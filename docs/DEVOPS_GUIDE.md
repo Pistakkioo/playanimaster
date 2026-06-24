@@ -70,7 +70,7 @@ docker compose version
 The repo should contain **only** `ANIMASTER/`, not `OLD_BISUITES/` or the whole `BISUITE_CURSOR` workspace.
 
 ```powershell
-cd C:\Users\sergi\BISUITE_CURSOR\ANIMASTER
+cd D:\_GITHUB_PROJECTS_\playanimaster
 git init
 git branch -M main
 ```
@@ -114,7 +114,7 @@ git push -u origin main
 ### 2.1 Start the stack
 
 ```powershell
-cd C:\Users\sergi\BISUITE_CURSOR\ANIMASTER
+cd D:\_GITHUB_PROJECTS_\playanimaster
 copy .env.example .env
 docker compose up -d --build
 ```
@@ -356,7 +356,7 @@ Stop relying on `uploadOnSave`. Use:
 
 ```powershell
 # Daily start
-cd C:\Users\sergi\BISUITE_CURSOR\ANIMASTER
+cd D:\_GITHUB_PROJECTS_\playanimaster
 docker compose up -d
 git pull
 

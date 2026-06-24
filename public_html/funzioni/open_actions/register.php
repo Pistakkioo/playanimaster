@@ -1,9 +1,9 @@
 <?php
-require ($_SERVER['DOCUMENT_ROOT'].'../private_functions/i.php');
+require ($_SERVER['DOCUMENT_ROOT'].'/../private_functions/i.php');
 
 
 $username = $_POST['username'];
-$display_name = $_POST['display_name'];
+//$display_name = $_POST['display_name'];
 $password = $_POST['password'];
 $email = $_POST['email'];
 
@@ -16,11 +16,14 @@ $result_check_u = $conn->query("
 $row_check_u = $result_check_u->fetch();
 $count_username_exists = intval($row_check_u[0]);
 
+$count_display_name_exists = 0;
+/*
 $result_check_d = $conn->query("
     select count(1) from users where display_name = \"$display_name\"
 ");
 $row_check_d = $result_check_d->fetch();
 $count_display_name_exists = intval($row_check_d[0]);
+*/
 
 $result_check_e = $conn->query("
     select count(1) from users where email = \"$email\"
