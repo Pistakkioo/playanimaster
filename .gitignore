@@ -1,0 +1,36 @@
+# --- Secrets (never commit) ---
+.env
+.env.local
+.env.production
+private_functions/i.php
+private_functions/c_variabili.php
+**/i.php
+!docker/i.php.example
+
+# --- Logs & runtime ---
+LOG/
+*.log
+*.log.*
+
+# --- OS / IDE ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+!.vscode/extensions.json
+.idea/
+
+# --- Backups ---
+*.bak
+*.tmp
+*~
+
+# --- Docker volumes (local data) ---
+docker/data/
+
+# --- Old / reference only (optional: remove lines if you want them in repo) ---
+old_cs_files/
+SQL_OLD/
+
+# --- Node (if added later) ---
+node_modules/
