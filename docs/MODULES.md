@@ -5,6 +5,14 @@ Track which files you already ran on each environment.
 **Full game plan:** [MMORPG_ROADMAP.md](MMORPG_ROADMAP.md)  
 **Next modules:** [modules/001_PVP_1v1.md](modules/001_PVP_1v1.md) → [modules/001b_PLAYER_CLASSES.md](modules/001b_PLAYER_CLASSES.md) → [modules/002_PARTY_PVE.md](modules/002_PARTY_PVE.md)
 
+## PvP 1v1 (module 001)
+
+Run once per environment:
+
+8. `private_functions/SQL/pvp_system.sql`
+
+Deploy steps: [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md)
+
 ## Base schema
 1. `private_functions/SQL/chat_system.sql` (if fresh DB — or skip if DB exists)
 2. `private_functions/SQL/chat_system_alter_local.sql`
@@ -22,6 +30,7 @@ Track which files you already ran on each environment.
 | Word filter | `chat_word_filter.php` | chat_word_replacements | — |
 | Target UI | `target.js`, `world.js`, `game.css` | language_texts_game_ui | yes |
 | Trade | `trade.php`, `trade.js`, `open_actions/*trade*` | trade_system | yes |
+| PvP 1v1 | `pvp.php`, `duel.js`, `open_actions/*duel*`, `pvp_get_battle_info.php` | pvp_system | yes |
 
 After each module: commit → test local Docker → deploy → run new SQL on server → smoke test live site.  
 Deploy steps: [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md)

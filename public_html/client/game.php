@@ -75,6 +75,7 @@ $bootstrap = [
                         </div>
                         <div class="target-actions">
                             <button type="button" id="target-trade-btn" class="target-trade-btn" hidden title="Trade" data-i18n-title="trade.request_tooltip" aria-label="Trade">&#x1F91D;</button>
+                            <button type="button" id="target-duel-btn" class="target-duel-btn" hidden title="Duel" data-i18n-title="duel.request_tooltip" aria-label="Duel">&#x2694;</button>
                         </div>
                         <button type="button" id="target-close" class="target-close" title="Close" data-i18n-title="ui.close" aria-label="Close target">&times;</button>
                     </header>
@@ -192,6 +193,7 @@ $bootstrap = [
             </header>
             <div id="combat-units" class="combat-units"></div>
             <div id="combat-log" class="combat-log"></div>
+            <p id="combat-pvp-status" class="combat-pvp-status" hidden aria-live="polite"></p>
             <div id="combat-abilities" class="combat-abilities"></div>
             <div class="combat-actions">
                 <label class="combat-auto-advance-label">
@@ -204,6 +206,19 @@ $bootstrap = [
         </div>
     </div>
 
+    </div>
+
+    <div id="duel-request-overlay" class="duel-request-overlay" hidden aria-hidden="true">
+        <div class="duel-request-panel" role="dialog" aria-labelledby="duel-request-text">
+            <p id="duel-request-text" class="duel-request-text"></p>
+            <div class="duel-request-timer" aria-hidden="true">
+                <div id="duel-request-timer-fill" class="duel-request-timer-fill"></div>
+            </div>
+            <div class="duel-request-actions">
+                <button type="button" id="duel-request-accept" class="duel-request-accept" data-i18n="duel.accept">Accept</button>
+                <button type="button" id="duel-request-decline" class="duel-request-decline" data-i18n="duel.decline">Decline</button>
+            </div>
+        </div>
     </div>
 
     <div id="trade-request-overlay" class="trade-request-overlay" hidden aria-hidden="true">
@@ -314,6 +329,7 @@ $bootstrap = [
     <script src="<?php echo animaster_h(animaster_asset_url('js/player_chat_bubbles.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/target.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/trade.js')); ?>"></script>
+    <script src="<?php echo animaster_h(animaster_asset_url('js/duel.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/chat.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/game.js')); ?>"></script>
 </body>

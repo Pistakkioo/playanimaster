@@ -7,7 +7,7 @@ if (!defined('ANIMASTER_MAX_CHARACTERS'))
 
 if (!defined('ANIMASTER_ASSET_VERSION'))
 {
-    define('ANIMASTER_ASSET_VERSION', '59');
+    define('ANIMASTER_ASSET_VERSION', '76');
 }
 
 function animaster_get_genders() 

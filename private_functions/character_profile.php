@@ -2,14 +2,28 @@
 
 function animaster_get_conn()
 {
-    global $conn;
-
-    if (!isset($conn))
+    if (!empty($GLOBALS['conn']) && $GLOBALS['conn'] instanceof PDO)
     {
-        require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/i.php';
+        return $GLOBALS['conn'];
     }
 
-    return $conn;
+    require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/i.php';
+
+    if (!empty($GLOBALS['conn']) && $GLOBALS['conn'] instanceof PDO)
+    {
+        return $GLOBALS['conn'];
+    }
+
+    global $conn;
+
+    if ($conn instanceof PDO)
+    {
+        $GLOBALS['conn'] = $conn;
+
+        return $conn;
+    }
+
+    throw new RuntimeException('Database connection unavailable');
 }
 
 function animaster_build_login_envelope($conn, array $profile_row)
@@ -37,30 +51,52 @@ function animaster_build_login_envelope($conn, array $profile_row)
     $id_user_ig = (int) $profile_row['id_user_ig'];
 
     $stringone_is_battling = '';
-    $result_battle = $conn->query("
-        SELECT id_battle_solo_pve FROM battles_solo_pve
-        WHERE id_user_ig = \"$id_user_ig\"
-        AND (finished IS NULL OR finished != 'S')
+    $result_pvp = $conn->query("
+        SELECT id_battle_pvp, current_turn
+        FROM battles_pvp
+        WHERE flg_status = 'O'
+          AND (id_user_ig_a = \"$id_user_ig\" OR id_user_ig_b = \"$id_user_ig\")
+        ORDER BY id_battle_pvp DESC
+        LIMIT 1
     ");
 
-    if ($result_battle->rowCount() > 0)
+    if ($result_pvp && $result_pvp->rowCount() > 0)
     {
-        $row_battle = $result_battle->fetch();
-        $id_battle = $row_battle['id_battle_solo_pve'];
-        $current_battle_turn = 0;
-        $result_turn = $conn->query("
-            SELECT MAX(turn) FROM battles_solo_pve_moves
-            WHERE id_battle_solo_pve = \"$id_battle\"
-        ");
-        $row_turn = $result_turn->fetch();
-        $current_battle_turn = intval($row_turn[0]);
-
+        $row_pvp = $result_pvp->fetch(PDO::FETCH_ASSOC);
         $stringone_is_battling = json_encode([
             'isBattling' => true,
-            'id_battle' => $id_battle,
-            'battle_type' => 'solo_pve',
-            'current_battle_turn' => $current_battle_turn
+            'id_battle' => (int) $row_pvp['id_battle_pvp'],
+            'battle_type' => 'pvp',
+            'current_battle_turn' => (int) $row_pvp['current_turn']
         ]);
+    }
+    else
+    {
+        $result_battle = $conn->query("
+            SELECT id_battle_solo_pve FROM battles_solo_pve
+            WHERE id_user_ig = \"$id_user_ig\"
+            AND (finished IS NULL OR finished != 'S')
+        ");
+
+        if ($result_battle->rowCount() > 0)
+        {
+            $row_battle = $result_battle->fetch();
+            $id_battle = $row_battle['id_battle_solo_pve'];
+            $current_battle_turn = 0;
+            $result_turn = $conn->query("
+                SELECT MAX(turn) FROM battles_solo_pve_moves
+                WHERE id_battle_solo_pve = \"$id_battle\"
+            ");
+            $row_turn = $result_turn->fetch();
+            $current_battle_turn = intval($row_turn[0]);
+
+            $stringone_is_battling = json_encode([
+                'isBattling' => true,
+                'id_battle' => $id_battle,
+                'battle_type' => 'solo_pve',
+                'current_battle_turn' => $current_battle_turn
+            ]);
+        }
     }
 
     return [

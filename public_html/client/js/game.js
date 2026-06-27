@@ -36,6 +36,11 @@
             AnimasterWorld.resetWildEncounter();
             syncWorldEntities(true);
             AnimasterNotifications.fetch();
+
+            if (typeof AnimasterDuel !== 'undefined')
+            {
+                AnimasterDuel.resetCombatFlag();
+            }
         },
         onBlackout: handleBlackout
     });
@@ -63,6 +68,23 @@
     AnimasterChat.init();
     AnimasterTarget.init();
     AnimasterTrade.init();
+    AnimasterDuel.init({
+        onBattleStart: function (battleInfo)
+        {
+            if (!player || !battleInfo || !battleInfo.id_battle)
+            {
+                return;
+            }
+
+            AnimasterTarget.clear();
+            state = State.COMBAT;
+            AnimasterInventory.close();
+            AnimasterTeam.close();
+            AnimasterInventory.setToggleEnabled(false);
+            AnimasterTeam.setToggleEnabled(false);
+            AnimasterCombat.start(player, battleInfo);
+        }
+    });
 
     var dialogCloseBtn = document.getElementById('dialog-close');
 
@@ -249,6 +271,7 @@
         AnimasterNotifications.setPlayer(player);
         AnimasterChat.setPlayer(player);
         AnimasterTrade.setPlayer(player);
+        AnimasterDuel.setPlayer(player);
     }
 
     function applyProfileToPlayer(profile)

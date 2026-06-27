@@ -9,12 +9,12 @@ $email = $_POST['email'];
 
 $c_pass = md5(md5($password)); 
 
-
+$count_username_exists = 0;
 $result_check_u = $conn->query("
-    select count(1) from users where username = \"$username\"
+    select * from users where username = \"$username\"
 ");
-$row_check_u = $result_check_u->fetch();
-$count_username_exists = intval($row_check_u[0]);
+$count_username_exists = $result_check_u->rowCount();
+
 
 $count_display_name_exists = 0;
 /*
@@ -26,10 +26,9 @@ $count_display_name_exists = intval($row_check_d[0]);
 */
 
 $result_check_e = $conn->query("
-    select count(1) from users where email = \"$email\"
+    select * from users where email = \"$email\"
 ");
-$row_check_e = $result_check_e->fetch();
-$count_email_exists = intval($row_check_e[0]);
+$count_email_exists = $result_check_e->rowCount();
 
 $stato = "OK";
 $msg = "OK";
@@ -61,9 +60,9 @@ else
 {
     $result = $conn->query("
         insert into users
-        (dt_creazione,dt_modifica,username,display_name,password,email)
+        (dt_creazione,dt_modifica,username,password,email)
         VALUES 
-        (now(),now(),\"$username\",\"$display_name\",\"$c_pass\",\"$email\")
+        (now(),now(),\"$username\",\"$c_pass\",\"$email\")
     ");
     $id_user = $conn->lastInsertId();
     
@@ -83,7 +82,7 @@ else
     */
     
 
-    if(!$result || !$result2)
+    if(!$result )
     {
         $stato = "KO";
         $msg = "Failed to connect";

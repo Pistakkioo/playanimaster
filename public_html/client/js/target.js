@@ -10,6 +10,7 @@ var AnimasterTarget = (function ()
     var dragHandle = null;
     var closeBtn = null;
     var tradeBtn = null;
+    var duelBtn = null;
 
     var current = null;
     var userDragged = false;
@@ -38,6 +39,7 @@ var AnimasterTarget = (function ()
         dragHandle = document.getElementById('target-drag-handle');
         closeBtn = document.getElementById('target-close');
         tradeBtn = document.getElementById('target-trade-btn');
+        duelBtn = document.getElementById('target-duel-btn');
 
         if (!panel || !wrap || !nameEl || !typeEl || !dragHandle || !closeBtn)
         {
@@ -64,6 +66,24 @@ var AnimasterTarget = (function ()
                 if (typeof AnimasterTrade !== 'undefined')
                 {
                     AnimasterTrade.requestToPlayer(current);
+                }
+            });
+        }
+
+        if (duelBtn)
+        {
+            duelBtn.addEventListener('click', function (e)
+            {
+                e.stopPropagation();
+
+                if (!current || current.kind !== 'player')
+                {
+                    return;
+                }
+
+                if (typeof AnimasterDuel !== 'undefined')
+                {
+                    AnimasterDuel.requestToPlayer(current);
                 }
             });
         }
@@ -106,7 +126,7 @@ var AnimasterTarget = (function ()
                 return;
             }
 
-            if (e.target.closest('.target-close') || e.target.closest('.target-trade-btn'))
+            if (e.target.closest('.target-close') || e.target.closest('.target-trade-btn') || e.target.closest('.target-duel-btn'))
             {
                 return;
             }
@@ -186,6 +206,11 @@ var AnimasterTarget = (function ()
         if (tradeBtn)
         {
             tradeBtn.hidden = info.kind !== 'player';
+        }
+
+        if (duelBtn)
+        {
+            duelBtn.hidden = info.kind !== 'player';
         }
 
         panel.hidden = false;

@@ -245,12 +245,39 @@ var AnimasterApi = (function ()
 
     function getBattleInfo(params)
     {
-        return postJson(BASE + 'solo_pve_get_battle_info.php', params).then(function (envelope)
+        var endpoint = params.battle_type === 'pvp'
+            ? 'pvp_get_battle_info.php'
+            : 'solo_pve_get_battle_info.php';
+
+        return postJson(BASE + endpoint, params).then(function (envelope)
         {
             unwrap(envelope);
-            var result = parseHashResponse(envelope.response);
-            apiLog('getBattleInfo', '[AnimasterApi] getBattleInfo', result);
-            return result;
+            var moves = parseHashResponse(envelope.response);
+            apiLog('getBattleInfo', '[AnimasterApi] getBattleInfo', moves);
+
+            if (params.battle_type === 'pvp')
+            {
+                var meta = {};
+
+                if (envelope.pvp_meta)
+                {
+                    try
+                    {
+                        meta = JSON.parse(envelope.pvp_meta);
+                    }
+                    catch (e)
+                    {
+                        meta = {};
+                    }
+                }
+
+                return {
+                    moves: moves,
+                    meta: meta
+                };
+            }
+
+            return moves;
         });
     }
 
@@ -468,6 +495,47 @@ var AnimasterApi = (function ()
         return JSON.parse(envelope.response);
     }
 
+    function parseDuelEnvelope(envelope)
+    {
+        return parseTradeEnvelope(envelope);
+    }
+
+    function sendDuelRequest(player, idTarget)
+    {
+        return postJson(BASE + 'send_duel_request.php', {
+            id_user_ig: player.id_user_ig || 0,
+            id_target: idTarget,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            return parseDuelEnvelope(envelope);
+        });
+    }
+
+    function pollDuel(player)
+    {
+        return postJson(BASE + 'poll_duel.php', {
+            id_user_ig: player.id_user_ig || 0,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            return parseDuelEnvelope(envelope);
+        });
+    }
+
+    function respondDuelRequest(player, idDuelRequest, accept)
+    {
+        return postJson(BASE + 'respond_duel_request.php', {
+            id_user_ig: player.id_user_ig || 0,
+            id_duel_request: idDuelRequest,
+            accept: accept ? 'S' : 'N',
+            lang: LANG
+        }).then(function (envelope)
+        {
+            return parseDuelEnvelope(envelope);
+        });
+    }
+
     function sendTradeRequest(player, idTarget)
     {
         return postJson(BASE + 'send_trade_request.php', {
@@ -570,6 +638,9 @@ var AnimasterApi = (function ()
         updateTradeOffer: updateTradeOffer,
         confirmTrade: confirmTrade,
         cancelTrade: cancelTrade,
+        sendDuelRequest: sendDuelRequest,
+        pollDuel: pollDuel,
+        respondDuelRequest: respondDuelRequest,
         markCharacterOffline: markCharacterOffline
     };
 })();

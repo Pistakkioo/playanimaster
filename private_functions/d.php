@@ -20,6 +20,7 @@ try
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
         ]
     );
+    $GLOBALS['conn'] = $conn;
 }
 catch (PDOException $e)
 {

@@ -19,6 +19,15 @@ var AnimasterCombat = (function ()
     var onEnd = null;
     var onBlackout = null;
     var blackoutHandled = false;
+    var pvpMeta = null;
+    var pvpPollTimer = null;
+    var pvpPhase = 'idle';
+    var pvpStatusEl = null;
+    var pvpLockedTurn = 0;
+    var pvpResolvePending = false;
+    var pvpResolvedMoveCount = 0;
+    var abilityCacheKey = '';
+    var abilityCacheList = [];
 
     var menuMode = 'main';
     var selectedItemTypeId = 0;
@@ -61,6 +70,7 @@ var AnimasterCombat = (function ()
         logEl = document.getElementById('combat-log');
         abilitiesEl = document.getElementById('combat-abilities');
         messageEl = document.getElementById('combat-message');
+        pvpStatusEl = document.getElementById('combat-pvp-status');
         fleeBtn = document.getElementById('combat-flee');
         closeBtn = document.getElementById('combat-close');
         onEnd = options.onEnd;
@@ -152,23 +162,473 @@ var AnimasterCombat = (function ()
         selectedItemTypeId = 0;
     }
 
+    function setPvpOverlayMode(active)
+    {
+        if (!overlay)
+        {
+            return;
+        }
+
+        if (active)
+        {
+            overlay.classList.add('combat-pvp-mode');
+        }
+        else
+        {
+            overlay.classList.remove('combat-pvp-mode');
+        }
+
+        if (pvpStatusEl)
+        {
+            if (active)
+            {
+                pvpStatusEl.hidden = false;
+            }
+            else
+            {
+                pvpStatusEl.hidden = true;
+                pvpStatusEl.textContent = '';
+            }
+        }
+    }
+
+    function clearPvpActionMenu()
+    {
+        menuMode = 'main';
+        selectedItemTypeId = 0;
+        abilitiesEl.innerHTML = '';
+        fleeBtn.disabled = true;
+    }
+
+    function pvpResolvingTurnNumber()
+    {
+        if (pvpLockedTurn > 0)
+        {
+            return pvpLockedTurn;
+        }
+
+        if (pvpMeta && pvpMeta.current_turn)
+        {
+            var current = parseInt(pvpMeta.current_turn, 10);
+
+            if (!isNaN(current) && current > 1)
+            {
+                return current - 1;
+            }
+        }
+
+        return battle ? battle.turn : 0;
+    }
+
+    function getPlayableMovesForTurn(turnMoves, turnNum)
+    {
+        var turn = parseInt(turnNum, 10) || 0;
+
+        return (turnMoves || []).filter(function (move)
+        {
+            return parseInt(move.turn, 10) === turn
+                && move.move_description
+                && move.move_type !== 'start';
+        });
+    }
+
+    function beginPvpTurnAnimation(beforeMove)
+    {
+        var resolvingTurn = pvpResolvingTurnNumber();
+        var turnMoves = getPlayableMovesForTurn(moves, resolvingTurn);
+
+        stopPvpPoll();
+        pvpPhase = 'animating';
+        pvpResolvePending = false;
+        busy = true;
+        presentTurn(beforeMove, turnMoves.length <= 1, turnMoves);
+    }
+
+    function updatePvpStatusBar()
+    {
+        if (!pvpStatusEl || !battle || battle.type !== 'pvp')
+        {
+            return;
+        }
+
+        if (!pvpMeta || pvpMeta.battle_finished || battle.status !== 'ongoing')
+        {
+            pvpStatusEl.textContent = '';
+            return;
+        }
+
+        if (pvpPhase === 'locked' || pvpMeta.submitted)
+        {
+            if (pvpMeta.both_locked || pvpMeta.opponent_submitted)
+            {
+                pvpStatusEl.textContent = t('duel.waiting_resolve');
+            }
+            else
+            {
+                pvpStatusEl.textContent = t('duel.choice_locked');
+            }
+
+            return;
+        }
+
+        if (pvpMeta.opponent_locked)
+        {
+            pvpStatusEl.textContent = t('duel.opponent_ready');
+            return;
+        }
+
+        pvpStatusEl.textContent = '';
+    }
+
+    function stopPvpPoll()
+    {
+        if (pvpPollTimer)
+        {
+            clearInterval(pvpPollTimer);
+            pvpPollTimer = null;
+        }
+    }
+
+    function startPvpPoll()
+    {
+        stopPvpPoll();
+
+        if (!battle || battle.type !== 'pvp' || battle.status !== 'ongoing')
+        {
+            return;
+        }
+
+        pvpPollTimer = setInterval(pollPvpStatus, pvpPhase === 'locked' ? 1000 : 2000);
+    }
+
+    function enterPvpInputPhase(force)
+    {
+        if (battle && battle.type === 'pvp' && !force)
+        {
+            if (pvpPhase === 'locked' || pvpPhase === 'animating')
+            {
+                return;
+            }
+
+            if (pvpMeta && pvpMeta.submitted && !pvpMeta.turn_complete)
+            {
+                enterPvpLockedPhase();
+                return;
+            }
+        }
+
+        if (battle && battle.type === 'pvp' && force && pvpMeta && pvpMeta.submitted && !pvpMeta.turn_complete)
+        {
+            enterPvpLockedPhase();
+            return;
+        }
+
+        pvpPhase = 'input';
+        pvpLockedTurn = 0;
+        pvpResolvePending = false;
+        pvpResolvedMoveCount = 0;
+        busy = false;
+        fleeBtn.disabled = false;
+        setMessage(t('combat.choose_action'));
+        updatePvpStatusBar();
+        resetMenu();
+        showMainMenu();
+        preloadAbilitiesForActive();
+        startPvpPoll();
+    }
+
+    function enterPvpLockedPhase()
+    {
+        pvpPhase = 'locked';
+
+        if (!pvpLockedTurn)
+        {
+            pvpLockedTurn = battle.turn;
+        }
+
+        if (pvpMeta && pvpMeta.both_locked)
+        {
+            pvpResolvePending = true;
+        }
+
+        clearPvpActionMenu();
+        busy = false;
+        setMessage(t('combat.choose_action'));
+        updatePvpStatusBar();
+        pvpResolvedMoveCount = getPlayableMovesForTurn(moves, pvpLockedTurn).length;
+        startPvpPoll();
+        pollPvpStatus();
+    }
+
+    function pvpPollTurn()
+    {
+        if (pvpPhase === 'locked' && pvpLockedTurn > 0)
+        {
+            return pvpLockedTurn;
+        }
+
+        return battle.turn;
+    }
+
+    function pvpTurnJustResolved(rows, prevComplete)
+    {
+        if (!pvpLockedTurn)
+        {
+            return !!(pvpMeta && pvpMeta.turn_complete && !prevComplete);
+        }
+
+        var resolvedNow = getPlayableMovesForTurn(rows, pvpLockedTurn).length;
+
+        return (resolvedNow > pvpResolvedMoveCount && resolvedNow > 0)
+            || !!(pvpMeta && pvpMeta.turn_complete && !prevComplete);
+    }
+
+    function pollPvpStatus()
+    {
+        if (!battle || !player || battle.type !== 'pvp' || pvpPhase === 'animating' || busy)
+        {
+            return;
+        }
+
+        AnimasterApi.getBattleInfo({
+            id_user_ig: player.id_user_ig || 0,
+            id_battle: battle.id,
+            battle_type: battle.type,
+            turn: pvpPollTurn(),
+            restarting_old_battle: 'N',
+            lang: AnimasterApi.LANG
+        }).then(function (result)
+        {
+            if (pvpPhase === 'animating' || busy)
+            {
+                return;
+            }
+
+            var prevComplete = !!(pvpMeta && pvpMeta.turn_complete);
+            var prevFinished = !!(pvpMeta && pvpMeta.battle_finished);
+
+            if (pvpPhase === 'input')
+            {
+                if (result && result.meta)
+                {
+                    pvpMeta = result.meta;
+                    syncPvpTurnFromMeta();
+                }
+
+                if (pvpMeta && pvpMeta.submitted && !pvpMeta.turn_complete)
+                {
+                    enterPvpLockedPhase();
+                    return;
+                }
+
+                updatePvpStatusBar();
+
+                if (pvpMeta && pvpMeta.battle_finished && !prevFinished)
+                {
+                    moves = normalizeBattleResponse(result);
+                    applyStateFromMoves({ deferTerminalUi: true });
+                    beginPvpTurnAnimation(null);
+                }
+
+                return;
+            }
+
+            var rows = normalizeBattleResponse(result);
+
+            if (pvpMeta && pvpMeta.both_locked)
+            {
+                pvpResolvePending = true;
+            }
+
+            if (pvpMeta && pvpMeta.battle_finished && !prevFinished)
+            {
+                moves = rows;
+                applyStateFromMoves({ deferTerminalUi: true });
+                beginPvpTurnAnimation(null);
+                return;
+            }
+
+            if (pvpMeta
+                && pvpPhase === 'locked'
+                && pvpTurnJustResolved(rows, prevComplete))
+            {
+                pvpResolvedMoveCount = getPlayableMovesForTurn(rows, pvpLockedTurn).length;
+                moves = rows;
+                applyStateFromMoves({ deferTerminalUi: true });
+                beginPvpTurnAnimation(null);
+                return;
+            }
+
+            if (pvpPhase === 'locked')
+            {
+                updatePvpStatusBar();
+            }
+        }).catch(function (err)
+        {
+            console.warn('[AnimasterCombat] pvp poll failed:', err && err.message ? err.message : err);
+        });
+    }
+
     function show()
     {
         overlay.hidden = false;
         overlay.setAttribute('aria-hidden', 'false');
     }
 
+    function abilityCacheKeyFor(stats)
+    {
+        if (!stats)
+        {
+            return '';
+        }
+
+        return String(stats.p_a_id || 0) + ':' + String(stats.p_a_lvl || 0);
+    }
+
+    function invalidateAbilityCache()
+    {
+        abilityCacheKey = '';
+        abilityCacheList = [];
+    }
+
+    function preloadAbilitiesForActive()
+    {
+        if (!battle || battle.type !== 'pvp' || !player)
+        {
+            return;
+        }
+
+        var stats = latestStats();
+
+        if (!stats)
+        {
+            return;
+        }
+
+        var cacheKey = abilityCacheKeyFor(stats);
+
+        if (cacheKey === abilityCacheKey && abilityCacheList.length)
+        {
+            return;
+        }
+
+        AnimasterApi.getAbilityList(player.id_user_ig, stats.p_a_id, stats.p_a_lvl).then(function (list)
+        {
+            if (!battle || battle.type !== 'pvp')
+            {
+                return;
+            }
+
+            var currentStats = latestStats();
+            var currentKey = abilityCacheKeyFor(currentStats);
+
+            if (currentKey !== cacheKey)
+            {
+                return;
+            }
+
+            abilityCacheKey = cacheKey;
+            abilityCacheList = list || [];
+        }).catch(function (err)
+        {
+            console.warn('[AnimasterCombat] ability preload failed:', err && err.message ? err.message : err);
+        });
+    }
+
+    function syncPvpTurnFromMeta()
+    {
+        if (!battle || battle.type !== 'pvp' || !pvpMeta)
+        {
+            return;
+        }
+
+        var serverTurn = parseInt(pvpMeta.current_turn, 10);
+
+        if (!isNaN(serverTurn) && serverTurn > 0)
+        {
+            battle.turn = serverTurn;
+        }
+    }
+
+    function normalizeBattleResponse(result)
+    {
+        if (battle && battle.type === 'pvp' && result && result.moves)
+        {
+            pvpMeta = result.meta || {};
+            syncPvpTurnFromMeta();
+            return result.moves;
+        }
+
+        pvpMeta = null;
+        return result || [];
+    }
+
+    function canActInBattle()
+    {
+        if (!battle || battle.status !== 'ongoing' || busy)
+        {
+            return false;
+        }
+
+        if (battle.type === 'pvp')
+        {
+            return !!(pvpMeta && pvpMeta.can_act);
+        }
+
+        return true;
+    }
+
+    function finalizePvpBattleIfNeeded()
+    {
+        if (!battle || battle.type !== 'pvp' || !pvpMeta || !pvpMeta.battle_finished)
+        {
+            return false;
+        }
+
+        stopPvpPoll();
+
+        if (battle.status === 'ongoing' && moves.length)
+        {
+            applyStateFromMoves();
+        }
+
+        if (battle.status !== 'ongoing')
+        {
+            setMessage(statusMessage(battle.status));
+            closeBtn.disabled = false;
+            fleeBtn.disabled = true;
+
+            if (abilitiesEl)
+            {
+                abilitiesEl.innerHTML = '';
+            }
+
+            maybeHandleBlackout();
+            return true;
+        }
+
+        return false;
+    }
+
     function hide()
     {
+        stopPvpPoll();
         cancelPresentation();
         overlay.hidden = true;
         overlay.setAttribute('aria-hidden', 'true');
+        setPvpOverlayMode(false);
         battle = null;
         moves = [];
         abilities = [];
         busy = false;
         resetMenu();
         blackoutHandled = false;
+        pvpPhase = 'idle';
+        pvpMeta = null;
+        pvpLockedTurn = 0;
+        pvpResolvePending = false;
+        pvpResolvedMoveCount = 0;
+        invalidateAbilityCache();
 
         if (onEnd)
         {
@@ -193,6 +653,7 @@ var AnimasterCombat = (function ()
 
         resetMenu();
         show();
+        setPvpOverlayMode(battle.type === 'pvp');
         loadTurn(0, false);
     }
 
@@ -215,6 +676,7 @@ var AnimasterCombat = (function ()
 
         resetMenu();
         show();
+        setPvpOverlayMode(battle.type === 'pvp');
         loadTurn(resumeTurn, resumeTurn > 0);
     }
 
@@ -235,10 +697,36 @@ var AnimasterCombat = (function ()
             turn: turn,
             restarting_old_battle: restarting ? 'S' : 'N',
             lang: AnimasterApi.LANG
-        }).then(function (rows)
+        }).then(function (result)
         {
-            moves = rows || [];
+            moves = normalizeBattleResponse(result);
             applyStateFromMoves({ deferTerminalUi: true });
+
+            if (battle.type === 'pvp')
+            {
+                syncPvpTurnFromMeta();
+                var stats = latestStats();
+
+                if (stats)
+                {
+                    renderUnitsFromStats(statsFromMove(stats));
+                    renderLogComplete(moves);
+                }
+
+                busy = false;
+
+                if (pvpMeta && pvpMeta.submitted && !pvpMeta.turn_complete)
+                {
+                    enterPvpLockedPhase();
+                }
+                else
+                {
+                    enterPvpInputPhase();
+                }
+
+                return;
+            }
+
             advanceTurnCounter();
             presentTurn(null, true);
         }).catch(function (err)
@@ -247,7 +735,7 @@ var AnimasterCombat = (function ()
             presentTurn(null, true);
         }).finally(function ()
         {
-            if (!blackoutHandled && !playbackRunning)
+            if (!blackoutHandled && !playbackRunning && battle && battle.type !== 'pvp')
             {
                 busy = false;
                 refreshActionMenu();
@@ -297,7 +785,24 @@ var AnimasterCombat = (function ()
 
     function maybeHandleBlackout()
     {
-        if (battle.status !== 'defeat' || blackoutHandled || typeof onBlackout !== 'function')
+        if (blackoutHandled || typeof onBlackout !== 'function')
+        {
+            return;
+        }
+
+        if (battle && battle.type === 'pvp')
+        {
+            if (battle.status !== 'defeat')
+            {
+                return;
+            }
+
+            if (!pvpMeta || !pvpMeta.needs_recovery)
+            {
+                return;
+            }
+        }
+        else if (battle.status !== 'defeat')
         {
             return;
         }
@@ -323,6 +828,19 @@ var AnimasterCombat = (function ()
 
     function statusMessage(status)
     {
+        if (battle && battle.type === 'pvp')
+        {
+            if (status === 'win')
+            {
+                return t('duel.win');
+            }
+
+            if (status === 'defeat')
+            {
+                return t('duel.lose');
+            }
+        }
+
         if (status === 'win')
         {
             return t('combat.status_victory');
@@ -364,6 +882,18 @@ var AnimasterCombat = (function ()
     function loadActionMenu()
     {
         if (!latestStats() || battle.status !== 'ongoing')
+        {
+            abilitiesEl.innerHTML = '';
+            fleeBtn.disabled = true;
+            return;
+        }
+
+        if (battle.type === 'pvp' && pvpPhase !== 'input')
+        {
+            return;
+        }
+
+        if (battle.type === 'pvp' && !canActInBattle())
         {
             abilitiesEl.innerHTML = '';
             fleeBtn.disabled = true;
@@ -442,6 +972,11 @@ var AnimasterCombat = (function ()
 
     function showMainMenu()
     {
+        if (battle && battle.type === 'pvp' && pvpPhase !== 'input')
+        {
+            return;
+        }
+
         menuMode = 'main';
         selectedItemTypeId = 0;
         abilitiesEl.innerHTML = '';
@@ -468,16 +1003,52 @@ var AnimasterCombat = (function ()
     {
         menuMode = 'fight';
         setMessage(t('combat.choose_ability'));
-        abilitiesEl.innerHTML = '<span class="combat-loading">' + escapeHtml(t('combat.loading_abilities')) + '</span>';
 
         var stats = latestStats();
 
+        if (!stats)
+        {
+            showMainMenu();
+            return;
+        }
+
+        var cacheKey = abilityCacheKeyFor(stats);
+
+        if (cacheKey === abilityCacheKey && abilityCacheList.length)
+        {
+            abilities = abilityCacheList.slice();
+            renderFightMenu();
+            return;
+        }
+
+        abilitiesEl.innerHTML = '<span class="combat-loading">' + escapeHtml(t('combat.loading_abilities')) + '</span>';
+
         AnimasterApi.getAbilityList(player.id_user_ig, stats.p_a_id, stats.p_a_lvl).then(function (list)
         {
-            abilities = list || [];
+            if (menuMode !== 'fight' || (battle.type === 'pvp' && pvpPhase !== 'input'))
+            {
+                return;
+            }
+
+            var currentStats = latestStats();
+            var currentKey = abilityCacheKeyFor(currentStats);
+
+            if (currentKey !== cacheKey)
+            {
+                return;
+            }
+
+            abilityCacheKey = cacheKey;
+            abilityCacheList = list || [];
+            abilities = abilityCacheList.slice();
             renderFightMenu();
         }).catch(function (err)
         {
+            if (menuMode !== 'fight' || (battle.type === 'pvp' && pvpPhase !== 'input'))
+            {
+                return;
+            }
+
             abilitiesEl.innerHTML = '<span class="error">' + escapeHtml(err.message || t('combat.load_abilities_failed')) + '</span>';
             appendBackButton();
         });
@@ -485,6 +1056,11 @@ var AnimasterCombat = (function ()
 
     function renderFightMenu()
     {
+        if (menuMode !== 'fight' || busy || (battle.type === 'pvp' && pvpPhase !== 'input'))
+        {
+            return;
+        }
+
         abilitiesEl.innerHTML = '';
 
         if (!abilities.length)
@@ -524,9 +1100,19 @@ var AnimasterCombat = (function ()
 
         AnimasterApi.getInventory(player, true).then(function (items)
         {
+            if (menuMode !== 'items' || busy || (battle.type === 'pvp' && pvpPhase !== 'input'))
+            {
+                return;
+            }
+
             renderItemsMenu(items || []);
         }).catch(function (err)
         {
+            if (menuMode !== 'items' || busy || (battle.type === 'pvp' && pvpPhase !== 'input'))
+            {
+                return;
+            }
+
             abilitiesEl.innerHTML = '<span class="error">' + escapeHtml(err.message || t('combat.load_items_failed')) + '</span>';
             appendBackButton();
         });
@@ -534,6 +1120,11 @@ var AnimasterCombat = (function ()
 
     function renderItemsMenu(items)
     {
+        if (menuMode !== 'items' || busy || (battle.type === 'pvp' && pvpPhase !== 'input'))
+        {
+            return;
+        }
+
         abilitiesEl.innerHTML = '';
 
         if (!items.length)
@@ -578,9 +1169,19 @@ var AnimasterCombat = (function ()
             id_item_type_selected: 0
         }).then(function (animals)
         {
+            if (menuMode !== 'switch' || busy || (battle.type === 'pvp' && pvpPhase !== 'input'))
+            {
+                return;
+            }
+
             renderSwitchMenu(animals || []);
         }).catch(function (err)
         {
+            if (menuMode !== 'switch' || busy || (battle.type === 'pvp' && pvpPhase !== 'input'))
+            {
+                return;
+            }
+
             abilitiesEl.innerHTML = '<span class="error">' + escapeHtml(err.message || t('combat.load_team_failed')) + '</span>';
             appendBackButton();
         });
@@ -588,6 +1189,11 @@ var AnimasterCombat = (function ()
 
     function renderSwitchMenu(animals)
     {
+        if (menuMode !== 'switch' || busy || (battle.type === 'pvp' && pvpPhase !== 'input'))
+        {
+            return;
+        }
+
         abilitiesEl.innerHTML = '';
 
         if (!animals.length)
@@ -706,14 +1312,23 @@ var AnimasterCombat = (function ()
 
     function performAction(type, id, extra)
     {
-        if (!battle || busy || battle.status !== 'ongoing')
+        if (!battle || busy || battle.status !== 'ongoing' || !canActInBattle())
         {
             return;
         }
 
+        if (battle.type === 'pvp' && pvpPhase !== 'input')
+        {
+            return;
+        }
+
+        stopPvpPoll();
+        pvpLockedTurn = battle.turn;
+        pvpPhase = 'locked';
+        pvpResolvePending = false;
         busy = true;
         setMessage(t('combat.resolving_turn'));
-        abilitiesEl.innerHTML = '';
+        clearPvpActionMenu();
 
         var beforeMove = latestStats();
         var actionTurn = battle.turn;
@@ -733,16 +1348,61 @@ var AnimasterCombat = (function ()
             params.id_item_type_selected = extra.id_item_type_selected;
         }
 
-        AnimasterApi.getBattleInfo(params).then(function (rows)
+        AnimasterApi.getBattleInfo(params).then(function (result)
         {
-            moves = rows || [];
+            moves = normalizeBattleResponse(result);
             resetMenu();
             applyStateFromMoves({ deferTerminalUi: true });
+
+            if (battle.type === 'pvp')
+            {
+                if (type === 'switch')
+                {
+                    invalidateAbilityCache();
+                }
+
+                if (pvpMeta && pvpMeta.battle_finished)
+                {
+                    beginPvpTurnAnimation(beforeMove);
+                    return;
+                }
+
+                if (pvpMeta && pvpMeta.submitted && !pvpMeta.turn_complete)
+                {
+                    enterPvpLockedPhase();
+                    return;
+                }
+
+                if (pvpMeta && pvpMeta.turn_complete)
+                {
+                    beginPvpTurnAnimation(beforeMove);
+                    return;
+                }
+
+                enterPvpInputPhase();
+                return;
+            }
+
             advanceTurnCounter();
             presentTurn(beforeMove, false);
         }).catch(function (err)
         {
             setMessage(err.message || t('combat.action_failed'));
+
+            if (battle.type === 'pvp')
+            {
+                if (pvpMeta && pvpMeta.submitted && !pvpMeta.turn_complete)
+                {
+                    enterPvpLockedPhase();
+                }
+                else
+                {
+                    enterPvpInputPhase();
+                }
+
+                return;
+            }
+
             presentTurn(beforeMove, true);
 
             if (!blackoutHandled)
@@ -783,10 +1443,12 @@ var AnimasterCombat = (function ()
 
         return {
             p_name: move.p_a_nickname || move.p_a_species || t('combat.unit_your_animal'),
+            p_a_id: parseInt(move.p_a_id, 10) || 0,
             p_lvl: move.p_a_lvl,
             p_hp: parseInt(move.p_a_res_hp, 10) || 0,
             p_max_hp: parseInt(move.p_a_res_max_hp, 10) || 1,
             w_name: move.w_a_species || t('combat.unit_wild'),
+            w_a_id: parseInt(move.w_a_id, 10) || 0,
             w_lvl: move.w_a_lvl,
             w_hp: parseInt(move.w_a_res_hp, 10) || 0,
             w_max_hp: parseInt(move.w_a_res_max_hp, 10) || 1
@@ -1049,6 +1711,46 @@ var AnimasterCombat = (function ()
         return move.move_type === 'ability' && !!move.protagonist_type && move.move_hit !== 'N';
     }
 
+    function unitCardForMove(move)
+    {
+        if (!move || !unitsEl)
+        {
+            return null;
+        }
+
+        var protagonistId = parseInt(move.id_protagonist, 10) || 0;
+
+        if (protagonistId > 0)
+        {
+            var cardById = unitsEl.querySelector('[data-animal-id="' + protagonistId + '"]');
+
+            if (cardById)
+            {
+                return cardById;
+            }
+
+            var playerAnimalId = parseInt(move.p_a_id, 10) || 0;
+            var enemyAnimalId = parseInt(move.w_a_id, 10) || 0;
+
+            if (protagonistId === playerAnimalId)
+            {
+                return unitsEl.querySelector('[data-side="player"]');
+            }
+
+            if (protagonistId === enemyAnimalId)
+            {
+                return unitsEl.querySelector('[data-side="enemy"]');
+            }
+        }
+
+        if (move.protagonist_type === 'wild_animal')
+        {
+            return unitsEl.querySelector('[data-side="enemy"]');
+        }
+
+        return unitsEl.querySelector('[data-side="player"]');
+    }
+
     function playBump(move, token)
     {
         if (!shouldBump(move))
@@ -1056,8 +1758,7 @@ var AnimasterCombat = (function ()
             return Promise.resolve();
         }
 
-        var isPlayer = move.protagonist_type === 'user_animal';
-        var card = unitsEl.querySelector('[data-side="' + (isPlayer ? 'player' : 'enemy') + '"]');
+        var card = unitCardForMove(move);
 
         if (!card)
         {
@@ -1136,8 +1837,14 @@ var AnimasterCombat = (function ()
 
         var name = side === 'player' ? stats.p_name : stats.w_name;
         var lvl = side === 'player' ? stats.p_lvl : stats.w_lvl;
+        var animalId = side === 'player' ? stats.p_a_id : stats.w_a_id;
 
         nameEl.textContent = name + ' ' + t('team.lv_short', { level: lvl || 1 });
+
+        if (animalId)
+        {
+            card.dataset.animalId = String(animalId);
+        }
     }
 
     function animateHpTransition(fromStats, toStats, token)
@@ -1204,12 +1911,6 @@ var AnimasterCombat = (function ()
 
         closeBtn.disabled = battle && battle.status === 'ongoing';
 
-        if (!blackoutHandled)
-        {
-            busy = false;
-            refreshActionMenu();
-        }
-
         if (!battle)
         {
             return;
@@ -1218,19 +1919,65 @@ var AnimasterCombat = (function ()
         if (battle.status !== 'ongoing')
         {
             setMessage(statusMessage(battle.status));
+            fleeBtn.disabled = true;
+            abilitiesEl.innerHTML = '';
+
+            if (!blackoutHandled)
+            {
+                busy = false;
+            }
+
             maybeHandleBlackout();
+            return;
         }
-        else
+
+        if (battle.type === 'pvp')
         {
-            setMessage(t('combat.choose_action'));
+            if (finalizePvpBattleIfNeeded())
+            {
+                return;
+            }
+
+            if (pvpPhase === 'animating')
+            {
+                pvpLockedTurn = 0;
+                pvpResolvePending = false;
+                pvpResolvedMoveCount = 0;
+                enterPvpInputPhase(true);
+                return;
+            }
+
+            if (pvpMeta && pvpMeta.submitted && !pvpMeta.turn_complete)
+            {
+                enterPvpLockedPhase();
+                return;
+            }
+
+            if (pvpPhase === 'locked')
+            {
+                clearPvpActionMenu();
+                updatePvpStatusBar();
+                return;
+            }
+
+            enterPvpInputPhase();
+            return;
         }
+
+        if (!blackoutHandled)
+        {
+            busy = false;
+            refreshActionMenu();
+        }
+
+        setMessage(t('combat.choose_action'));
     }
 
-    function presentTurn(beforeMove, instant)
+    function presentTurn(beforeMove, instant, movesToPlay)
     {
         playbackToken += 1;
         var token = playbackToken;
-        var playable = getPlayableMoves(moves);
+        var playable = movesToPlay || getPlayableMoves(moves);
         var stats = latestStats();
 
         if (!stats)
@@ -1259,6 +2006,11 @@ var AnimasterCombat = (function ()
 
         playbackRunning = true;
         busy = true;
+
+        if (battle.type === 'pvp')
+        {
+            pvpPhase = 'animating';
+        }
 
         var initialStats = beforeMove ? statsFromMove(beforeMove) : statsFromMove(moves[0]);
         renderUnitsFromStats(initialStats);
@@ -1303,8 +2055,8 @@ var AnimasterCombat = (function ()
         }
 
         unitsEl.innerHTML = '';
-        unitsEl.appendChild(buildUnitCard(unitStats.p_name, unitStats.p_lvl, unitStats.p_hp, unitStats.p_max_hp, false));
-        unitsEl.appendChild(buildUnitCard(unitStats.w_name, unitStats.w_lvl, unitStats.w_hp, unitStats.w_max_hp, true));
+        unitsEl.appendChild(buildUnitCard(unitStats.p_name, unitStats.p_lvl, unitStats.p_hp, unitStats.p_max_hp, false, unitStats.p_a_id));
+        unitsEl.appendChild(buildUnitCard(unitStats.w_name, unitStats.w_lvl, unitStats.w_hp, unitStats.w_max_hp, true, unitStats.w_a_id));
     }
 
     function renderLogComplete(turnMoves)
@@ -1335,11 +2087,16 @@ var AnimasterCombat = (function ()
         presentTurn(null, true);
     }
 
-    function buildUnitCard(name, lvl, hp, maxHp, isEnemy)
+    function buildUnitCard(name, lvl, hp, maxHp, isEnemy, animalId)
     {
         var card = document.createElement('div');
         card.className = 'unit-card' + (isEnemy ? ' enemy' : '');
         card.dataset.side = isEnemy ? 'enemy' : 'player';
+
+        if (animalId)
+        {
+            card.dataset.animalId = String(animalId);
+        }
 
         var hpVal = parseInt(hp, 10) || 0;
         var maxVal = parseInt(maxHp, 10) || 1;

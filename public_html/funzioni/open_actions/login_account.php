@@ -1,7 +1,5 @@
 <?php
-require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/character_profile.php';
-
-$conn = animaster_get_conn();
+require $_SERVER['DOCUMENT_ROOT'] . '/funzioni/i.php';
 
 $username = isset($_POST['username']) ? $_POST['username'] : '';
 $password = isset($_POST['password']) ? $_POST['password'] : '';
