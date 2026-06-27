@@ -75,7 +75,10 @@ $token = dev_admin_token();
             <h1 class="h3 mb-1">NPC Content Dev</h1>
             <p class="meta mb-0">Token-protected. Not linked from the game client.</p>
         </div>
-        <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_url()); ?>">Refresh</a>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_static_data.php')); ?>">Static data</a>
+            <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_url()); ?>">Refresh</a>
+        </div>
     </div>
 
     <?php if ($flash !== ''): ?>

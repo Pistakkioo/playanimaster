@@ -2,6 +2,9 @@
 
 Track which files you already ran on each environment.
 
+**Full game plan:** [MMORPG_ROADMAP.md](MMORPG_ROADMAP.md)  
+**Next modules:** [modules/001_PVP_1v1.md](modules/001_PVP_1v1.md) → [modules/001b_PLAYER_CLASSES.md](modules/001b_PLAYER_CLASSES.md) → [modules/002_PARTY_PVE.md](modules/002_PARTY_PVE.md)
+
 ## Base schema
 1. `private_functions/SQL/chat_system.sql` (if fresh DB — or skip if DB exists)
 2. `private_functions/SQL/chat_system_alter_local.sql`

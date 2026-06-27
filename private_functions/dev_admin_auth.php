@@ -61,8 +61,13 @@ function dev_admin_h($value)
 
 function dev_admin_url(array $extra = [])
 {
+    return dev_admin_page_url('dev_npcs.php', $extra);
+}
+
+function dev_admin_page_url($page, array $extra = [])
+{
     $params = array_merge(['T' => dev_admin_token()], $extra);
     $query = http_build_query($params);
 
-    return 'dev_npcs.php?' . $query;
+    return $page . '?' . $query;
 }

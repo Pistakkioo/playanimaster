@@ -2,10 +2,9 @@
 .env
 .env.local
 .env.production
-private_functions/i.php
-private_functions/c_variabili.php
-**/i.php
-!docker/i.php.example
+private_functions/d.php 
+**/d.php
+!docker/d.php.example
 
 # --- Logs & runtime ---
 LOG/
