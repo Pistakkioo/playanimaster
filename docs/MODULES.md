@@ -23,4 +23,5 @@ Track which files you already ran on each environment.
 | Target UI | `target.js`, `world.js`, `game.css` | language_texts_game_ui | yes |
 | Trade | `trade.php`, `trade.js`, `open_actions/*trade*` | trade_system | yes |
 
-After each module: commit → test local Docker → deploy → run new SQL on server → smoke test live site.
+After each module: commit → test local Docker → deploy → run new SQL on server → smoke test live site.  
+Deploy steps: [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md)

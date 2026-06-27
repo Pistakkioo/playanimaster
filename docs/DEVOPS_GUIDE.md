@@ -6,6 +6,8 @@ This guide moves ANIMASTER from **edit-on-server / SFTP** to:
 2. **Docker on your PC** — PHP + MariaDB locally  
 3. **Controlled deploy** — push finished modules to production via SSH (not the buggy SFTP extension)
 
+**Deploy checklist (step-by-step):** [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md)
+
 ---
 
 ## What you have today
@@ -214,51 +216,9 @@ git pull
 
 ### Step 6 — Deploy to production
 
-Load SSH key (once per session):
+Follow **[DEPLOY_GUIDE.md](DEPLOY_GUIDE.md)** (SSH key, dry-run, full or partial deploy, production SQL, smoke test).
 
-```powershell
-Get-Service ssh-agent | Set-Service -StartupType Manual
-Start-Service ssh-agent
-ssh-add C:\Users\sergi\.ssh\id_ed25519
-```
-
-Deploy changed files only:
-
-```powershell
-.\scripts\deploy.ps1 -Files @(
-  'public_html/client/js/trade.js',
-  'public_html/client/game.php',
-  'private_functions/character_config.php'
-)
-```
-
-Or full sync (when many files changed):
-
-```powershell
-.\scripts\deploy.ps1
-```
-
-Dry run first:
-
-```powershell
-.\scripts\deploy.ps1 -DryRun
-```
-
-### Step 7 — Server database
-
-SSH to server and run **only new** SQL (phpMyAdmin or CLI):
-
-```bash
-mysql -u ... -p playanimaster_db < /var/www/playanimaster/private_functions/SQL/trade_system.sql
-```
-
-### Step 8 — Smoke test production
-
-- Hard refresh (Ctrl+F5) — asset version busts cache  
-- Test the feature with two accounts if needed  
-- Check `LOG/error.log` on server if something breaks  
-
-### Step 9 — Tag release (optional)
+### Step 7 — Tag release (optional)
 
 ```powershell
 git tag -a v1.0-trade -m "Trade system live"
@@ -295,15 +255,9 @@ Skeleton (add later as `.github/workflows/deploy.yml`):
 - Trigger: `push` tags `v*`
 - Steps: checkout → rsync over SSH using `DEPLOY_KEY` secret
 
-### 5.2 Pre-deploy checklist (print this)
+### 5.2 Pre-deploy checklist
 
-- [ ] Tested on Docker locally  
-- [ ] SQL migration listed and tested  
-- [ ] Asset version bumped if JS/CSS changed  
-- [ ] No secrets in commit (`git diff` — no passwords)  
-- [ ] Deploy script run  
-- [ ] SQL run on production  
-- [ ] Live smoke test  
+See the printable checklist in **[DEPLOY_GUIDE.md](DEPLOY_GUIDE.md)**.
 
 ---
 
