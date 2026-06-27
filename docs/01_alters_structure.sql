@@ -78,3 +78,85 @@ ALTER TABLE playanimaster_db.npcs ADD gender varchar(1) DEFAULT null NULL;
 
 
 
+
+ALTER TABLE playanimaster_db.animals CHANGE id_user id_user_ig int(11) DEFAULT NULL NULL;
+ALTER TABLE playanimaster_db.battles_solo_pve CHANGE id_user id_user_ig int(11) DEFAULT NULL NULL;
+ALTER TABLE playanimaster_db.items CHANGE id_user id_user_ig int(11) DEFAULT NULL NULL;
+ALTER TABLE playanimaster_db.notifications CHANGE id_user id_user_ig int(11) DEFAULT NULL NULL;
+ALTER TABLE playanimaster_db.user_conversations CHANGE id_user id_user_ig int(11) DEFAULT NULL NULL;
+ALTER TABLE playanimaster_db.user_quests CHANGE id_user id_user_ig int(11) DEFAULT NULL NULL;
+
+
+
+
+
+ALTER TABLE playanimaster_db.users_ig ADD gender varchar(1) DEFAULT null NULL;
+ALTER TABLE playanimaster_db.users_ig ADD character_type varchar(100) DEFAULT null NULL;
+ALTER TABLE playanimaster_db.users_ig ADD move_speed decimal(10,4) DEFAULT null NULL;
+ALTER TABLE playanimaster_db.users_ig ADD target_position_x decimal(10,4) DEFAULT null NULL;
+ALTER TABLE playanimaster_db.users_ig ADD target_position_y decimal(10,4) DEFAULT null NULL;
+ALTER TABLE playanimaster_db.users_ig ADD target_position_z decimal(10,4) DEFAULT null NULL;
+
+
+ALTER TABLE playanimaster_db.wild_animals ADD id_zone int(11) DEFAULT null NULL;
+ALTER TABLE playanimaster_db.wild_animals ADD id_spawn_point int(11) DEFAULT null NULL;
+ALTER TABLE playanimaster_db.wild_animals ADD pos_x float DEFAULT null NULL;
+ALTER TABLE playanimaster_db.wild_animals ADD pos_y float DEFAULT null NULL;
+ALTER TABLE playanimaster_db.wild_animals ADD pos_z float DEFAULT null NULL;
+
+
+
+
+ALTER TABLE playanimaster_db.abilities  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.alliances  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.animals  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.battles_solo_pve  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.battles_solo_pve_moves  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.chat_global_item_config  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.chat_global_passes  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.chat_messages  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.chat_read_cursors  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.chat_word_replacements  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.clans  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.classes  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.consequences  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.conversations  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.conversation_consequences  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.conversation_requirements  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.costanti  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.dialogues  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.dialogues_options  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.elements  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.items  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.item_types  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.language_texts  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.log  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.notifications  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.npcs  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.npc_requirements  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.quests  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.quest_requirements  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.requirements  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.spawn_points  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.species  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.species_abilities  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.storico_battles_solo_pve_moves  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.subclasses  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.trades  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.trade_item_locks  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.trade_offer_items  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.trade_requests  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.users  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.users_ig  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.user_conversations  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.user_quests  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.wild_animals  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.wild_animal_drop_types  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.zones  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE playanimaster_db.zone_animals  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+ALTER TABLE playanimaster_db.consequences CHANGE `ref` ref_table varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL NULL;
+ALTER TABLE playanimaster_db.requirements CHANGE `ref` ref_table varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL NULL;
+

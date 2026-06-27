@@ -11,7 +11,7 @@ $LANG = $_POST['lang'];
 
 
 $result = $conn->query("
-    select C.id_consequence,C.consequence_type,C.id_ref,C.ref,C.num 
+    select C.id_consequence,C.consequence_type,C.id_ref,C.ref_table,C.num 
     from conversation_consequences CC
     join consequences C ON C.id_consequence = CC.id_consequence 
     where CC.id_conversation = \"$id_conversation\"

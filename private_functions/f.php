@@ -333,7 +333,6 @@ class FUNZIONI
         $min = intval($row_req['min']);
         $max = intval($row_req['max']);
         $id_ref = $row_req['id_ref'];
-        $ref = $row_req['ref'];
         
         if($row_req['requirement_type']=="user lvl")
         {
@@ -394,14 +393,13 @@ class FUNZIONI
     public static function ApplyConsequence($conn,$id_user_ig,$id_consequence,$LANG)
     {
         $result = $conn->query("
-            select consequence_type,id_ref,ref,num 
+            select consequence_type,id_ref,num 
             from consequences 
             where id_consequence = \"$id_consequence\"
         ");
         $row = $result->fetch();
         $consequence_type = $row['consequence_type'];
         $id_ref = $row['id_ref'];
-        $ref = $row['ref'];
         $num = intval($row['num']);
         
         if($consequence_type=="[obtain item]")
@@ -440,6 +438,8 @@ class FUNZIONI
     
     public static function SpawnAnimals($conn,$id_zone,$id_spawn_point,$diff,$radius,$x,$z)
     {
+        //error_log("SpawnAnimals: $id_zone, $id_spawn_point, $diff, $radius, $x, $z");
+        //debug_log("SpawnAnimals: {id_zone: $id_zone, id_spawn_point: $id_spawn_point, diff: $diff, radius: $radius, x: $x, z: $z}");
         for($i=0;$i<$diff;$i++)
         {
             $pos_x = $x + rand(-$radius,$radius);
@@ -450,9 +450,10 @@ class FUNZIONI
                 select sum(chance_points) tot from zone_animals
                 where id_zone = \"$id_zone\"
                 AND id_spawn_point = \"$id_spawn_point\"
+                group by id_zone, id_spawn_point
             ");
             $row_tot = $result_tot_chance_points->fetch();
-            $tot_chance = intval($row_tot[0]);
+            $tot_chance = intval($row_tot['tot']);
 
             if ($tot_chance <= 0)
             {

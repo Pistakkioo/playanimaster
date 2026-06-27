@@ -570,7 +570,7 @@ INSERT INTO playanimaster_db.classes (id_class, class) VALUES(5, 'Insects');
 INSERT INTO playanimaster_db.classes (id_class, class) VALUES(6, 'Invertebrates');
 
 
-INSERT INTO playanimaster_db.consequences (id_consequence, consequence_type, id_ref, `ref`, num) VALUES(1, '[obtain item]', 1, 'POTION', 1);
+INSERT INTO playanimaster_db.consequences (id_consequence, consequence_type, id_ref, ref_table, num) VALUES(1, '[obtain item]', 1, 'POTION', 1);
 
 INSERT INTO playanimaster_db.conversation_consequences (id_conversation_consequence, id_conversation, id_option, id_consequence) VALUES(1, 5, 1, 1);
 INSERT INTO playanimaster_db.conversation_consequences (id_conversation_consequence, id_conversation, id_option, id_consequence) VALUES(2, 6, 5, 1);
@@ -587,6 +587,13 @@ INSERT INTO playanimaster_db.conversations (id_conversation, id_npc, visible, ti
 INSERT INTO playanimaster_db.costanti (id_costante, costante, valore) VALUES(4, 'lvl_up_constant_animal', 40);
 INSERT INTO playanimaster_db.costanti (id_costante, costante, valore) VALUES(5, 'lvl_up_constant_player', 80);
 INSERT INTO playanimaster_db.costanti (id_costante, costante, valore) VALUES(6, 'exp_loss_percent_on_death', 5);
+
+INSERT INTO playanimaster_db.costanti 
+( id_costante, costante, valore) 
+VALUES(7, 'INITIAL_POSITION_X', 0),
+(8, 'INITIAL_POSITION_Y', 0),
+(9, 'INITIAL_POSITION_Z', 0),
+(10, 'INITIAL_MOVE_SPEED', 100);
 
 
 INSERT INTO playanimaster_db.dialogues (id_dialog, id_conversation, `order`, flg_last, flg_options, dialog, dialog_it, dialog_pt) VALUES(6, 4, 2, 'S', 'S', 'You do not have any animals yet. Would you like to receive your first companion?', 'Non hai ancora nessun animale. Vuoi ricevere il tuo primo compagno?', 'Ainda nao tens nenhum animal. Queres receber o teu primeiro companheiro?');
@@ -626,10 +633,10 @@ INSERT INTO playanimaster_db.npcs (id_npc, npc, `type`, id_zone, posx, posy, ran
 INSERT INTO playanimaster_db.npcs (id_npc, npc, `type`, id_zone, posx, posy, rangex, rangey, direction, sight_distance, npc_type_prefab, posz, wander_range, euler_x, euler_y, euler_z, gender) VALUES(2, 'Assistant', 'story adjacent?', 1000, 50.0, 0.0, 0, 0, 'D', 0, 'trader', 0.0, 0, 0.0, 0.0, 0.0, NULL);
 
 
-INSERT INTO playanimaster_db.requirements (id_requirement, requirement_type, id_ref, `ref`, min, max, descrizione) VALUES(2, 'item', 1, 'POTION', 5, 100, 'at least 5 potions');
-INSERT INTO playanimaster_db.requirements (id_requirement, requirement_type, id_ref, `ref`, min, max, descrizione) VALUES(3, 'number of animals', 0, 'ZERO', 0, 0, 'Account has no animals');
-INSERT INTO playanimaster_db.requirements (id_requirement, requirement_type, id_ref, `ref`, min, max, descrizione) VALUES(4, 'number of animals', 0, 'HAS_ANIMALS', 1, 999, 'Account has at least one animal');
-INSERT INTO playanimaster_db.requirements (id_requirement, requirement_type, id_ref, `ref`, min, max, descrizione) VALUES(7, 'item', 1, 'POTION', 0, 4, 'Fewer than 5 potions in inventory');
+INSERT INTO playanimaster_db.requirements (id_requirement, requirement_type, id_ref, ref_table, min, max, descrizione) VALUES(2, 'item', 1, 'POTION', 5, 100, 'at least 5 potions');
+INSERT INTO playanimaster_db.requirements (id_requirement, requirement_type, id_ref, ref_table, min, max, descrizione) VALUES(3, 'number of animals', 0, 'ZERO', 0, 0, 'Account has no animals');
+INSERT INTO playanimaster_db.requirements (id_requirement, requirement_type, id_ref, ref_table, min, max, descrizione) VALUES(4, 'number of animals', 0, 'HAS_ANIMALS', 1, 999, 'Account has at least one animal');
+INSERT INTO playanimaster_db.requirements (id_requirement, requirement_type, id_ref, ref_table, min, max, descrizione) VALUES(7, 'item', 1, 'POTION', 0, 4, 'Fewer than 5 potions in inventory');
 
 
 INSERT INTO playanimaster_db.spawn_points (id_spawn_point, id_zone, x, y, z, radius, number_of_animals) VALUES(1, 1000, 100.0, 100.0, 100.0, 50, 5);

@@ -72,7 +72,7 @@ else
     $initial_position_y = INITIAL_POSITION_Y;
     
     
-    
+    /*
     $result2 = $conn->query("
         insert into users_ig
         (id_user,dt_creazione,dt_modifica,id_zone,flg_online,position_x,position_y,position_z,exp_total,level,gender,character_type)
@@ -80,6 +80,7 @@ else
         (\"$id_user\",now(),now(),1000,'N',\"$initial_position_x\",\"$initial_position_y\",\"$initial_position_z\",0,1,\"$gender\",\"$character_type\")
     ");
     $id_user_ig = $conn->lastInsertId();
+    */
     
 
     if(!$result || !$result2)

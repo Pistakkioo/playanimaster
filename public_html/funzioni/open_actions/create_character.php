@@ -62,14 +62,14 @@ else
             $initial_position_z = INITIAL_POSITION_Z;
             $initial_position_x = INITIAL_POSITION_X;
             $initial_position_y = INITIAL_POSITION_Y;
-
+            $move_speed = INITIAL_MOVE_SPEED;
             $result = $conn->query("
                 INSERT INTO users_ig
                 (id_user, dt_creazione, dt_modifica, id_zone, flg_online, position_x, position_y, position_z,
-                 exp_total, level, gender, character_type, display_name)
+                 exp_total, level, gender, character_type, display_name,move_speed)
                 VALUES
                 (\"$id_user\", NOW(), NOW(), 1000, 'N', \"$initial_position_x\", \"$initial_position_y\",
-                 \"$initial_position_z\", 0, 1, \"$gender\", \"$character_type\", \"$display_name\")
+                 \"$initial_position_z\", 0, 1, \"$gender\", \"$character_type\", \"$display_name\",\"$move_speed\")
             ");
 
             if (!$result)
