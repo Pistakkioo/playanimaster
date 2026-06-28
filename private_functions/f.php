@@ -399,6 +399,29 @@ class FUNZIONI
             return $row_req['requirement_type'] === 'conversation finished' ? $finished : !$finished;
         }
 
+        if ($row_req['requirement_type'] === 'player class')
+        {
+            $result_user = $conn->query("
+                SELECT id_player_class FROM users_ig WHERE id_user_ig = \"$id_user_ig\"
+            ");
+            $row_user = $result_user ? $result_user->fetch(PDO::FETCH_ASSOC) : null;
+            $user_class_id = $row_user ? (int) $row_user['id_player_class'] : 0;
+            $target_class_id = (int) $id_ref;
+            $ref_table = isset($row_req['ref_table']) ? (string) $row_req['ref_table'] : '';
+
+            if ($ref_table === 'NOT')
+            {
+                return $user_class_id !== $target_class_id;
+            }
+
+            if ($target_class_id <= 0)
+            {
+                return false;
+            }
+
+            return $user_class_id === $target_class_id;
+        }
+
         return false;
     }
     

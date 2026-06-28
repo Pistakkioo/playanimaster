@@ -1,5 +1,8 @@
 <?php
 
+require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/character_config.php';
+require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/player_class.php';
+
 function animaster_get_conn()
 {
     if (!empty($GLOBALS['conn']) && $GLOBALS['conn'] instanceof PDO)
@@ -148,6 +151,7 @@ function animaster_fetch_character_profile_row($conn, $id_user, $id_user_ig)
               ,UI.id_zone_last_recover
               ,UI.gender
               ,UI.character_type
+              ,UI.id_player_class
               ,UI.move_speed
               ,UI.display_name
               ,U.username
@@ -185,8 +189,65 @@ function animaster_normalize_profile(array $profile)
 {
     $profile['id_user'] = (int) (isset($profile['id_user']) ? $profile['id_user'] : 0);
     $profile['id_user_ig'] = (int) (isset($profile['id_user_ig']) ? $profile['id_user_ig'] : 0);
+    $profile['id_player_class'] = (int) (isset($profile['id_player_class']) ? $profile['id_player_class'] : 0);
+    $profile['level'] = (int) (isset($profile['level']) ? $profile['level'] : 1);
+    $profile['exp_total'] = (int) (isset($profile['exp_total']) ? $profile['exp_total'] : 0);
+    $profile['gold'] = (int) (isset($profile['gold']) ? $profile['gold'] : 0);
 
-    return $profile; 
+    if ($profile['id_user_ig'] > 0)
+    {
+        try
+        {
+            $profile = PLAYER_CLASS::appendToProfile($profile, animaster_get_conn(), $profile['id_user_ig']);
+        }
+        catch (RuntimeException $e)
+        {
+            $profile['player_class_code'] = '';
+            $profile['player_class_name'] = '';
+        }
+    }
+    else
+    {
+        $profile['player_class_code'] = '';
+        $profile['player_class_name'] = '';
+    }
+
+    return $profile;
+}
+
+/**
+ * Player level EXP range (same formula as FUNZIONI::AdjustUserLvlFromExp / team panel).
+ *
+ * @return array{exp_total:int,exp_min:int,exp_max:int,exp_in_level:int,exp_to_next:int,progress:float}
+ */
+function animaster_player_exp_range($level, $exp_total, $lvl_up_constant)
+{
+    $level = max(1, (int) $level);
+    $exp_total = max(0, (int) $exp_total);
+    $constant = max(1, (int) $lvl_up_constant);
+    $min = $constant * $level * $level * $level;
+    $max = $constant * ($level + 1) * ($level + 1) * ($level + 1);
+    $span = $max - $min;
+    $progress = $span > 0 ? ($exp_total - $min) / $span : 0.0;
+
+    if ($progress < 0)
+    {
+        $progress = 0.0;
+    }
+
+    if ($progress > 1)
+    {
+        $progress = 1.0;
+    }
+
+    return [
+        'exp_total' => $exp_total,
+        'exp_min' => $min,
+        'exp_max' => $max,
+        'exp_in_level' => max(0, $exp_total - $min),
+        'exp_to_next' => max(0, $max - $exp_total),
+        'progress' => $progress
+    ];
 }
 
 function animaster_update_character_presence($conn, $id_user, $id_user_ig, $posx, $posy, $posz, $target_posx, $target_posy, $target_posz)
@@ -285,16 +346,22 @@ function animaster_mark_character_online($conn, $id_user_ig)
 function animaster_fetch_characters_for_user($conn, $id_user)
 {
     $result = $conn->query("
-        SELECT id_user_ig
-              ,display_name
-              ,gender
-              ,character_type
-              ,`level`
-              ,id_zone
-              ,flg_online
-        FROM users_ig
-        WHERE id_user = \"$id_user\"
-        ORDER BY dt_creazione ASC
+        SELECT UI.id_user_ig
+              ,UI.display_name
+              ,UI.gender
+              ,UI.character_type
+              ,UI.id_player_class
+              ,PC.code AS player_class_code
+              ,PC.name
+              ,PC.name_it
+              ,PC.name_pt
+              ,UI.`level`
+              ,UI.id_zone
+              ,UI.flg_online
+        FROM users_ig UI
+        LEFT JOIN player_classes PC ON PC.id_player_class = UI.id_player_class
+        WHERE UI.id_user = \"$id_user\"
+        ORDER BY UI.dt_creazione ASC
     ");
 
     if (!$result)
@@ -302,7 +369,21 @@ function animaster_fetch_characters_for_user($conn, $id_user)
         return [];
     }
 
-    return $result->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $result->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($rows as $i => $row)
+    {
+        if (!empty($row['player_class_code']))
+        {
+            $rows[$i]['player_class_name'] = PLAYER_CLASS::displayName($row);
+        }
+        else
+        {
+            $rows[$i]['player_class_name'] = '';
+        }
+    }
+
+    return $rows;
 }
 
 function animaster_post_id_user_ig()

@@ -31,7 +31,8 @@ $username = isset($_SESSION['animaster_username']) ? $_SESSION['animaster_userna
 $form = [
     'display_name' => '',
     'gender' => 'M',
-    'character_type' => $character_types[0]
+    'character_type' => $character_types[0],
+    'player_class' => 'nerd'
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST')
@@ -64,17 +65,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
         $form['display_name'] = trim(isset($_POST['display_name']) ? $_POST['display_name'] : '');
         $form['gender'] = isset($_POST['gender']) ? $_POST['gender'] : '';
         $form['character_type'] = isset($_POST['character_type']) ? $_POST['character_type'] : '';
+        $form['player_class'] = isset($_POST['player_class']) ? $_POST['player_class'] : '';
 
         if (!$can_create)
         {
             $error = 'Maximum number of characters reached.';
+        }
+        else if (!PLAYER_CLASS::isValidStarterCode($form['player_class']))
+        {
+            $error = 'Choose Nerd or Stud as your class.';
         }
         else
         {
             $result = animaster_create_character(
                 $form['display_name'],
                 $form['gender'],
-                $form['character_type']
+                $form['character_type'],
+                $form['player_class']
             );
 
             if ($result['ok'])
@@ -132,6 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
                                             <strong><?php echo animaster_h($character['display_name']); ?></strong>
                                             <span class="character-meta">
                                                 Lv <?php echo (int) $character['level']; ?>
+                                                · <?php echo animaster_h(!empty($character['player_class_name']) ? $character['player_class_name'] : '—'); ?>
                                                 · <?php echo animaster_h($character['character_type']); ?>
                                                 · Zone <?php echo (int) $character['id_zone']; ?>
                                             </span>
@@ -169,7 +177,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
                             </select>
                         </label>
                         <label>
-                            Character type
+                            Class
+                            <select name="player_class" required>
+                                <option value="nerd"<?php echo $form['player_class'] === 'nerd' ? ' selected' : ''; ?>>Nerd — knowledge and precision</option>
+                                <option value="stud"<?php echo $form['player_class'] === 'stud' ? ' selected' : ''; ?>>Stud — action and presence</option>
+                            </select>
+                        </label>
+                        <label>
+                            Avatar look
                             <select name="character_type" required>
                                 <?php foreach ($character_types as $type) { ?>
                                     <option value="<?php echo animaster_h($type); ?>"<?php echo $form['character_type'] === $type ? ' selected' : ''; ?>>

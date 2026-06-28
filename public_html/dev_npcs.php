@@ -36,6 +36,7 @@ $flat_dialogues = dev_npc_flat_dialogues($tree);
 $flat_options = dev_npc_flat_options($tree);
 $flat_quests = dev_npc_flat_quests($tree);
 $item_types = dev_npc_fetch_item_types($conn);
+$player_classes = dev_npc_fetch_player_classes($conn);
 $requirement_ref_tables = dev_npc_requirement_ref_tables();
 $token = dev_admin_token();
 ?>
@@ -336,6 +337,7 @@ $token = dev_admin_token();
                                         <option value="item">item</option>
                                         <option value="conversation finished">conversation finished</option>
                                         <option value="conversation not finished">conversation not finished</option>
+                                        <option value="player class">player class</option>
                                     </select>
                                 </div>
                                 <div class="mb-2"><label class="form-label">ref_table</label>
@@ -356,6 +358,11 @@ $token = dev_admin_token();
                                         <?php foreach ($flat_conversations as $c): ?>
                                         <option value="<?php echo (int) $c['id_conversation']; ?>" data-ref-table="CONVERSATION">
                                             #<?php echo (int) $c['id_conversation']; ?> — <?php echo dev_admin_h($c['npc']); ?>: <?php echo dev_admin_h($c['title']); ?>
+                                        </option>
+                                        <?php endforeach; ?>
+                                        <?php foreach ($player_classes as $pc): ?>
+                                        <option value="<?php echo (int) $pc['id_player_class']; ?>" data-ref-table="PLAYER_CLASS">
+                                            #<?php echo (int) $pc['id_player_class']; ?> <?php echo dev_admin_h($pc['code']); ?> — <?php echo dev_admin_h($pc['name']); ?> (Lv <?php echo (int) $pc['unlock_level']; ?>)
                                         </option>
                                         <?php endforeach; ?>
                                         <option value="0" data-ref-table="ZERO">0 — not used</option>
@@ -564,7 +571,8 @@ $token = dev_admin_token();
             'number of animals': 'ZERO',
             'item': 'POTION',
             'conversation finished': 'CONVERSATION',
-            'conversation not finished': 'CONVERSATION'
+            'conversation not finished': 'CONVERSATION',
+            'player class': 'PLAYER_CLASS'
         };
         var suggested = map[typeEl.value];
 

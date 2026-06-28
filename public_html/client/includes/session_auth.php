@@ -230,13 +230,14 @@ function animaster_select_character($id_user_ig)
     ];
 }
 
-function animaster_dispatch_create_character($id_user, $display_name, $gender, $character_type)
+function animaster_dispatch_create_character($id_user, $display_name, $gender, $character_type, $player_class)
 {
     $data = animaster_post_dispatch('/funzioni/open_actions/create_character.php', [
         'id_user' => $id_user,
         'display_name' => $display_name,
         'gender' => $gender,
-        'character_type' => $character_type
+        'character_type' => $character_type,
+        'player_class' => $player_class
     ]);
 
     if (!is_array($data))
@@ -271,7 +272,7 @@ function animaster_dispatch_create_character($id_user, $display_name, $gender, $
     ];
 }
 
-function animaster_create_character($display_name, $gender, $character_type)
+function animaster_create_character($display_name, $gender, $character_type, $player_class)
 {
     animaster_session_start();
 
@@ -287,7 +288,8 @@ function animaster_create_character($display_name, $gender, $character_type)
         (int) $_SESSION['animaster_id_user'],
         $display_name,
         $gender,
-        $character_type
+        $character_type,
+        $player_class
     );
 
     if (!$create['ok'])

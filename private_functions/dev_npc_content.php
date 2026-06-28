@@ -40,6 +40,17 @@ function dev_npc_fetch_item_types(PDO $conn)
     return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
 }
 
+function dev_npc_fetch_player_classes(PDO $conn)
+{
+    $stmt = $conn->query('
+        SELECT id_player_class, code, name, unlock_level, parent_id_player_class
+        FROM player_classes
+        ORDER BY unlock_level ASC, id_player_class ASC
+    ');
+
+    return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+}
+
 /**
  * ref_table values used by requirements (labels for the dev form).
  *
@@ -50,6 +61,7 @@ function dev_npc_requirement_ref_tables()
     return [
         ['value' => '', 'label' => '— none —'],
         ['value' => 'POTION', 'label' => 'POTION (item type)'],
+        ['value' => 'PLAYER_CLASS', 'label' => 'PLAYER_CLASS (gameplay class)'],
         ['value' => 'CONVERSATION', 'label' => 'CONVERSATION'],
         ['value' => 'ZERO', 'label' => 'ZERO (no animals)'],
         ['value' => 'HAS_ANIMALS', 'label' => 'HAS_ANIMALS'],

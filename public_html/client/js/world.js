@@ -940,6 +940,12 @@ var AnimasterWorld = (function ()
     function getHudText()
     {
         var name = player.display_name || t('hud.default_player');
+        var classLabel = player.player_class_name || '';
+
+        if (classLabel)
+        {
+            name = name + ' · ' + classLabel;
+        }
 
         return {
             player: t('hud.player_position', {

@@ -521,24 +521,22 @@ var AnimasterDialog = (function ()
             return;
         }
 
-        var chain = Promise.resolve();
+        var chain = Promise.resolve(null);
 
         if (flgRegister || idOption > 0)
         {
-            chain = chain.then(function ()
-            {
-                return AnimasterApi.getConversationConsequences(playerRef, idConversation, idOption);
-            }).catch(function (err)
+            chain = AnimasterApi.getConversationConsequences(playerRef, idConversation, idOption).catch(function (err)
             {
                 console.warn('[AnimasterDialog] consequences failed:', err && err.message ? err.message : err);
+                return null;
             });
         }
 
-        chain.finally(function ()
+        chain.then(function (envelope)
         {
             if (onCloseCallback)
             {
-                onCloseCallback();
+                onCloseCallback(envelope || null);
             }
         });
     }

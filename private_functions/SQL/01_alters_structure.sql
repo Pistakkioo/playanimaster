@@ -168,6 +168,14 @@ ALTER TABLE playanimaster_db.user_conversations ADD UNIQUE KEY uniq_user_convers
 
 
 
+ALTER TABLE playanimaster_db.users_ig
+    ADD COLUMN id_player_class INT(11) DEFAULT NULL COMMENT 'Gameplay class (nerd/stud tree)' AFTER character_type,
+    ADD KEY idx_users_ig_player_class (id_player_class);
+
+UPDATE playanimaster_db.users_ig
+SET id_player_class = 1
+WHERE id_player_class IS NULL;
+
 
 
 

@@ -38,6 +38,7 @@
             state = State.WORLD;
             AnimasterInventory.setToggleEnabled(true);
             AnimasterTeam.setToggleEnabled(true);
+            AnimasterSelf.setToggleEnabled(true);
             AnimasterWorld.resetWildEncounter();
             syncWorldEntities(true);
             AnimasterNotifications.fetch();
@@ -67,6 +68,11 @@
             ? bootstrap.costanti.lvl_up_constant_animal
             : 40
     });
+    AnimasterSelf.init({
+        lvlUpConstantPlayer: bootstrap.costanti
+            ? bootstrap.costanti.lvl_up_constant_player
+            : 80
+    });
 
     AnimasterNotifications.init();
     AnimasterPlayerChatBubbles.init();
@@ -85,8 +91,10 @@
             state = State.COMBAT;
             AnimasterInventory.close();
             AnimasterTeam.close();
+            AnimasterSelf.close();
             AnimasterInventory.setToggleEnabled(false);
             AnimasterTeam.setToggleEnabled(false);
+            AnimasterSelf.setToggleEnabled(false);
             AnimasterCombat.start(player, battleInfo);
         }
     });
@@ -217,7 +225,7 @@
             return false;
         }
 
-        if (AnimasterInventory.isOpen() || AnimasterTeam.isOpen())
+        if (AnimasterInventory.isOpen() || AnimasterTeam.isOpen() || AnimasterSelf.isOpen())
         {
             return false;
         }
@@ -260,21 +268,55 @@
         });
     }
 
-    function onDialogClosed()
+    function onDialogClosed(envelope)
     {
-        syncWorldEntities(true);
+        var refreshChain = Promise.resolve();
 
-        if (AnimasterInventory.isOpen())
+        if (envelope && envelope.response2 && envelope.response2.indexOf('[set player_class]') !== -1 && player)
         {
-            AnimasterInventory.refresh();
+            refreshChain = AnimasterApi.getSelfInfo(player).then(function (selfData)
+            {
+                if (!selfData)
+                {
+                    return;
+                }
+
+                player.player_class_code = selfData.player_class_code || '';
+                player.player_class_name = selfData.player_class_name || '';
+
+                if (selfData.level !== undefined && selfData.level !== null)
+                {
+                    player.level = selfData.level;
+                }
+
+                syncPlayerToModules();
+            }).catch(function (err)
+            {
+                console.warn('[Animaster] self refresh after class promotion failed:', err && err.message ? err.message : err);
+            });
         }
 
-        if (AnimasterTeam.isOpen())
+        refreshChain.finally(function ()
         {
-            AnimasterTeam.refresh();
-        }
+            syncWorldEntities(true);
 
-        AnimasterNotifications.fetch();
+            if (AnimasterInventory.isOpen())
+            {
+                AnimasterInventory.refresh();
+            }
+
+            if (AnimasterTeam.isOpen())
+            {
+                AnimasterTeam.refresh();
+            }
+
+            if (AnimasterSelf.isOpen())
+            {
+                AnimasterSelf.refresh();
+            }
+
+            AnimasterNotifications.fetch();
+        });
     }
 
     function bindCharactersLink()
@@ -310,6 +352,11 @@
             id_zone: profile.id_zone,
             display_name: profile.display_name,
             character_type: profile.character_type || '',
+            player_class_code: profile.player_class_code || '',
+            player_class_name: profile.player_class_name || '',
+            level: parseInt(profile.level, 10) || 1,
+            exp_total: parseInt(profile.exp_total, 10) || 0,
+            gold: parseInt(profile.gold, 10) || 0,
             x: parseFloat(profile.position_x) || 0,
             y: parseFloat(profile.position_y) || 0,
             z: parseFloat(profile.position_z) || 0,
@@ -330,6 +377,7 @@
         });
         AnimasterInventory.setToggleEnabled(true);
         AnimasterTeam.setToggleEnabled(true);
+        AnimasterSelf.setToggleEnabled(true);
         state = State.WORLD;
 
         syncPresence(true);
@@ -342,8 +390,10 @@
             state = State.COMBAT;
             AnimasterInventory.close();
             AnimasterTeam.close();
+            AnimasterSelf.close();
             AnimasterInventory.setToggleEnabled(false);
             AnimasterTeam.setToggleEnabled(false);
+            AnimasterSelf.setToggleEnabled(false);
             AnimasterCombat.resume(player, battleResume);
         }
 
@@ -362,6 +412,7 @@
         AnimasterDialog.setPlayer(player);
         AnimasterInventory.setPlayer(player);
         AnimasterTeam.setPlayer(player);
+        AnimasterSelf.setPlayer(player);
         AnimasterSpawn.setPlayer(player);
         AnimasterNotifications.setPlayer(player);
         AnimasterChat.setPlayer(player);
@@ -494,8 +545,10 @@
         state = State.COMBAT;
         AnimasterInventory.close();
         AnimasterTeam.close();
+        AnimasterSelf.close();
         AnimasterInventory.setToggleEnabled(false);
         AnimasterTeam.setToggleEnabled(false);
+        AnimasterSelf.setToggleEnabled(false);
 
         AnimasterApi.startBattle(player, wild.id_wild_animal).then(function (info)
         {
@@ -596,6 +649,7 @@
                 && !AnimasterDialog.isTalkBubbleVisible()
                 && !AnimasterInventory.isOpen()
                 && !AnimasterTeam.isOpen()
+                && !AnimasterSelf.isOpen()
                 && !AnimasterNotifications.isVisible()
                 && !(typeof AnimasterChat !== 'undefined' && AnimasterChat.isInputFocused()))
             {
@@ -606,6 +660,9 @@
                 state === State.WORLD && !AnimasterDialog.isActive() && !AnimasterCombat.isVisible()
             );
             AnimasterTeam.setToggleEnabled(
+                state === State.WORLD && !AnimasterDialog.isActive() && !AnimasterCombat.isVisible()
+            );
+            AnimasterSelf.setToggleEnabled(
                 state === State.WORLD && !AnimasterDialog.isActive() && !AnimasterCombat.isVisible()
             );
 

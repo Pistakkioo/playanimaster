@@ -354,15 +354,21 @@ New consequence type: `[set player_class]` with `id_ref` = target class.
 
 ## Implementation phases
 
-### Phase A — Data & character create (3–4 days)
-- `player_classes` seed tree; `users_ig.id_player_class` default nerd/stud at create
-- Replace or map `character_type` cosmetic vs `player_class` gameplay (keep cosmetic avatar separate)
-- Profile shows class name + path
+### Phase A — Data & character create (3–4 days) ✅ shipped (v1)
 
-### Phase B — Quest-gated promotion (4–5 days)
+- `player_classes` seed tree; `users_ig.id_player_class` set at create (Nerd / Stud)
+- Cosmetic `character_type` avatar separate from gameplay class
+- Profile + HUD show class name
+
+**Deploy:** run new tail of `01_alters_structure.sql` and `02_insert_static_data.sql` on each environment.
+
+### Phase B — Quest-gated promotion (4–5 days) ✅ shipped (v1)
+
 - Requirement type `player class`; consequence `[set player_class]`
-- One full 25-path quest (Scientist) via `dev_npcs` content
-- Item turn-in validation in dialog
+- Nerd → Scientist path: NPC **Lab Director** (zone 1000), quest items 6–8, conversation **10**
+- Item turn-in via `params_json.consume_items`; client refreshes HUD/self after promotion
+
+**Deploy:** run new tail of `02_insert_static_data.sql` (Phase B block after self-panel i18n).
 
 ### Phase C — Abilities v1 (5–7 days)
 - 2 abilities per tier-3 class (1 battle, 1 field)

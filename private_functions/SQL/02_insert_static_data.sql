@@ -1275,6 +1275,269 @@ ON DUPLICATE KEY UPDATE
     id_consequence = VALUES(id_consequence);
 
 
+-- Module 001b — player class tree (stable ids).
+
+INSERT INTO playanimaster_db.player_classes
+    (id_player_class, code, name, name_it, name_pt, parent_id_player_class, unlock_level, starter_branch)
+VALUES
+    (1, 'nerd', 'Nerd', 'Nerd', 'Nerd', NULL, 1, 'nerd'),
+    (2, 'stud', 'Stud', 'Stud', 'Stud', NULL, 1, 'stud'),
+    (3, 'artist', 'Artist', 'Artista', 'Artista', 1, 25, NULL),
+    (4, 'scientist', 'Scientist', 'Scienziato', 'Cientista', 1, 25, NULL),
+    (5, 'trainer', 'Trainer', 'Allenatore', 'Treinador', 2, 25, NULL),
+    (6, 'adventurer', 'Adventurer', 'Avventuriero', 'Aventureiro', 2, 25, NULL),
+    (7, 'musician', 'Musician', 'Musicista', 'Musico', 3, 50, NULL),
+    (8, 'stylist', 'Stylist', 'Stilista', 'Estilista', 3, 50, NULL),
+    (9, 'veterinarian', 'Veterinarian', 'Veterinario', 'Veterinario', 4, 50, NULL),
+    (10, 'pharmacist', 'Pharmacist', 'Farmacista', 'Farmaceutico', 4, 50, NULL),
+    (11, 'striker', 'Striker', 'Assalitore', 'Atacante', 5, 50, NULL),
+    (12, 'guardian', 'Guardian', 'Guardiano', 'Guardiao', 5, 50, NULL),
+    (13, 'scout', 'Scout', 'Esploratore', 'Batedor', 6, 50, NULL),
+    (14, 'explorer', 'Explorer', 'Esploratore', 'Explorador', 6, 50, NULL)
+ON DUPLICATE KEY UPDATE
+    name = VALUES(name),
+    name_it = VALUES(name_it),
+    name_pt = VALUES(name_pt),
+    parent_id_player_class = VALUES(parent_id_player_class),
+    unlock_level = VALUES(unlock_level),
+    starter_branch = VALUES(starter_branch);
+
+INSERT INTO playanimaster_db.player_class_abilities
+    (id_player_class_ability, id_player_class, code, name, name_it, name_pt,
+     description, description_it, description_pt, use_context, cooldown_turns, cooldown_seconds,
+     effect_json, unlock_level, flg_active)
+VALUES
+    (1, 1, 'nerd_shard_identify', 'Keen Eye', 'Occhio attento', 'Olho atento',
+     '+5% element shard identify rate on wild inspect.', '+5% identificazione frammenti al ispezionare selvatici.', '+5% identificacao de fragmentos ao inspecionar.',
+     'field', 0, 0, '{"type":"passive","stat":"shard_identify","percent":5}', 1, 'S'),
+    (2, 1, 'nerd_accuracy_aura', 'Steady Focus', 'Mira stabile', 'Foco estavel',
+     '+5% accuracy on team when you act first in a round.', '+5% precisione alla squadra quando agisci per primo nel turno.', '+5% precisao na equipa quando ages primeiro na ronda.',
+     'battle', 0, 0, '{"type":"passive","stat":"acc","percent":5,"when":"acts_first_in_round"}', 1, 'S'),
+    (3, 2, 'stud_move_speed', 'Long Stride', 'Passo lungo', 'Passo longo',
+     '+5% move speed outside battle.', '+5% velocita di movimento fuori lotta.', '+5% velocidade de movimento fora de combate.',
+     'field', 0, 0, '{"type":"passive","stat":"move_speed","percent":5}', 1, 'S'),
+    (4, 2, 'stud_first_crit', 'Opening Blow', 'Colpo iniziale', 'Golpe inicial',
+     '+5% crit on first animal attack each battle.', '+5% crit sul primo attacco animale per lotta.', '+5% crit no primeiro ataque animal por batalha.',
+     'battle', 0, 0, '{"type":"passive","stat":"cr","percent":5,"when":"first_attack_per_battle"}', 1, 'S')
+ON DUPLICATE KEY UPDATE
+    id_player_class = VALUES(id_player_class),
+    name = VALUES(name),
+    name_it = VALUES(name_it),
+    name_pt = VALUES(name_pt),
+    description = VALUES(description),
+    description_it = VALUES(description_it),
+    description_pt = VALUES(description_pt),
+    use_context = VALUES(use_context),
+    cooldown_turns = VALUES(cooldown_turns),
+    cooldown_seconds = VALUES(cooldown_seconds),
+    effect_json = VALUES(effect_json),
+    unlock_level = VALUES(unlock_level),
+    flg_active = VALUES(flg_active);
+
+INSERT INTO playanimaster_db.language_texts (dt_c, tag, text, text_it, text_pt) VALUES
+(NOW(), 'character_create.player_class', 'Class', 'Classe', 'Classe'),
+(NOW(), 'character_create.player_class_nerd', 'Nerd — knowledge and precision', 'Nerd — conoscenza e precisione', 'Nerd — conhecimento e precisao'),
+(NOW(), 'character_create.player_class_stud', 'Stud — action and presence', 'Stud — azione e presenza', 'Stud — acao e presenca'),
+(NOW(), 'character_create.avatar', 'Avatar look', 'Aspetto avatar', 'Aparencia do avatar')
+ON DUPLICATE KEY UPDATE
+    text = VALUES(text),
+    text_it = VALUES(text_it),
+    text_pt = VALUES(text_pt);
+
+INSERT INTO playanimaster_db.language_texts (dt_c, tag, text, text_it, text_pt) VALUES
+(NOW(), 'self.title', 'Character', 'Personaggio', 'Personagem'),
+(NOW(), 'self.tab_overview', 'Overview', 'Panoramica', 'Visao geral'),
+(NOW(), 'self.tab_abilities', 'Abilities', 'Abilita', 'Habilidades'),
+(NOW(), 'self.loading', 'Loading character…', 'Caricamento personaggio…', 'A carregar personagem…'),
+(NOW(), 'self.load_failed', 'Could not load character info.', 'Impossibile caricare il personaggio.', 'Nao foi possivel carregar o personagem.'),
+(NOW(), 'self.exp_label', 'Experience', 'Esperienza', 'Experiencia'),
+(NOW(), 'self.exp_progress', 'Lv {level}: {current} / {needed} XP · next Lv {next}', 'Lv {level}: {current} / {needed} XP · prossimo Lv {next}', 'Nv {level}: {current} / {needed} XP · proximo Nv {next}'),
+(NOW(), 'self.level_label', 'Lv {level}', 'Lv {level}', 'Nv {level}'),
+(NOW(), 'self.gold_label', '{gold} gold', '{gold} oro', '{gold} ouro'),
+(NOW(), 'self.field_avatar', 'Avatar look', 'Aspetto avatar', 'Aparencia avatar'),
+(NOW(), 'self.field_gender', 'Gender', 'Genere', 'Genero'),
+(NOW(), 'self.field_zone', 'Zone', 'Zona', 'Zona'),
+(NOW(), 'self.field_class_tier', 'Class tier', 'Grado classe', 'Grau de classe'),
+(NOW(), 'self.gender_male', 'Male', 'Maschio', 'Masculino'),
+(NOW(), 'self.gender_female', 'Female', 'Femmina', 'Feminino'),
+(NOW(), 'self.class_tier', 'Tier {tier}', 'Grado {tier}', 'Grau {tier}'),
+(NOW(), 'self.specialize_hint', 'Reach level {level} to specialize via quests.', 'Raggiungi il livello {level} per specializzarti con le missioni.', 'Atinge o nivel {level} para te especializares via missoes.'),
+(NOW(), 'self.abilities_empty', 'No class abilities yet.', 'Nessuna abilita di classe.', 'Sem habilidades de classe.'),
+(NOW(), 'self.context_battle', 'Battle', 'Lotta', 'Combate'),
+(NOW(), 'self.context_field', 'Field', 'Campo', 'Campo'),
+(NOW(), 'self.context_both', 'Battle & field', 'Lotta e campo', 'Combate e campo'),
+(NOW(), 'self.ability_passive', 'Passive', 'Passiva', 'Passiva'),
+(NOW(), 'self.ability_locked', 'Locked', 'Bloccata', 'Bloqueada'),
+(NOW(), 'self.ability_cd_turns', 'Cooldown: {turns} turns', 'Recupero: {turns} turni', 'Recarga: {turns} turnos'),
+(NOW(), 'self.ability_cd_seconds', 'Cooldown: {seconds}s', 'Recupero: {seconds}s', 'Recarga: {seconds}s'),
+(NOW(), 'hud.help', 'WASD move · Walk into wilds to battle · Talk to NPCs · P self · I bag · T team', 'WASD muovi · Cammina sui selvatici · NPC · P personaggio · I borsa · T squadra', 'WASD mover · Encontra selvagens · NPCs · P personagem · I mochila · T equipa')
+ON DUPLICATE KEY UPDATE
+    text = VALUES(text),
+    text_it = VALUES(text_it),
+    text_pt = VALUES(text_pt);
 
 
+-- Module 001b Phase B — Nerd → Scientist promotion (Lab Director)
 
+INSERT INTO playanimaster_db.item_types
+    (id_item_type, dt_creazione, item_type, nome, descrizione, price, sell_price, use_effect,
+     flg_holdable, flg_tradable, flg_sellable, flg_usable, usable_on, flg_stackable, stack_limit,
+     flg_usable_in_battle, flg_usable_outside_battle, flg_usable_on_alive, flg_usable_on_fainted,
+     nome_it, nome_pt, descrizione_it, descrizione_pt)
+VALUES
+    (6, NOW(), 'quest_material', 'Element Shard (Fire)', 'Quest material for class specialization.', 0, 0, 0,
+     'S', 'N', 'N', 'N', 'none', 'S', 9999, 'N', 'N', 'N', 'N',
+     'Frammento elementale (Fuoco)', 'Fragmento elemental (Fogo)',
+     'Materiale per specializzazione di classe.', 'Material para especializacao de classe.'),
+    (7, NOW(), 'quest_material', 'Field Notes', 'Research notes collected in the field.', 0, 0, 0,
+     'S', 'N', 'N', 'N', 'none', 'S', 9999, 'N', 'N', 'N', 'N',
+     'Appunti di campo', 'Notas de campo',
+     'Appunti raccolti sul campo.', 'Notas recolhidas no campo.'),
+    (8, NOW(), 'quest_material', 'Microscope Trinket', 'A crafted lens assembly for the lab.', 0, 0, 0,
+     'S', 'N', 'N', 'N', 'none', 'S', 9999, 'N', 'N', 'N', 'N',
+     'Trinket microscopio', 'Trinket microscopio',
+     'Lente artigianale per il laboratorio.', 'Lente artesanal para o laboratorio.')
+ON DUPLICATE KEY UPDATE
+    item_type = VALUES(item_type),
+    nome = VALUES(nome),
+    descrizione = VALUES(descrizione),
+    nome_it = VALUES(nome_it),
+    nome_pt = VALUES(nome_pt),
+    descrizione_it = VALUES(descrizione_it),
+    descrizione_pt = VALUES(descrizione_pt);
+
+INSERT INTO playanimaster_db.requirements
+    (id_requirement, requirement_type, id_ref, ref_table, min, max, descrizione)
+VALUES
+    (13, 'player class', 1, 'PLAYER_CLASS', 1, 1, 'Player is Nerd'),
+    (14, 'user lvl', 0, NULL, 25, 999, 'Player level at least 25'),
+    (15, 'item', 6, 'POTION', 5, 999, 'At least 5 Element Shard (Fire)'),
+    (16, 'item', 7, 'POTION', 3, 999, 'At least 3 Field Notes'),
+    (17, 'item', 8, 'POTION', 1, 999, 'At least 1 Microscope Trinket')
+ON DUPLICATE KEY UPDATE
+    requirement_type = VALUES(requirement_type),
+    id_ref = VALUES(id_ref),
+    ref_table = VALUES(ref_table),
+    min = VALUES(min),
+    max = VALUES(max),
+    descrizione = VALUES(descrizione);
+
+INSERT INTO playanimaster_db.consequences
+    (id_consequence, consequence_type, id_ref, ref_table, num, params_json)
+VALUES
+    (3, '[set player_class]', 4, 'scientist', 1,
+     '{"consume_items":[{"id_item_type":6,"quantity":5},{"id_item_type":7,"quantity":3},{"id_item_type":8,"quantity":1}]}')
+ON DUPLICATE KEY UPDATE
+    consequence_type = VALUES(consequence_type),
+    id_ref = VALUES(id_ref),
+    ref_table = VALUES(ref_table),
+    num = VALUES(num),
+    params_json = VALUES(params_json);
+
+INSERT INTO playanimaster_db.npcs
+    (id_npc, npc, `type`, id_zone, posx, posy, rangex, rangey, direction, sight_distance, npc_type_prefab, posz, wander_range, euler_x, euler_y, euler_z, gender)
+VALUES
+    (4, 'Lab Director', 'story', 1000, -30.0, 50.0, 0, 0, 'D', 0, 'Scientist', -20.0, 0, 0.0, 0.0, 0.0, NULL)
+ON DUPLICATE KEY UPDATE
+    npc = VALUES(npc),
+    `type` = VALUES(`type`),
+    id_zone = VALUES(id_zone),
+    posx = VALUES(posx),
+    posy = VALUES(posy),
+    posz = VALUES(posz),
+    npc_type_prefab = VALUES(npc_type_prefab);
+
+INSERT INTO playanimaster_db.conversations
+    (id_conversation, id_npc, visible, title, title_it, title_pt, flg_register)
+VALUES
+    (10, 4, 'S', 'Scientific specialization', 'Specializzazione scientifica', 'Especializacao cientifica', 'S')
+ON DUPLICATE KEY UPDATE
+    id_npc = VALUES(id_npc),
+    visible = VALUES(visible),
+    title = VALUES(title),
+    title_it = VALUES(title_it),
+    title_pt = VALUES(title_pt),
+    flg_register = VALUES(flg_register);
+
+INSERT INTO playanimaster_db.conversation_requirements
+    (id_conversation_requirement, id_conversation, id_requirement)
+VALUES
+    (11, 10, 13),
+    (12, 10, 14),
+    (13, 10, 15),
+    (14, 10, 16),
+    (15, 10, 17)
+ON DUPLICATE KEY UPDATE
+    id_conversation = VALUES(id_conversation),
+    id_requirement = VALUES(id_requirement);
+
+INSERT INTO playanimaster_db.dialogues
+    (id_dialog, id_conversation, `order`, flg_last, flg_options, dialog, dialog_it, dialog_pt)
+VALUES
+    (17, 10, 1, 'N', 'N',
+        'Your field data is promising. With the materials you brought, we can register you as a Scientist.',
+        'I tuoi dati sul campo sono promettenti. Con i materiali che hai portato possiamo registrarti come Scienziato.',
+        'Os teus dados de campo sao promissores. Com os materiais que trouxeste podemos registar-te como Cientista.'),
+    (18, 10, 2, 'S', 'S',
+        'Are you ready to specialize as a Scientist? This choice is permanent.',
+        'Sei pronto a specializzarti come Scienziato? Questa scelta e permanente.',
+        'Estas pronto para te especializares como Cientista? Esta escolha e permanente.')
+ON DUPLICATE KEY UPDATE
+    id_conversation = VALUES(id_conversation),
+    `order` = VALUES(`order`),
+    flg_last = VALUES(flg_last),
+    flg_options = VALUES(flg_options),
+    dialog = VALUES(dialog),
+    dialog_it = VALUES(dialog_it),
+    dialog_pt = VALUES(dialog_pt);
+
+INSERT INTO playanimaster_db.dialogues_options
+    (id_dialog_option, id_dialog, option_n, `option`, option_it, option_pt, option_color, option_text, option_text_it, option_text_pt)
+VALUES
+    (10, 18, 1, NULL, NULL, NULL, 'green', 'I''m ready to specialize', 'Sono pronto a specializzarmi', 'Estou pronto para me especializar'),
+    (11, 18, 2, NULL, NULL, NULL, 'red', 'Not yet', 'Non ancora', 'Ainda nao')
+ON DUPLICATE KEY UPDATE
+    id_dialog = VALUES(id_dialog),
+    option_n = VALUES(option_n),
+    option_color = VALUES(option_color),
+    option_text = VALUES(option_text),
+    option_text_it = VALUES(option_text_it),
+    option_text_pt = VALUES(option_text_pt);
+
+INSERT INTO playanimaster_db.conversation_consequences
+    (id_conversation_consequence, id_conversation, id_option, id_consequence)
+VALUES
+    (6, 10, 10, 3)
+ON DUPLICATE KEY UPDATE
+    id_conversation = VALUES(id_conversation),
+    id_option = VALUES(id_option),
+    id_consequence = VALUES(id_consequence);
+
+INSERT INTO playanimaster_db.player_class_abilities
+    (id_player_class_ability, id_player_class, code, name, name_it, name_pt,
+     description, description_it, description_pt, use_context, cooldown_turns, cooldown_seconds,
+     effect_json, unlock_level, flg_active)
+VALUES
+    (5, 4, 'scientist_analyze', 'Analyze', 'Analizza', 'Analisar',
+     'Reveal enemy resistances and next AI tendency for 1 turn.', 'Rivela resistenze nemiche e la prossima mossa IA per 1 turno.', 'Revela resistencias inimigas e a proxima tendencia IA por 1 turno.',
+     'battle', 3, 0, '{"type":"active","effect":"analyze_enemy"}', 25, 'S'),
+    (6, 4, 'scientist_sample', 'Sample', 'Campiona', 'Amostra',
+     'Sample wild remains for bestiary progress.', 'Campiona resti selvatici per progressi bestiario.', 'Amostra restos selvagens para progresso do bestiario.',
+     'field', 0, 300, '{"type":"active","effect":"sample_wild"}', 25, 'S')
+ON DUPLICATE KEY UPDATE
+    id_player_class = VALUES(id_player_class),
+    name = VALUES(name),
+    name_it = VALUES(name_it),
+    name_pt = VALUES(name_pt),
+    description = VALUES(description),
+    description_it = VALUES(description_it),
+    description_pt = VALUES(description_pt),
+    use_context = VALUES(use_context),
+    cooldown_turns = VALUES(cooldown_turns),
+    cooldown_seconds = VALUES(cooldown_seconds),
+    effect_json = VALUES(effect_json),
+    unlock_level = VALUES(unlock_level),
+    flg_active = VALUES(flg_active);
+
+
+INSERT INTO playanimaster_db.conversation_consequences (id_conversation_consequence, id_conversation, id_option, id_consequence) VALUES(7, 4, 1, 2);

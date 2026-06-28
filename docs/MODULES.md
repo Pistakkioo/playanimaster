@@ -50,7 +50,7 @@ After code + SQL: test local → commit → deploy → run new SQL tail on produ
 |-------|--------|-----|
 | Done | PvP 1v1 | [modules/001_PVP_1v1.md](modules/001_PVP_1v1.md) |
 | Done | Buff / debuff | [modules/001a_BUFF_SYSTEM.md](modules/001a_BUFF_SYSTEM.md) |
-| **Next** | Player classes | [modules/001b_PLAYER_CLASSES.md](modules/001b_PLAYER_CLASSES.md) |
+| **Next** | Player classes | [modules/001b_PLAYER_CLASSES.md](modules/001b_PLAYER_CLASSES.md) | Phase A in progress |
 | Then | Party system | [modules/002_PARTY_SYSTEM.md](modules/002_PARTY_SYSTEM.md) |
 | Then | Party PvE | [modules/002b_PARTY_PVE.md](modules/002b_PARTY_PVE.md) |
 | Later | Combat engine refactor | [modules/005_COMBAT_ENGINE.md](modules/005_COMBAT_ENGINE.md) (after party PvE proves multi-actor turns) |
@@ -73,6 +73,7 @@ Schema for these modules is already in `00_tables.sql` (greenfield). Incremental
 | PvP 1v1 | [001_PVP_1v1.md](modules/001_PVP_1v1.md) | `pvp.php`, `duel.js`, `private_functions/pvp.php`, `pvp_*` open_actions | `pvp_*`, `battles_pvp*` in `00`; UI strings in `02` | yes |
 | Buff / debuff | [001a_BUFF_SYSTEM.md](modules/001a_BUFF_SYSTEM.md) | `buffs.php`, battle start hooks, `get_team_info.php`, `team.js` | `buff_*` tables in `00`; definitions + team UI strings in `02` | yes |
 | Team panel & reorder | — | `team.js`, `save_team_order.php`, `get_team_*` | `language_texts` in `02` (no schema) | yes |
+| Player classes (001b) | [001b_PLAYER_CLASSES.md](modules/001b_PLAYER_CLASSES.md) | `player_class.php`, `create_character.php`, `character_select.php` | `player_classes*` in `00`/`01`; seeds in `02` | yes |
 | Dev tools | — | `dev_npcs.php`, `dev_static_data.php`, `dev_species.php` | Content export mirrors `02` patterns | — |
 
 Module design docs under `docs/modules/` describe **behavior** only. For deploy, always follow this file and `private_functions/SQL/README.md`.

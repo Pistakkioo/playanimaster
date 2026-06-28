@@ -386,6 +386,29 @@ var AnimasterApi = (function ()
         });
     }
 
+    function getSelfInfo(player)
+    {
+        return postJson(BASE + 'get_self_info.php', {
+            id_user_ig: player.id_user_ig || 0,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            unwrap(envelope);
+
+            if (!envelope.response)
+            {
+                throw new Error('Empty self info');
+            }
+
+            var payload = typeof envelope.response === 'string'
+                ? JSON.parse(envelope.response)
+                : envelope.response;
+
+            apiLog('getSelfInfo', '[AnimasterApi] getSelfInfo', payload);
+            return payload;
+        });
+    }
+
     function getTeamInfo(player)
     {
         return postJson(BASE + 'get_team_info.php', {
@@ -688,6 +711,7 @@ var AnimasterApi = (function ()
         getBattleInfo: getBattleInfo,
         getAbilityList: getAbilityList,
         getInventory: getInventory,
+        getSelfInfo: getSelfInfo,
         getTeamInfo: getTeamInfo,
         getTeamAnimals: getTeamAnimals,
         useItem: useItem,

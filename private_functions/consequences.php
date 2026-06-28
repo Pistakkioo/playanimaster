@@ -17,6 +17,7 @@ class CONSEQUENCES
         return [
             '[obtain item]' => [self::class, 'handleObtainItem'],
             'receive_random_animal' => [self::class, 'handleReceiveRandomAnimal'],
+            '[set player_class]' => [self::class, 'handleSetPlayerClass'],
         ];
     }
 
@@ -455,6 +456,48 @@ class CONSEQUENCES
         }
 
         return (int) $pool[array_rand($pool)];
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @param array<string, mixed> $params
+     */
+    private static function handleSetPlayerClass($conn, $id_user_ig, $row, $params, $LANG)
+    {
+        if (!class_exists('PLAYER_CLASS'))
+        {
+            require_once dirname(__FILE__) . '/player_class.php';
+        }
+
+        $target_id = (int) ($params['id_player_class'] ?? $params['id_ref'] ?? 0);
+
+        if ($target_id <= 0 && !empty($params['class_code']))
+        {
+            $by_code = PLAYER_CLASS::fetchByCode($conn, (string) $params['class_code']);
+
+            if ($by_code)
+            {
+                $target_id = (int) $by_code['id_player_class'];
+            }
+        }
+
+        if ($target_id <= 0 && !empty($row['ref_table']))
+        {
+            $by_code = PLAYER_CLASS::fetchByCode($conn, (string) $row['ref_table']);
+
+            if ($by_code)
+            {
+                $target_id = (int) $by_code['id_player_class'];
+            }
+        }
+
+        if ($target_id <= 0)
+        {
+            error_log('[CONSEQUENCES] set player_class missing target id');
+            return false;
+        }
+
+        return PLAYER_CLASS::promoteTo($conn, $id_user_ig, $target_id, $LANG, $params);
     }
 
     private static function normalizeLangSuffix($LANG)

@@ -1340,3 +1340,58 @@ CREATE TABLE IF NOT EXISTS playanimaster_db.battle_turn_buffs (
     CONSTRAINT fk_battle_turn_buffs_definition
         FOREIGN KEY (id_buff_definition) REFERENCES buff_definitions (id_buff_definition)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Player classes (gameplay identity; separate from cosmetic character_type avatar).
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.player_classes (
+    id_player_class INT(11) NOT NULL AUTO_INCREMENT,
+    code VARCHAR(50) NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    name_it VARCHAR(100) DEFAULT NULL,
+    name_pt VARCHAR(100) DEFAULT NULL,
+    parent_id_player_class INT(11) DEFAULT NULL,
+    unlock_level INT(11) NOT NULL DEFAULT 1,
+    starter_branch VARCHAR(10) DEFAULT NULL COMMENT 'nerd or stud for tier-1 starters only',
+    PRIMARY KEY (id_player_class),
+    UNIQUE KEY uniq_player_classes_code (code),
+    KEY idx_player_classes_parent (parent_id_player_class)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.player_class_abilities (
+    id_player_class_ability INT(11) NOT NULL AUTO_INCREMENT,
+    id_player_class INT(11) NOT NULL,
+    code VARCHAR(50) NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    name_it VARCHAR(100) DEFAULT NULL,
+    name_pt VARCHAR(100) DEFAULT NULL,
+    description VARCHAR(300) DEFAULT NULL,
+    description_it VARCHAR(300) DEFAULT NULL,
+    description_pt VARCHAR(300) DEFAULT NULL,
+    use_context ENUM('battle', 'field', 'both') NOT NULL DEFAULT 'battle',
+    cooldown_turns INT(11) NOT NULL DEFAULT 0,
+    cooldown_seconds INT(11) NOT NULL DEFAULT 0,
+    effect_json TEXT DEFAULT NULL,
+    unlock_level INT(11) NOT NULL DEFAULT 1,
+    flg_active CHAR(1) NOT NULL DEFAULT 'S',
+    PRIMARY KEY (id_player_class_ability),
+    UNIQUE KEY uniq_player_class_abilities_code (code),
+    KEY idx_player_class_abilities_class (id_player_class),
+    CONSTRAINT fk_player_class_abilities_class
+        FOREIGN KEY (id_player_class) REFERENCES player_classes (id_player_class)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.user_player_class_abilities (
+    id_user_player_class_ability INT(11) NOT NULL AUTO_INCREMENT,
+    id_user_ig INT(11) NOT NULL,
+    id_player_class_ability INT(11) NOT NULL,
+    flg_unlocked CHAR(1) NOT NULL DEFAULT 'S',
+    dt_unlocked TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_user_player_class_ability),
+    UNIQUE KEY uniq_user_player_class_ability (id_user_ig, id_player_class_ability),
+    KEY idx_user_pca_user (id_user_ig),
+    CONSTRAINT fk_user_pca_user
+        FOREIGN KEY (id_user_ig) REFERENCES users_ig (id_user_ig),
+    CONSTRAINT fk_user_pca_ability
+        FOREIGN KEY (id_player_class_ability) REFERENCES player_class_abilities (id_player_class_ability)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

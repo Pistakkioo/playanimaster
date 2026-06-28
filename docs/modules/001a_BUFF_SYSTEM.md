@@ -43,7 +43,7 @@ At **battle start**, animal buffs and owner `user_ig` buffs are merged and sorte
 
 ## Deploy
 
-Run `private_functions/SQL/buff_system.sql` on production DB.
+Append schema to `01_alters_structure.sql` and seeds to `02_insert_static_data.sql` (see [MODULES.md](../MODULES.md) and [SQL/README.md](../../private_functions/SQL/README.md)).
 
 ## Future
 

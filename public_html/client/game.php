@@ -22,6 +22,7 @@ if (!$profile || empty($profile['id_user_ig']))
 $profile = animaster_normalize_profile($profile);
 
 $lvl_up_constant_animal = 40;
+$lvl_up_constant_player = 80;
 $conn = animaster_get_conn();
 $costante_row = $conn->query("SELECT valore FROM costanti WHERE costante = 'lvl_up_constant_animal' LIMIT 1");
 
@@ -32,6 +33,18 @@ if ($costante_row)
     if ($costante_data && isset($costante_data['valore']))
     {
         $lvl_up_constant_animal = (int) $costante_data['valore'];
+    }
+}
+
+$costante_player_row = $conn->query("SELECT valore FROM costanti WHERE costante = 'lvl_up_constant_player' LIMIT 1");
+
+if ($costante_player_row)
+{
+    $costante_player_data = $costante_player_row->fetch();
+
+    if ($costante_player_data && isset($costante_player_data['valore']))
+    {
+        $lvl_up_constant_player = (int) $costante_player_data['valore'];
     }
 }
 
@@ -46,7 +59,8 @@ $bootstrap = [
     'profile' => $profile,
     'battle' => $battle,
     'costanti' => [
-        'lvl_up_constant_animal' => $lvl_up_constant_animal
+        'lvl_up_constant_animal' => $lvl_up_constant_animal,
+        'lvl_up_constant_player' => $lvl_up_constant_player
     ],
     'langApi' => $langApi,
     'texts' => animaster_load_language_texts($conn, $langApi),
@@ -173,6 +187,41 @@ $bootstrap = [
                     </div>
                     <p id="team-message" class="team-message"></p>
                 </aside>
+
+                <aside id="self-panel" class="self-panel side-panel" hidden aria-hidden="true">
+                    <header class="self-header side-panel-header">
+                        <h2 class="self-title" data-i18n="self.title">Character</h2>
+                        <button type="button" id="self-close" class="self-close" title="Close" data-i18n-title="ui.close">&times;</button>
+                    </header>
+                    <div class="self-body">
+                        <div class="self-hero">
+                            <div id="self-thumb" class="self-thumb" aria-hidden="true">
+                                <span id="self-thumb-initial" class="self-thumb-initial">?</span>
+                            </div>
+                            <div class="self-hero-meta">
+                                <div id="self-name" class="self-name">—</div>
+                                <div id="self-class" class="self-class">—</div>
+                                <div class="self-hero-stats">
+                                    <span id="self-level" class="self-level">—</span>
+                                    <span id="self-gold" class="self-gold">—</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="self-exp-block">
+                            <span class="self-exp-label" data-i18n="self.exp_label">Experience</span>
+                            <div class="self-exp-bar">
+                                <div id="self-exp-fill" class="self-exp-fill"></div>
+                            </div>
+                            <span id="self-exp-text" class="self-exp-text"></span>
+                        </div>
+                        <div id="self-tabs" class="self-tabs" role="tablist"></div>
+                        <div class="self-tab-panels">
+                            <div id="self-tab-overview" class="self-tab-panel is-active" role="tabpanel"></div>
+                            <div id="self-tab-abilities" class="self-tab-panel" role="tabpanel" hidden></div>
+                        </div>
+                    </div>
+                    <p id="self-message" class="self-message"></p>
+                </aside>
             </div>
         </div>
     </div>
@@ -182,7 +231,8 @@ $bootstrap = [
         <div id="hud" class="hud-overlay" hidden aria-hidden="true">
             <div id="hud-player"></div>
             <div id="hud-status"></div>
-            <div id="hud-help" data-i18n="hud.help">WASD move · Walk into wilds to battle · Talk to NPCs · I bag · T team</div>
+            <div id="hud-help" data-i18n="hud.help">WASD move · Walk into wilds to battle · Talk to NPCs · P self · I bag · T team</div>
+            <button type="button" id="self-toggle" class="hud-self-toggle" aria-expanded="false" data-i18n="self.title">Self</button>
             <button type="button" id="team-toggle" class="hud-team-toggle" aria-expanded="false" data-i18n="hud.team">Team</button>
             <button type="button" id="inventory-toggle" class="hud-inventory-toggle" aria-expanded="false" data-i18n="hud.bag">Bag</button>
             <a class="hud-logout" id="hud-characters" href="character_select.php?switch=1" data-i18n="hud.characters">Characters</a>
@@ -371,6 +421,7 @@ $bootstrap = [
     <script src="<?php echo animaster_h(animaster_asset_url('js/element-icons.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/inventory.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/team.js')); ?>"></script>
+    <script src="<?php echo animaster_h(animaster_asset_url('js/self.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/notifications.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/combat.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/player_chat_bubbles.js')); ?>"></script>
