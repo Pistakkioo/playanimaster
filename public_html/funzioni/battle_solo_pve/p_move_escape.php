@@ -65,6 +65,13 @@ if($b_status!="ongoing")
         update battles_solo_pve set finished = 'S'
         where id_battle_solo_pve = \"$id_battle\"
     ");
+
+    if (!class_exists('BUFFS'))
+    {
+        require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/buffs.php';
+    }
+
+    BUFFS::onSoloPveBattleEnd($conn, $id_battle);
 }
 
 

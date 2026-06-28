@@ -338,10 +338,12 @@ CREATE TABLE `species` (
 CREATE TABLE `language_texts` (
   `id_language_text` int(11) NOT NULL AUTO_INCREMENT,
   `dt_c` timestamp NULL DEFAULT NULL,
+  `tag` varchar(100) DEFAULT NULL,
   `text` varchar(500) DEFAULT NULL,
   `text_it` varchar(500) DEFAULT NULL,
   `text_pt` varchar(500) DEFAULT NULL,
-  PRIMARY KEY (`id_language_text`)
+  PRIMARY KEY (`id_language_text`),
+  UNIQUE KEY `uniq_language_texts_tag` (`tag`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
@@ -946,3 +948,395 @@ CREATE TABLE `log` (
 
 
 
+
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.pvp_duel_requests (
+    id_duel_request INT(11) NOT NULL AUTO_INCREMENT,
+    id_user_ig_challenger INT(11) NOT NULL,
+    id_user_ig_target INT(11) NOT NULL,
+    id_zone INT(11) NOT NULL,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_expires DATETIME NOT NULL,
+    flg_status CHAR(1) NOT NULL DEFAULT 'P' COMMENT 'P=pending, A=accepted, D=declined, X=expired, C=cancelled',
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_duel_request),
+    KEY idx_duel_req_target_pending (id_user_ig_target, flg_status, dt_expires),
+    KEY idx_duel_req_challenger_pending (id_user_ig_challenger, flg_status, dt_expires)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battles_pvp (
+    id_battle_pvp INT(11) NOT NULL AUTO_INCREMENT,
+    id_duel_request INT(11) DEFAULT NULL,
+    id_user_ig_a INT(11) NOT NULL COMMENT 'Challenger',
+    id_user_ig_b INT(11) NOT NULL COMMENT 'Target',
+    id_zone INT(11) DEFAULT NULL,
+    flg_status CHAR(1) NOT NULL DEFAULT 'O' COMMENT 'O=ongoing, F=finished, X=cancelled',
+    id_winner_user_ig INT(11) DEFAULT NULL,
+    end_reason VARCHAR(50) DEFAULT NULL,
+    awaiting_user_ig INT(11) DEFAULT NULL,
+    current_turn INT(11) NOT NULL DEFAULT 0,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_finished TIMESTAMP NULL DEFAULT NULL,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_pvp),
+    KEY idx_battles_pvp_user_a (id_user_ig_a, flg_status),
+    KEY idx_battles_pvp_user_b (id_user_ig_b, flg_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battles_pvp_moves (
+    id_battle_pvp_move INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle_pvp INT(11) DEFAULT NULL,
+    id_user_ig_actor INT(11) DEFAULT NULL,
+    dt_creazione TIMESTAMP NULL DEFAULT NULL,
+    dt_modifica TIMESTAMP NULL DEFAULT NULL,
+    turn INT(11) DEFAULT NULL,
+    move_type VARCHAR(100) DEFAULT NULL,
+    move_speed DECIMAL(10,2) DEFAULT NULL,
+    order_in_turn INT(11) DEFAULT NULL,
+    id_rif INT(11) DEFAULT NULL,
+    move_description VARCHAR(200) DEFAULT NULL,
+    move_hit VARCHAR(1) DEFAULT NULL,
+    w_a_res_hp INT(11) DEFAULT NULL,
+    p_a_res_hp INT(11) DEFAULT NULL,
+    w_a_res_atk DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_def DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_matk DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_mdef DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_acc INT(11) DEFAULT NULL,
+    w_a_res_eva INT(11) DEFAULT NULL,
+    w_a_res_cr INT(11) DEFAULT NULL,
+    w_a_res_spd DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_atk DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_def DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_matk DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_mdef DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_acc INT(11) DEFAULT NULL,
+    p_a_res_eva INT(11) DEFAULT NULL,
+    p_a_res_cr INT(11) DEFAULT NULL,
+    p_a_res_spd DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_max_hp INT(11) DEFAULT NULL,
+    p_a_res_max_hp INT(11) DEFAULT NULL,
+    protagonist_type VARCHAR(100) DEFAULT NULL,
+    id_protagonist INT(11) DEFAULT NULL,
+    target_type VARCHAR(100) DEFAULT NULL,
+    id_target INT(11) DEFAULT NULL,
+    w_a_id INT(11) DEFAULT NULL,
+    w_a_id_species INT(11) DEFAULT NULL,
+    w_a_species VARCHAR(100) DEFAULT NULL,
+    w_a_lvl INT(11) DEFAULT NULL,
+    p_a_id INT(11) DEFAULT NULL,
+    p_a_id_species INT(11) DEFAULT NULL,
+    p_a_species VARCHAR(100) DEFAULT NULL,
+    p_a_lvl INT(11) DEFAULT NULL,
+    p_a_nickname VARCHAR(100) DEFAULT NULL,
+    resulting_battle_status VARCHAR(10) DEFAULT NULL,
+    w_a_id_element INT(11) DEFAULT NULL,
+    p_a_id_element INT(11) DEFAULT NULL,
+    p_a_cur_exp INT(11) DEFAULT '0',
+    PRIMARY KEY (id_battle_pvp_move),
+    KEY idx_battles_pvp_moves_battle (id_battle_pvp, turn)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.pvp_turn_choices (
+    id_turn_choice INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle_pvp INT(11) NOT NULL,
+    turn INT(11) NOT NULL,
+    id_user_ig INT(11) NOT NULL,
+    action_type VARCHAR(50) NOT NULL,
+    action_id INT(11) NOT NULL DEFAULT 0,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_turn_choice),
+    UNIQUE KEY uniq_pvp_turn_choice (id_battle_pvp, turn, id_user_ig),
+    KEY idx_pvp_turn_choice_battle (id_battle_pvp, turn)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+
+
+
+
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.buff_definitions (
+    id_buff_definition INT(11) NOT NULL AUTO_INCREMENT,
+    buff_code VARCHAR(50) NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    name_it VARCHAR(100) DEFAULT NULL,
+    name_pt VARCHAR(100) DEFAULT NULL,
+    description VARCHAR(300) DEFAULT NULL,
+    description_it VARCHAR(300) DEFAULT NULL,
+    description_pt VARCHAR(300) DEFAULT NULL,
+    target_entity ENUM('animal', 'user_ig') NOT NULL DEFAULT 'animal',
+    stat_key VARCHAR(20) NOT NULL COMMENT 'atk, def, matk, mdef, spd, acc, eva, cr, hp, max_hp',
+    modifier_kind ENUM('flat', 'percent') NOT NULL DEFAULT 'percent',
+    modifier_value DECIMAL(10, 4) NOT NULL DEFAULT 0,
+    is_debuff CHAR(1) NOT NULL DEFAULT 'N',
+    flg_active CHAR(1) NOT NULL DEFAULT 'S',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_buff_definition),
+    UNIQUE KEY uniq_buff_definitions_code (buff_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.entity_buffs (
+    id_entity_buff INT(11) NOT NULL AUTO_INCREMENT,
+    id_buff_definition INT(11) NOT NULL,
+    entity_type ENUM('animal', 'user_ig') NOT NULL,
+    id_entity INT(11) NOT NULL,
+    dt_applied_utc DATETIME NOT NULL,
+    dt_expires_utc DATETIME NOT NULL,
+    source_type VARCHAR(50) DEFAULT NULL COMMENT 'ability, item, quest, admin',
+    source_id INT(11) DEFAULT NULL,
+    PRIMARY KEY (id_entity_buff),
+    KEY idx_entity_buffs_active (entity_type, id_entity, dt_expires_utc),
+    KEY idx_entity_buffs_definition (id_buff_definition),
+    CONSTRAINT fk_entity_buffs_definition
+        FOREIGN KEY (id_buff_definition) REFERENCES buff_definitions (id_buff_definition)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battle_turn_buffs (
+    id_battle_turn_buff INT(11) NOT NULL AUTO_INCREMENT,
+    battle_type ENUM('solo_pve', 'pvp', 'party_pve') NOT NULL,
+    id_battle INT(11) NOT NULL,
+    entity_type ENUM('animal', 'user_ig', 'wild') NOT NULL,
+    id_entity INT(11) NOT NULL,
+    id_buff_definition INT(11) NOT NULL,
+    applied_at_turn INT(11) NOT NULL DEFAULT 0,
+    applied_order INT(11) NOT NULL DEFAULT 0,
+    turns_total INT(11) NOT NULL,
+    turns_remaining INT(11) NOT NULL,
+    dt_applied_utc DATETIME NOT NULL,
+    PRIMARY KEY (id_battle_turn_buff),
+    KEY idx_battle_turn_buffs_battle (battle_type, id_battle, turns_remaining),
+    KEY idx_battle_turn_buffs_entity (entity_type, id_entity),
+    CONSTRAINT fk_battle_turn_buffs_definition
+        FOREIGN KEY (id_buff_definition) REFERENCES buff_definitions (id_buff_definition)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.pvp_duel_requests (
+    id_duel_request INT(11) NOT NULL AUTO_INCREMENT,
+    id_user_ig_challenger INT(11) NOT NULL,
+    id_user_ig_target INT(11) NOT NULL,
+    id_zone INT(11) NOT NULL,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_expires DATETIME NOT NULL,
+    flg_status CHAR(1) NOT NULL DEFAULT 'P' COMMENT 'P=pending, A=accepted, D=declined, X=expired, C=cancelled',
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_duel_request),
+    KEY idx_duel_req_target_pending (id_user_ig_target, flg_status, dt_expires),
+    KEY idx_duel_req_challenger_pending (id_user_ig_challenger, flg_status, dt_expires)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battles_pvp (
+    id_battle_pvp INT(11) NOT NULL AUTO_INCREMENT,
+    id_duel_request INT(11) DEFAULT NULL,
+    id_user_ig_a INT(11) NOT NULL COMMENT 'Challenger',
+    id_user_ig_b INT(11) NOT NULL COMMENT 'Target',
+    id_zone INT(11) DEFAULT NULL,
+    flg_status CHAR(1) NOT NULL DEFAULT 'O' COMMENT 'O=ongoing, F=finished, X=cancelled',
+    id_winner_user_ig INT(11) DEFAULT NULL,
+    end_reason VARCHAR(50) DEFAULT NULL,
+    awaiting_user_ig INT(11) DEFAULT NULL,
+    current_turn INT(11) NOT NULL DEFAULT 0,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_finished TIMESTAMP NULL DEFAULT NULL,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_pvp),
+    KEY idx_battles_pvp_user_a (id_user_ig_a, flg_status),
+    KEY idx_battles_pvp_user_b (id_user_ig_b, flg_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battles_pvp_moves (
+    id_battle_pvp_move INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle_pvp INT(11) DEFAULT NULL,
+    id_user_ig_actor INT(11) DEFAULT NULL,
+    dt_creazione TIMESTAMP NULL DEFAULT NULL,
+    dt_modifica TIMESTAMP NULL DEFAULT NULL,
+    turn INT(11) DEFAULT NULL,
+    move_type VARCHAR(100) DEFAULT NULL,
+    move_speed DECIMAL(10,2) DEFAULT NULL,
+    order_in_turn INT(11) DEFAULT NULL,
+    id_rif INT(11) DEFAULT NULL,
+    move_description VARCHAR(200) DEFAULT NULL,
+    move_hit VARCHAR(1) DEFAULT NULL,
+    w_a_res_hp INT(11) DEFAULT NULL,
+    p_a_res_hp INT(11) DEFAULT NULL,
+    w_a_res_atk DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_def DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_matk DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_mdef DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_acc INT(11) DEFAULT NULL,
+    w_a_res_eva INT(11) DEFAULT NULL,
+    w_a_res_cr INT(11) DEFAULT NULL,
+    w_a_res_spd DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_atk DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_def DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_matk DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_mdef DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_acc INT(11) DEFAULT NULL,
+    p_a_res_eva INT(11) DEFAULT NULL,
+    p_a_res_cr INT(11) DEFAULT NULL,
+    p_a_res_spd DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_max_hp INT(11) DEFAULT NULL,
+    p_a_res_max_hp INT(11) DEFAULT NULL,
+    protagonist_type VARCHAR(100) DEFAULT NULL,
+    id_protagonist INT(11) DEFAULT NULL,
+    target_type VARCHAR(100) DEFAULT NULL,
+    id_target INT(11) DEFAULT NULL,
+    w_a_id INT(11) DEFAULT NULL,
+    w_a_id_species INT(11) DEFAULT NULL,
+    w_a_species VARCHAR(100) DEFAULT NULL,
+    w_a_lvl INT(11) DEFAULT NULL,
+    p_a_id INT(11) DEFAULT NULL,
+    p_a_id_species INT(11) DEFAULT NULL,
+    p_a_species VARCHAR(100) DEFAULT NULL,
+    p_a_lvl INT(11) DEFAULT NULL,
+    p_a_nickname VARCHAR(100) DEFAULT NULL,
+    resulting_battle_status VARCHAR(10) DEFAULT NULL,
+    w_a_id_element INT(11) DEFAULT NULL,
+    p_a_id_element INT(11) DEFAULT NULL,
+    p_a_cur_exp INT(11) DEFAULT '0',
+    PRIMARY KEY (id_battle_pvp_move),
+    KEY idx_battles_pvp_moves_battle (id_battle_pvp, turn)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.pvp_turn_choices (
+    id_turn_choice INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle_pvp INT(11) NOT NULL,
+    turn INT(11) NOT NULL,
+    id_user_ig INT(11) NOT NULL,
+    action_type VARCHAR(50) NOT NULL,
+    action_id INT(11) NOT NULL DEFAULT 0,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_turn_choice),
+    UNIQUE KEY uniq_pvp_turn_choice (id_battle_pvp, turn, id_user_ig),
+    KEY idx_pvp_turn_choice_battle (id_battle_pvp, turn)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.trade_requests (
+    id_trade_request INT(11) NOT NULL AUTO_INCREMENT,
+    id_user_ig_sender INT(11) NOT NULL,
+    id_user_ig_target INT(11) NOT NULL,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_expires DATETIME NOT NULL,
+    flg_status CHAR(1) NOT NULL DEFAULT 'P' COMMENT 'P=pending, A=accepted, D=declined, X=expired, C=cancelled',
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_trade_request),
+    KEY idx_trade_req_target_pending (id_user_ig_target, flg_status, dt_expires),
+    KEY idx_trade_req_sender_pending (id_user_ig_sender, flg_status, dt_expires)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.trades (
+    id_trade INT(11) NOT NULL AUTO_INCREMENT,
+    id_trade_request INT(11) DEFAULT NULL,
+    id_user_ig_a INT(11) NOT NULL COMMENT 'Trade request sender',
+    id_user_ig_b INT(11) NOT NULL COMMENT 'Trade request target',
+    gold_a INT(11) NOT NULL DEFAULT 0,
+    gold_b INT(11) NOT NULL DEFAULT 0,
+    flg_confirm_a CHAR(1) NOT NULL DEFAULT 'N',
+    flg_confirm_b CHAR(1) NOT NULL DEFAULT 'N',
+    flg_status CHAR(1) NOT NULL DEFAULT 'O' COMMENT 'O=open, C=completed, X=cancelled',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_trade),
+    KEY idx_trades_user_a (id_user_ig_a, flg_status),
+    KEY idx_trades_user_b (id_user_ig_b, flg_status),
+    KEY idx_trades_request (id_trade_request)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.trade_offer_items (
+    id_trade_offer_item INT(11) NOT NULL AUTO_INCREMENT,
+    id_trade INT(11) NOT NULL,
+    id_user_ig INT(11) NOT NULL,
+    id_item_type INT(11) NOT NULL,
+    quantity INT(11) NOT NULL DEFAULT 1,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_trade_offer_item),
+    UNIQUE KEY uq_trade_offer_item (id_trade, id_user_ig, id_item_type),
+    KEY idx_trade_offer_trade (id_trade)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.trade_item_locks (
+    id_trade_item_lock INT(11) NOT NULL AUTO_INCREMENT,
+    id_trade INT(11) NOT NULL,
+    id_item INT(11) NOT NULL,
+    id_user_ig INT(11) NOT NULL,
+    id_item_type INT(11) NOT NULL,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_trade_item_lock),
+    UNIQUE KEY uq_trade_item_lock_item (id_item),
+    KEY idx_trade_item_lock_trade (id_trade)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.buff_definitions (
+    id_buff_definition INT(11) NOT NULL AUTO_INCREMENT,
+    buff_code VARCHAR(50) NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    name_it VARCHAR(100) DEFAULT NULL,
+    name_pt VARCHAR(100) DEFAULT NULL,
+    description VARCHAR(300) DEFAULT NULL,
+    description_it VARCHAR(300) DEFAULT NULL,
+    description_pt VARCHAR(300) DEFAULT NULL,
+    target_entity ENUM('animal', 'user_ig') NOT NULL DEFAULT 'animal',
+    stat_key VARCHAR(20) NOT NULL COMMENT 'atk, def, matk, mdef, spd, acc, eva, cr, hp, max_hp',
+    modifier_kind ENUM('flat', 'percent') NOT NULL DEFAULT 'percent',
+    modifier_value DECIMAL(10, 4) NOT NULL DEFAULT 0,
+    is_debuff CHAR(1) NOT NULL DEFAULT 'N',
+    flg_active CHAR(1) NOT NULL DEFAULT 'S',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_buff_definition),
+    UNIQUE KEY uniq_buff_definitions_code (buff_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.entity_buffs (
+    id_entity_buff INT(11) NOT NULL AUTO_INCREMENT,
+    id_buff_definition INT(11) NOT NULL,
+    entity_type ENUM('animal', 'user_ig') NOT NULL,
+    id_entity INT(11) NOT NULL,
+    dt_applied_utc DATETIME NOT NULL,
+    dt_expires_utc DATETIME NOT NULL,
+    source_type VARCHAR(50) DEFAULT NULL COMMENT 'ability, item, quest, admin',
+    source_id INT(11) DEFAULT NULL,
+    PRIMARY KEY (id_entity_buff),
+    KEY idx_entity_buffs_active (entity_type, id_entity, dt_expires_utc),
+    KEY idx_entity_buffs_definition (id_buff_definition),
+    CONSTRAINT fk_entity_buffs_definition
+        FOREIGN KEY (id_buff_definition) REFERENCES buff_definitions (id_buff_definition)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battle_turn_buffs (
+    id_battle_turn_buff INT(11) NOT NULL AUTO_INCREMENT,
+    battle_type ENUM('solo_pve', 'pvp', 'party_pve') NOT NULL,
+    id_battle INT(11) NOT NULL,
+    entity_type ENUM('animal', 'user_ig', 'wild') NOT NULL,
+    id_entity INT(11) NOT NULL,
+    id_buff_definition INT(11) NOT NULL,
+    applied_at_turn INT(11) NOT NULL DEFAULT 0,
+    applied_order INT(11) NOT NULL DEFAULT 0,
+    turns_total INT(11) NOT NULL,
+    turns_remaining INT(11) NOT NULL,
+    dt_applied_utc DATETIME NOT NULL,
+    PRIMARY KEY (id_battle_turn_buff),
+    KEY idx_battle_turn_buffs_battle (battle_type, id_battle, turns_remaining),
+    KEY idx_battle_turn_buffs_entity (entity_type, id_entity),
+    CONSTRAINT fk_battle_turn_buffs_definition
+        FOREIGN KEY (id_buff_definition) REFERENCES buff_definitions (id_buff_definition)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

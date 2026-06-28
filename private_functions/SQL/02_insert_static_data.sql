@@ -140,7 +140,11 @@ INSERT INTO playanimaster_db.language_texts (dt_c, tag, text, text_it, text_pt) 
 
 (NOW(), 'stats.hp_value', '{current} / {max} HP', '{current} / {max} PS', '{current} / {max} HP'),
 
-(NOW(), 'error.start_battle_failed', 'Could not start battle', 'Impossibile iniziare la lotta', 'Não foi possível iniciar batalha');
+(NOW(), 'error.start_battle_failed', 'Could not start battle', 'Impossibile iniziare la lotta', 'Não foi possível iniciar batalha')
+ON DUPLICATE KEY UPDATE
+    text = VALUES(text),
+    text_it = VALUES(text_it),
+    text_pt = VALUES(text_pt);
 
 
 
@@ -184,7 +188,11 @@ INSERT INTO playanimaster_db.language_texts (dt_c, tag, text, text_it, text_pt) 
 (NOW(), 'chat.error_no_global_pass', 'You need a global chat pass.', 'Serve un pass per la chat globale.', 'Precisas de um passe para o chat global.'),
 (NOW(), 'chat.error_invalid_sender', 'Could not send message.', 'Impossibile inviare il messaggio.', 'Não foi possível enviar mensagem.'),
 (NOW(), 'chat.error_server_error', 'Chat is temporarily unavailable. Try again later.', 'Chat temporaneamente non disponibile. Riprova più tardi.', 'Chat temporariamente indisponível. Tenta mais tarde.'),
-(NOW(), 'chat.error_generic', 'Could not send message.', 'Impossibile inviare il messaggio.', 'Não foi possível enviar mensagem.');
+(NOW(), 'chat.error_generic', 'Could not send message.', 'Impossibile inviare il messaggio.', 'Não foi possível enviar mensagem.')
+ON DUPLICATE KEY UPDATE
+    text = VALUES(text),
+    text_it = VALUES(text_it),
+    text_pt = VALUES(text_pt);
 
 
 
@@ -224,7 +232,11 @@ INSERT INTO playanimaster_db.language_texts (dt_c, tag, text, text_it, text_pt) 
 (NOW(), 'trade.pick_item_title', 'Add to trade', 'Aggiungi allo scambio', 'Adicionar à troca'),
 (NOW(), 'trade.pick_item_empty', 'No tradable items in your bag.', 'Nessun oggetto scambiabile nella borsa.', 'Sem itens trocáveis na mochila.'),
 (NOW(), 'trade.pick_quantity_label', 'Quantity', 'Quantità', 'Quantidade'),
-(NOW(), 'trade.pick_quantity_hint', 'Available: {max}', 'Disponibili: {max}', 'Disponíveis: {max}');
+(NOW(), 'trade.pick_quantity_hint', 'Available: {max}', 'Disponibili: {max}', 'Disponíveis: {max}')
+ON DUPLICATE KEY UPDATE
+    text = VALUES(text),
+    text_it = VALUES(text_it),
+    text_pt = VALUES(text_pt);
 
 
 
@@ -570,10 +582,12 @@ INSERT INTO playanimaster_db.classes (id_class, class) VALUES(5, 'Insects');
 INSERT INTO playanimaster_db.classes (id_class, class) VALUES(6, 'Invertebrates');
 
 
-INSERT INTO playanimaster_db.consequences (id_consequence, consequence_type, id_ref, ref_table, num) VALUES(1, '[obtain item]', 1, 'POTION', 1);
+INSERT INTO playanimaster_db.consequences (id_consequence, consequence_type, id_ref, ref_table, num, params_json) VALUES(1, '[obtain item]', 1, 'POTION', 1, NULL);
+INSERT INTO playanimaster_db.consequences (id_consequence, consequence_type, id_ref, ref_table, num, params_json) VALUES(2, 'receive_random_animal', 0, NULL, 1, '{"species_pool":[1,2,3],"element_pool":[1,2,3,4,5,6,7]}');
 
 INSERT INTO playanimaster_db.conversation_consequences (id_conversation_consequence, id_conversation, id_option, id_consequence) VALUES(1, 5, 1, 1);
 INSERT INTO playanimaster_db.conversation_consequences (id_conversation_consequence, id_conversation, id_option, id_consequence) VALUES(2, 6, 5, 1);
+INSERT INTO playanimaster_db.conversation_consequences (id_conversation_consequence, id_conversation, id_option, id_consequence) VALUES(3, 4, 1, 2);
 
 INSERT INTO playanimaster_db.conversation_requirements (id_conversation_requirement, id_conversation, id_requirement) VALUES(4, 4, 3);
 INSERT INTO playanimaster_db.conversation_requirements (id_conversation_requirement, id_conversation, id_requirement) VALUES(3, 3, 4);
@@ -872,6 +886,264 @@ INSERT INTO playanimaster_db.spawn_points (id_spawn_point, id_zone, x, y, z, rad
 
 
 
+INSERT INTO playanimaster_db.buff_definitions
+    (buff_code, name, name_it, name_pt, description, description_it, description_pt,
+     target_entity, stat_key, modifier_kind, modifier_value, is_debuff, flg_active)
+VALUES
+    ('atk_up_10', 'Attack Up', 'Attacco +', 'Ataque +',
+     'Raises attack by 10%.', 'Aumenta l''attacco del 10%.', 'Aumenta o ataque em 10%.',
+     'animal', 'atk', 'percent', 10, 'N', 'S'),
+    ('def_down_10', 'Defense Down', 'Difesa -', 'Defesa -',
+     'Lowers defense by 10%.', 'Riduce la difesa del 10%.', 'Reduz a defesa em 10%.',
+     'animal', 'def', 'percent', 10, 'S', 'S'),
+    ('party_spd_up_5', 'Party Speed Up', 'Velocita squadra +', 'Velocidade grupo +',
+     'Raises speed of all team animals by 5%.', 'Aumenta la velocita di tutta la squadra del 5%.', 'Aumenta a velocidade de toda a equipa em 5%.',
+     'user_ig', 'spd', 'percent', 5, 'N', 'S')
+ON DUPLICATE KEY UPDATE
+    name = VALUES(name),
+    description = VALUES(description),
+    modifier_value = VALUES(modifier_value);
+
+
+
+
+
+-- Game client UI strings (English default in `text`, Italian `text_it`, Portuguese `text_pt`).
+-- Frontend resolves by `tag`. Placeholders: {name}, {item}, {status}, {others}, {wilds}, {npcs}, {zone}, {x}, {z}, {id}, {turn}, {description}
+-- Idempotent; requires UNIQUE on tag (see structure_changes.sql).
+
+INSERT INTO playanimaster_db.language_texts (dt_c, tag, text, text_it, text_pt) VALUES
+(NOW(), 'ui.loading', 'Loading…', 'Caricamento…', 'A carregar…'),
+(NOW(), 'ui.back', 'Back', 'Indietro', 'Voltar'),
+(NOW(), 'ui.close', 'Close', 'Chiudi', 'Fechar'),
+(NOW(), 'ui.save', 'Save', 'Salva', 'Guardar'),
+(NOW(), 'ui.cancel', 'Cancel', 'Annulla', 'Cancelar'),
+(NOW(), 'ui.ok', 'OK', 'OK', 'OK'),
+(NOW(), 'ui.use', 'Use', 'Usa', 'Usar'),
+(NOW(), 'ui.next', 'Next', 'Avanti', 'Seguinte'),
+(NOW(), 'ui.combat_close_title', 'Only after battle ends', 'Solo a fine lotta', 'Só após o fim da batalha'),
+
+(NOW(), 'combat.title', 'Combat', 'Lotta', 'Combate'),
+(NOW(), 'combat.flee', 'Flee', 'Fuga', 'Fugir'),
+(NOW(), 'combat.fight', 'Fight', 'Combatti', 'Lutar'),
+(NOW(), 'combat.fight_hint', 'Select an ability to attack.', 'Scegli un''abilità per attaccare.', 'Escolhe uma habilidade para atacar.'),
+(NOW(), 'combat.items', 'Items', 'Oggetti', 'Itens'),
+(NOW(), 'combat.items_hint', 'Use an item on your team.', 'Usa un oggetto sulla squadra.', 'Usa um item na tua equipa.'),
+(NOW(), 'combat.team', 'Team', 'Squadra', 'Equipa'),
+(NOW(), 'combat.team_hint', 'Switch to another creature.', 'Cambia creatura.', 'Troca de criatura.'),
+(NOW(), 'combat.choose_action', 'Choose an action.', 'Scegli un''azione.', 'Escolhe uma ação.'),
+(NOW(), 'combat.choose_ability', 'Choose an ability or flee.', 'Scegli un''abilità o fuggi.', 'Escolhe uma habilidade ou foge.'),
+(NOW(), 'combat.choose_item', 'Choose an item.', 'Scegli un oggetto.', 'Escolhe um item.'),
+(NOW(), 'combat.choose_switch', 'Choose a creature to switch in.', 'Scegli la creatura da mandare in campo.', 'Escolhe a criatura para entrar em campo.'),
+(NOW(), 'combat.loading_turn', 'Loading turn…', 'Caricamento turno…', 'A carregar turno…'),
+(NOW(), 'combat.resolving_turn', 'Resolving turn…', 'Risoluzione turno…', 'A resolver turno…'),
+(NOW(), 'combat.load_failed', 'Combat load failed', 'Caricamento lotta fallito', 'Falha ao carregar combate'),
+(NOW(), 'combat.no_battle_data', 'No battle data.', 'Nessun dato di lotta.', 'Sem dados de batalha.'),
+(NOW(), 'combat.no_battle_data_turn', 'No battle data for this turn. Close (×) to exit.', 'Nessun dato per questo turno. Chiudi (×) per uscire.', 'Sem dados para este turno. Fecha (×) para sair.'),
+(NOW(), 'combat.action_failed', 'Action failed', 'Azione fallita', 'Ação falhou'),
+(NOW(), 'combat.status_victory', 'Victory! The wild animal was freed.', 'Vittoria! L''animale selvatico è stato liberato.', 'Vitória! O animal selvagem foi libertado.'),
+(NOW(), 'combat.status_defeat', 'You have no usable creatures. You blacked out.', 'Non hai creature utilizzabili. Sei svenuto.', 'Não tens criaturas utilizáveis. Desmaiaste.'),
+(NOW(), 'combat.status_fled', 'You fled from battle.', 'Sei fuggito dalla lotta.', 'Fugiste da batalha.'),
+(NOW(), 'combat.status_ended', 'Battle ended: {status}', 'Lotta terminata: {status}', 'Batalha terminada: {status}'),
+(NOW(), 'combat.status_blackout_loading', 'You have no usable creatures. You blacked out…', 'Non hai creature utilizzabili. Sei svenuto…', 'Não tens criaturas utilizáveis. Desmaiaste…'),
+(NOW(), 'combat.recovery_failed', 'Recovery failed. Close (×) to continue.', 'Recupero fallito. Chiudi (×) per continuare.', 'Recuperação falhou. Fecha (×) para continuar.'),
+(NOW(), 'combat.loading_abilities', 'Loading abilities…', 'Caricamento abilità…', 'A carregar habilidades…'),
+(NOW(), 'combat.no_abilities', 'No abilities available.', 'Nessuna abilità disponibile.', 'Nenhuma habilidade disponível.'),
+(NOW(), 'combat.load_abilities_failed', 'Could not load abilities', 'Impossibile caricare le abilità', 'Não foi possível carregar habilidades'),
+(NOW(), 'combat.loading_items', 'Loading items…', 'Caricamento oggetti…', 'A carregar itens…'),
+(NOW(), 'combat.no_items', 'No usable items in battle.', 'Nessun oggetto utilizzabile in lotta.', 'Nenhum item utilizável em combate.'),
+(NOW(), 'combat.load_items_failed', 'Could not load items', 'Impossibile caricare gli oggetti', 'Não foi possível carregar itens'),
+(NOW(), 'combat.loading_team', 'Loading team…', 'Caricamento squadra…', 'A carregar equipa…'),
+(NOW(), 'combat.load_team_failed', 'Could not load team', 'Impossibile caricare la squadra', 'Não foi possível carregar equipa'),
+(NOW(), 'combat.no_switch_targets', 'No other team creatures available.', 'Nessun''altra creatura in squadra disponibile.', 'Nenhuma outra criatura da equipa disponível.'),
+(NOW(), 'combat.item_target_prompt', 'Use {item} on which creature?', 'Su quale creatura usare {item}?', 'Em que criatura usar {item}?'),
+(NOW(), 'combat.no_item_target', 'No valid target for this item.', 'Nessun bersaglio valido per questo oggetto.', 'Nenhum alvo válido para este item.'),
+(NOW(), 'combat.unit_your_animal', 'Your animal', 'La tua creatura', 'A tua criatura'),
+(NOW(), 'combat.unit_wild', 'Wild', 'Selvatico', 'Selvagem'),
+(NOW(), 'combat.log_turn', 'T{turn}: {description}', 'T{turn}: {description}', 'T{turn}: {description}'),
+(NOW(), 'combat.press_space_continue', 'Press Space to continue…', 'Premi Spazio per continuare…', 'Prime Espaço para continuar…'),
+(NOW(), 'combat.auto_advance', 'Auto-advance', 'Avanzamento automatico', 'Avanço automático'),
+(NOW(), 'combat.skip_animations', 'Skip animations', 'Salta animazioni', 'Saltar animações'),
+(NOW(), 'combat.missed', 'But it missed!', 'Ma non l''ha preso!', 'Mas falhou!'),
+(NOW(), 'combat.hit', 'Hit!', 'Preso!', 'Acertou!'),
+(NOW(), 'combat.critical_hit', 'Critical hit!', 'Preso in pieno!', 'Acertou em cheio!'),
+(NOW(), 'combat.stat_attack', 'attack', 'attacco', 'ataque'),
+(NOW(), 'combat.stat_defense', 'defense', 'difesa', 'defesa'),
+(NOW(), 'combat.stat_matk', 'magic attack', 'attacco magico', 'ataque mágico'),
+(NOW(), 'combat.stat_mdef', 'magic defense', 'difesa magica', 'defesa mágica'),
+(NOW(), 'combat.stat_accuracy', 'accuracy', 'precisione', 'pontaria'),
+(NOW(), 'combat.stat_evasion', 'evasion', 'evasione', 'evasão'),
+(NOW(), 'combat.stat_critical', 'critical rate', 'probabilità critica', 'probabilidade crítica'),
+(NOW(), 'combat.stat_speed', 'speed', 'velocità', 'velocidade'),
+(NOW(), 'combat.stat_increased', 'increased', 'è aumentato', 'aumentou'),
+(NOW(), 'combat.stat_decreased', 'decreased', 'è diminuito', 'diminuiu'),
+(NOW(), 'combat.stat_changed', '{name}''s {stat} {direction}.', '{stat} di {name} {direction}.', 'O {stat} de {name} {direction}.'),
+
+(NOW(), 'dialog.talk_button', 'Talk [Space]', 'Parla [Spazio]', 'Falar [Espaço]'),
+(NOW(), 'dialog.choose_topic', 'Choose a topic', 'Scegli un argomento', 'Escolhe um tema'),
+(NOW(), 'dialog.choose_topic_prompt', 'What would you like to talk about?', 'Di cosa vorresti parlare?', 'Sobre o que gostarias de falar?'),
+(NOW(), 'dialog.npc_fallback', 'NPC', 'PNG', 'NPC'),
+(NOW(), 'dialog.conversation_fallback', 'Conversation {id}', 'Conversazione {id}', 'Conversa {id}'),
+(NOW(), 'dialog.option_fallback', 'Option {id}', 'Opzione {id}', 'Opção {id}'),
+
+(NOW(), 'hud.help', 'WASD move · Walk into wilds to battle · Talk to NPCs · I bag · T team', 'WASD muovi · Avvicinati ai selvatici per lottare · Parla con PNG · I borsa · T squadra', 'WASD mover · Aproxima-te de selvagens para combater · Falar com NPCs · I mochila · T equipa'),
+(NOW(), 'hud.team', 'Team', 'Squadra', 'Equipa'),
+(NOW(), 'hud.bag', 'Bag', 'Borsa', 'Mochila'),
+(NOW(), 'hud.characters', 'Characters', 'Personaggi', 'Personagens'),
+(NOW(), 'hud.logout', 'Logout', 'Esci', 'Sair'),
+(NOW(), 'hud.status_counts', 'Others: {others} · Wild: {wilds} · NPC: {npcs}', 'Altri: {others} · Selvatici: {wilds} · PNG: {npcs}', 'Outros: {others} · Selvagens: {wilds} · NPCs: {npcs}'),
+(NOW(), 'hud.player_position', '{name} · Zone {zone} · ({x}, {z})', '{name} · Zona {zone} · ({x}, {z})', '{name} · Zona {zone} · ({x}, {z})'),
+(NOW(), 'hud.default_player', 'Player', 'Giocatore', 'Jogador'),
+(NOW(), 'hud.default_you', 'You', 'Tu', 'Tu'),
+(NOW(), 'hud.toggle_show', 'Show HUD', 'Mostra HUD', 'Mostrar HUD'),
+(NOW(), 'hud.toggle_hide', 'Hide HUD', 'Nascondi HUD', 'Ocultar HUD'),
+
+(NOW(), 'inventory.title', 'Inventory', 'Inventario', 'Inventário'),
+(NOW(), 'inventory.empty', 'Your bag is empty.', 'La borsa è vuota.', 'A mochila está vazia.'),
+(NOW(), 'inventory.load_failed', 'Could not load inventory.', 'Impossibile caricare l''inventario.', 'Não foi possível carregar inventário.'),
+(NOW(), 'inventory.no_items', 'No items', 'Nessun oggetto', 'Sem itens'),
+(NOW(), 'inventory.select_item', 'Select an item from the list.', 'Seleziona un oggetto dall''elenco.', 'Seleciona um item da lista.'),
+(NOW(), 'inventory.item_fallback', 'Item {id}', 'Oggetto {id}', 'Item {id}'),
+(NOW(), 'inventory.meta_effect', 'Effect: {effect}', 'Effetto: {effect}', 'Efeito: {effect}'),
+(NOW(), 'inventory.meta_usable_on', 'Use on: {target}', 'Usa su: {target}', 'Usar em: {target}'),
+(NOW(), 'inventory.cannot_use_here', 'This item cannot be used here.', 'Questo oggetto non può essere usato qui.', 'Este item não pode ser usado aqui.'),
+(NOW(), 'inventory.team_picker_title', 'Use on which animal?', 'Su quale animale?', 'Em que animal?'),
+(NOW(), 'inventory.no_team_animals', 'You have no team animals.', 'Non hai animali in squadra.', 'Não tens animais na equipa.'),
+(NOW(), 'inventory.cannot_use_on_animal', 'You cannot use this item on that animal.', 'Non puoi usare questo oggetto su quell''animale.', 'Não podes usar este item nesse animal.'),
+(NOW(), 'inventory.using_item', 'Using item…', 'Uso oggetto…', 'A usar item…'),
+(NOW(), 'inventory.item_used', 'Item used on {name}.', 'Oggetto usato su {name}.', 'Item usado em {name}.'),
+(NOW(), 'inventory.use_failed', 'Could not use item.', 'Impossibile usare l''oggetto.', 'Não foi possível usar item.'),
+
+(NOW(), 'team.title', 'Team', 'Squadra', 'Equipa'),
+(NOW(), 'team.empty', 'Your team is empty.', 'La squadra è vuota.', 'A equipa está vazia.'),
+(NOW(), 'team.load_failed', 'Could not load team.', 'Impossibile caricare la squadra.', 'Não foi possível carregar equipa.'),
+(NOW(), 'team.no_animals', 'No team animals', 'Nessun animale in squadra', 'Sem animais na equipa'),
+(NOW(), 'team.nickname_label', 'Nickname', 'Soprannome', 'Alcunha'),
+(NOW(), 'team.level_prefix', 'Level {level}', 'Livello {level}', 'Nível {level}'),
+(NOW(), 'team.lv_short', 'Lv.{level}', 'Lv.{level}', 'Nv.{level}'),
+(NOW(), 'team.element_prefix', 'Element: {element}', 'Elemento: {element}', 'Elemento: {element}'),
+(NOW(), 'team.fainted', '(fainted)', '(svenuto)', '(desmaiado)'),
+(NOW(), 'team.saving_nickname', 'Saving nickname…', 'Salvataggio soprannome…', 'A guardar alcunha…'),
+(NOW(), 'team.nickname_saved', 'Nickname saved.', 'Soprannome salvato.', 'Alcunha guardada.'),
+(NOW(), 'team.nickname_save_failed', 'Could not save nickname.', 'Impossibile salvare il soprannome.', 'Não foi possível guardar alcunha.'),
+(NOW(), 'team.animal_fallback', 'Animal {id}', 'Animale {id}', 'Animal {id}'),
+(NOW(), 'team.species_fallback', 'Species {id}', 'Specie {id}', 'Espécie {id}'),
+(NOW(), 'team.buffs_title', 'Active effects', 'Effetti attivi', 'Efeitos ativos'),
+(NOW(), 'team.buff_party_prefix', 'Party:', 'Squadra:', 'Grupo:'),
+(NOW(), 'team.buff_stacks_toggle', 'Toggle {count} stacks', 'Mostra/nascondi {count} stack', 'Alternar {count} stacks'),
+(NOW(), 'team.buff_stack_entry', 'Stack {n}', 'Stack {n}', 'Stack {n}'),
+(NOW(), 'team.tab_overview', 'Overview', 'Panoramica', 'Visão geral'),
+(NOW(), 'team.tab_base', 'Base', 'Base', 'Base'),
+(NOW(), 'team.tab_dna', 'DNA', 'DNA', 'DNA'),
+(NOW(), 'team.tab_exp', 'EXP pts', 'Punti EXP', 'Pts EXP'),
+(NOW(), 'team.tab_points', 'Stat pts', 'Punti stat', 'Pts stat'),
+(NOW(), 'team.tab_abilities', 'Abilities', 'Abilità', 'Habilidades'),
+(NOW(), 'team.abilities_loading', 'Loading abilities…', 'Caricamento abilità…', 'A carregar habilidades…'),
+(NOW(), 'team.abilities_empty', 'No learnable abilities at this level.', 'Nessuna abilità apprendibile a questo livello.', 'Sem habilidades aprendíveis neste nível.'),
+(NOW(), 'team.ability_fallback', 'Ability {id}', 'Abilità {id}', 'Habilidade {id}'),
+(NOW(), 'team.ability_power', 'Power {value}', 'Potenza {value}', 'Potência {value}'),
+(NOW(), 'team.ability_mpower', 'M.Power {value}', 'Pot. spec. {value}', 'Poder esp. {value}'),
+(NOW(), 'team.ability_accuracy', 'Acc {value}', 'Prec {value}', 'Prec {value}'),
+(NOW(), 'team.reorder_toggle', 'Reorder team', 'Riordina squadra', 'Reordenar equipa'),
+(NOW(), 'team.reorder_hint', 'Drag animals to reorder your team.', 'Trascina gli animali per riordinare la squadra.', 'Arrasta os animais para reordenar a equipa.'),
+(NOW(), 'team.reorder_save', 'Save order', 'Salva ordine', 'Guardar ordem'),
+(NOW(), 'team.reorder_saving', 'Saving team order…', 'Salvataggio ordine squadra…', 'A guardar ordem da equipa…'),
+(NOW(), 'team.reorder_saved', 'Team order saved.', 'Ordine squadra salvato.', 'Ordem da equipa guardada.'),
+(NOW(), 'team.reorder_save_failed', 'Could not save team order.', 'Impossibile salvare l''ordine della squadra.', 'Não foi possível guardar a ordem da equipa.'),
+(NOW(), 'team.reorder_need_two', 'You need at least two team animals to reorder.', 'Servono almeno due animali in squadra per riordinare.', 'Precisas de pelo menos dois animais na equipa para reordenar.'),
+
+(NOW(), 'world.wild_fallback', 'Wild #{id}', 'Selvatico #{id}', 'Selvagem #{id}'),
+(NOW(), 'world.other_player_fallback', 'Player', 'Giocatore', 'Jogador'),
+
+(NOW(), 'target.type_self', 'Your character', 'Il tuo personaggio', 'O teu personagem'),
+(NOW(), 'target.type_player', 'Player', 'Giocatore', 'Jogador'),
+(NOW(), 'target.type_npc', 'NPC', 'NPC', 'NPC'),
+(NOW(), 'target.type_wild', 'Wild animal', 'Animale selvatico', 'Animal selvagem'),
+
+(NOW(), 'stats.hp_value', '{current} / {max} HP', '{current} / {max} PS', '{current} / {max} HP'),
+
+(NOW(), 'error.start_battle_failed', 'Could not start battle', 'Impossibile iniziare la lotta', 'Não foi possível iniciar batalha')
+ON DUPLICATE KEY UPDATE
+    text = VALUES(text),
+    text_it = VALUES(text_it),
+    text_pt = VALUES(text_pt);
+
+-- Chat UI strings: see language_texts_chat.sql for incremental INSERT.
+ 
+
+
+-- Language strings (idempotent; requires UNIQUE on tag — run structure_changes.sql once).
+INSERT INTO playanimaster_db.language_texts (dt_c, tag, text, text_it, text_pt) VALUES
+(NOW(), 'duel.request_tooltip', 'Duel', 'Duello', 'Duelo'),
+(NOW(), 'duel.request_sent', 'Duel challenge sent.', 'Sfida al duello inviata.', 'Desafio de duelo enviado.'),
+(NOW(), 'duel.request_failed', 'Could not send duel challenge.', 'Impossibile inviare la sfida.', 'Não foi possível enviar o desafio.'),
+(NOW(), 'duel.incoming_title', '{name} challenges you to a duel', '{name} ti sfida a duello', '{name} desafia-te para um duelo'),
+(NOW(), 'duel.accept', 'Accept', 'Accetta', 'Aceitar'),
+(NOW(), 'duel.decline', 'Decline', 'Rifiuta', 'Recusar'),
+(NOW(), 'duel.expired', 'Duel challenge expired.', 'Sfida al duello scaduta.', 'Desafio de duelo expirado.'),
+(NOW(), 'duel.waiting', 'Waiting for {name}…', 'In attesa di {name}…', 'À espera de {name}…'),
+(NOW(), 'duel.waiting_opponent', 'Opponent is choosing…', 'L''avversario sta scegliendo…', 'O adversário está a escolher…'),
+(NOW(), 'duel.waiting_resolve', 'Waiting for both choices…', 'In attesa delle scelte…', 'À espera das escolhas…'),
+(NOW(), 'duel.choice_locked', 'Choice locked — waiting for opponent.', 'Scelta registrata — in attesa dell''avversario.', 'Escolha registada — à espera do adversário.'),
+(NOW(), 'duel.opponent_ready', 'Opponent locked in — choose your action.', 'L''avversario ha scelto — scegli la tua azione.', 'O adversário escolheu — escolhe a tua ação.'),
+(NOW(), 'duel.error_offline', 'Player is not available.', 'Giocatore non disponibile.', 'Jogador indisponível.'),
+(NOW(), 'duel.error_busy', 'You or the other player are busy.', 'Tu o l''altro giocatore siete occupati.', 'Tu ou o outro jogador estão ocupados.'),
+(NOW(), 'duel.error_range', 'Player is too far away.', 'Giocatore troppo lontano.', 'Jogador demasiado longe.'),
+(NOW(), 'duel.error_no_team', 'You need at least one animal with HP to duel.', 'Serve almeno un animale con HP per duellare.', 'Precisas de pelo menos um animal com HP para duelar.'),
+(NOW(), 'duel.error_cooldown', 'Wait before challenging this player again.', 'Attendi prima di sfidare di nuovo questo giocatore.', 'Espera antes de desafiar este jogador novamente.'),
+(NOW(), 'duel.error_generic', 'Duel failed.', 'Duello fallito.', 'Duelo falhou.'),
+(NOW(), 'duel.win', 'You won the duel!', 'Hai vinto il duello!', 'Ganhaste o duelo!'),
+(NOW(), 'duel.lose', 'You lost the duel.', 'Hai perso il duello.', 'Perdeste o duelo.'),
+(NOW(), 'duel.recovering', 'Recovering after the duel…', 'Recupero dopo il duello…', 'A recuperar após o duelo…'),
+(NOW(), 'duel.lose_teleported', 'You lost the duel and were teleported to your last recovery location.', 'Hai perso il duello e sei stato teletrasportato all''ultimo punto di recupero.', 'Perdeste o duelo e foste teletransportados para o vosso último ponto de recuperação.'),
+(NOW(), 'duel.opponent_label', 'Opponent', 'Avversario', 'Adversário'),
+(NOW(), 'combat.pvp_your_turn', 'Choose an action.', 'Scegli un''azione.', 'Escolhe uma ação.')
+ON DUPLICATE KEY UPDATE
+    text = VALUES(text),
+    text_it = VALUES(text_it),
+    text_pt = VALUES(text_pt);
+
+
+
+
+-- UI strings (idempotent; requires UNIQUE on tag — see structure_changes.sql)
+INSERT INTO playanimaster_db.language_texts (dt_c, tag, text, text_it, text_pt) VALUES
+(NOW(), 'trade.request_tooltip', 'Trade', 'Scambia', 'Trocar'),
+(NOW(), 'trade.request_sent', 'Trade request sent.', 'Richiesta di scambio inviata.', 'Pedido de troca enviado.'),
+(NOW(), 'trade.request_failed', 'Could not send trade request.', 'Impossibile inviare la richiesta di scambio.', 'Não foi possível enviar pedido de troca.'),
+(NOW(), 'trade.incoming_title', '{name} wants to trade', '{name} vuole scambiare', '{name} quer trocar'),
+(NOW(), 'trade.accept', 'Accept', 'Accetta', 'Aceitar'),
+(NOW(), 'trade.decline', 'Decline', 'Rifiuta', 'Recusar'),
+(NOW(), 'trade.expired', 'Trade request expired.', 'Richiesta di scambio scaduta.', 'Pedido de troca expirado.'),
+(NOW(), 'trade.waiting', 'Waiting for {name}…', 'In attesa di {name}…', 'À espera de {name}…'),
+(NOW(), 'trade.title', 'Trade with {name}', 'Scambio con {name}', 'Troca com {name}'),
+(NOW(), 'trade.your_offer', 'Your offer', 'La tua offerta', 'A tua oferta'),
+(NOW(), 'trade.their_offer', '{name}''s offer', 'Offerta di {name}', 'Oferta de {name}'),
+(NOW(), 'trade.gold_label', 'Gold', 'Oro', 'Ouro'),
+(NOW(), 'trade.gold_balance', 'You have: {gold}', 'Hai: {gold}', 'Tens: {gold}'),
+(NOW(), 'trade.add_item', 'Add item', 'Aggiungi oggetto', 'Adicionar item'),
+(NOW(), 'trade.remove_item', 'Remove', 'Rimuovi', 'Remover'),
+(NOW(), 'trade.no_items', 'No items offered', 'Nessun oggetto', 'Sem itens'),
+(NOW(), 'trade.confirm', 'Confirm trade', 'Conferma scambio', 'Confirmar troca'),
+(NOW(), 'trade.confirmed', 'Confirmed — waiting for partner', 'Confermato — in attesa del partner', 'Confirmado — à espera do parceiro'),
+(NOW(), 'trade.partner_confirmed', 'Partner confirmed', 'Partner ha confermato', 'Parceiro confirmou'),
+(NOW(), 'trade.cancel', 'Cancel trade', 'Annulla scambio', 'Cancelar troca'),
+(NOW(), 'trade.completed', 'Trade completed!', 'Scambio completato!', 'Troca concluída!'),
+(NOW(), 'trade.cancelled', 'Trade cancelled.', 'Scambio annullato.', 'Troca cancelada.'),
+(NOW(), 'trade.error_not_tradable', 'That item cannot be traded.', 'Quell''oggetto non è scambiabile.', 'Esse item não pode ser trocado.'),
+(NOW(), 'trade.error_not_enough_gold', 'Not enough gold.', 'Oro insufficiente.', 'Ouro insuficiente.'),
+(NOW(), 'trade.error_not_enough_items', 'Not enough items.', 'Oggetti insufficienti.', 'Itens insuficientes.'),
+(NOW(), 'trade.error_busy', 'You or the other player are already trading.', 'Tu o l''altro giocatore state già scambiando.', 'Tu ou o outro jogador já estão a trocar.'),
+(NOW(), 'trade.error_offline', 'Player is not available.', 'Giocatore non disponibile.', 'Jogador indisponível.'),
+(NOW(), 'trade.error_generic', 'Trade failed.', 'Scambio fallito.', 'Troca falhou.'),
+(NOW(), 'trade.pick_item_title', 'Add to trade', 'Aggiungi allo scambio', 'Adicionar à troca'),
+(NOW(), 'trade.pick_item_empty', 'No tradable items in your bag.', 'Nessun oggetto scambiabile nella borsa.', 'Sem itens trocáveis na mochila.'),
+(NOW(), 'trade.pick_quantity_label', 'Quantity', 'Quantità', 'Quantidade'),
+(NOW(), 'trade.pick_quantity_hint', 'Available: {max}', 'Disponibili: {max}', 'Disponíveis: {max}')
+ON DUPLICATE KEY UPDATE
+    text = VALUES(text),
+    text_it = VALUES(text_it),
+    text_pt = VALUES(text_pt);
 
 
 
@@ -879,18 +1151,128 @@ INSERT INTO playanimaster_db.spawn_points (id_spawn_point, id_zone, x, y, z, rad
 
 
 
+INSERT INTO playanimaster_db.consequences
+    (id_consequence, consequence_type, id_ref, ref_table, num, params_json)
+VALUES
+    (2, 'receive_random_animal', 0, NULL, 1, '{"species_pool":[1,2,3],"element_pool":[1,2,3,4,5,6,7]}')
+ON DUPLICATE KEY UPDATE
+    consequence_type = VALUES(consequence_type),
+    id_ref = VALUES(id_ref),
+    ref_table = VALUES(ref_table),
+    num = VALUES(num),
+    params_json = VALUES(params_json);
+
+INSERT INTO playanimaster_db.conversation_consequences
+    (id_conversation, id_option, id_consequence)
+SELECT 4, 1, 2
+FROM DUAL
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM playanimaster_db.conversation_consequences
+    WHERE id_conversation = 4
+      AND id_option = 1
+);
 
 
 
 
 
+INSERT INTO playanimaster_db.npcs
+    (id_npc, npc, `type`, id_zone, posx, posy, rangex, rangey, direction, sight_distance, npc_type_prefab, posz, wander_range, euler_x, euler_y, euler_z, gender)
+VALUES
+    (3, 'Tamer', 'story', 1000, 0, 50.0, 0, 0, 'D', 0, 'trader', 50, 0, 0.0, 0.0, 0.0, NULL)
+ON DUPLICATE KEY UPDATE
+    npc = VALUES(npc),
+    `type` = VALUES(`type`);
 
+-- Requirements (id_ref for conversation finished = id_conversation to check)
+INSERT INTO playanimaster_db.requirements
+    (id_requirement, requirement_type, id_ref, ref_table, min, max, descrizione)
+VALUES
+    (8, 'user lvl', 0, NULL, 4, 999, 'Player level at least 4'),
+    (9, 'number of animals', 0, 'LT_2', 0, 1, 'Fewer than 2 animals on account'),
+    (10, 'conversation finished', 8, 'CONVERSATION', 0, 0, 'Completed conversation Help me help you'),
+    (11, 'user lvl', 0, NULL, 8, 999, 'Player level at least 8'),
+    (12, 'number of animals', 0, 'LT_3', 0, 2, 'Fewer than 3 animals on account')
+ON DUPLICATE KEY UPDATE
+    requirement_type = VALUES(requirement_type),
+    id_ref = VALUES(id_ref),
+    ref_table = VALUES(ref_table),
+    min = VALUES(min),
+    max = VALUES(max),
+    descrizione = VALUES(descrizione);
 
+-- Conversations
+INSERT INTO playanimaster_db.conversations
+    (id_conversation, id_npc, visible, title, title_it, title_pt, flg_register)
+VALUES
+    (8, 3, 'S', 'Help me help you', 'Aiutami ad aiutarti', 'Ajuda-me a ajudar-te', 'S'),
+    (9, 3, 'S', 'Third time''s the charm', 'La terza e la volta buona', 'A terceira e a da certeza', 'S')
+ON DUPLICATE KEY UPDATE
+    id_npc = VALUES(id_npc),
+    visible = VALUES(visible),
+    title = VALUES(title),
+    title_it = VALUES(title_it),
+    title_pt = VALUES(title_pt),
+    flg_register = VALUES(flg_register);
 
+INSERT INTO playanimaster_db.conversation_requirements
+    (id_conversation_requirement, id_conversation, id_requirement)
+VALUES
+    (6, 8, 8),
+    (7, 8, 9),
+    (8, 9, 10),
+    (9, 9, 11),
+    (10, 9, 12)
+ON DUPLICATE KEY UPDATE
+    id_conversation = VALUES(id_conversation),
+    id_requirement = VALUES(id_requirement);
 
+-- Dialogues (single step with yes/no)
+INSERT INTO playanimaster_db.dialogues
+    (id_dialog, id_conversation, `order`, flg_last, flg_options, dialog, dialog_it, dialog_pt)
+VALUES
+    (15, 8, 1, 'S', 'S',
+        'A strong trainer builds their team step by step. You still have room for another companion — want me to find one for you?',
+        'Un buon allenatore costruisce la squadra un passo alla volta. Hai ancora spazio per un altro compagno — vuoi che te ne trovi uno?',
+        'Um bom treinador forma a equipa passo a passo. Ainda tens espaco para outro companheiro — queres que te arranje um?'),
+    (16, 9, 1, 'S', 'S',
+        'Back again? Good. You are ready for a third partner on your journey. Shall I find one for you?',
+        'Di nuovo qui? Bene. Sei pronto per un terzo compagno di viaggio. Te ne cerco uno?',
+        'Outra vez? Otimo. Estas pronto para um terceiro parceiro de viagem. Arranjo-te um?')
+ON DUPLICATE KEY UPDATE
+    id_conversation = VALUES(id_conversation),
+    `order` = VALUES(`order`),
+    flg_last = VALUES(flg_last),
+    flg_options = VALUES(flg_options),
+    dialog = VALUES(dialog),
+    dialog_it = VALUES(dialog_it),
+    dialog_pt = VALUES(dialog_pt);
 
+INSERT INTO playanimaster_db.dialogues_options
+    (id_dialog_option, id_dialog, option_n, `option`, option_it, option_pt, option_color, option_text, option_text_it, option_text_pt)
+VALUES
+    (6, 15, 1, NULL, NULL, NULL, 'green', 'Yes, I''d like another!', 'Si, ne vorrei un altro!', 'Sim, quero outro!'),
+    (7, 15, 2, NULL, NULL, NULL, 'red', 'Not now', 'Non adesso', 'Agora nao'),
+    (8, 16, 1, NULL, NULL, NULL, 'green', 'Yes, give me another!', 'Si, dammi un altro!', 'Sim, da-me outro!'),
+    (9, 16, 2, NULL, NULL, NULL, 'red', 'Not now', 'Non adesso', 'Agora nao')
+ON DUPLICATE KEY UPDATE
+    id_dialog = VALUES(id_dialog),
+    option_n = VALUES(option_n),
+    option_color = VALUES(option_color),
+    option_text = VALUES(option_text),
+    option_text_it = VALUES(option_text_it),
+    option_text_pt = VALUES(option_text_pt);
 
-
+INSERT INTO playanimaster_db.conversation_consequences
+    (id_conversation_consequence, id_conversation, id_option, id_consequence)
+VALUES
+    (4, 8, 6, 2),
+    (5, 9, 8, 2)
+ON DUPLICATE KEY UPDATE
+    id_conversation = VALUES(id_conversation),
+    id_option = VALUES(id_option),
+    id_consequence = VALUES(id_consequence);
 
 
 

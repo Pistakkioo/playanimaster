@@ -1,0 +1,31 @@
+---
+description: Database schema change policy for live test/prod environments
+alwaysApply: true
+---
+
+# Database schema migrations
+
+This project is live in testing and production. Schema files have fixed roles:
+
+## docs/00_tables.sql — frozen baseline
+
+- **Never edit existing `CREATE TABLE` statements** in this file.
+- Treat it as a historical snapshot / reference for greenfield installs only.
+- Do not add columns, keys, or renames inside existing `CREATE TABLE` blocks.
+
+## docs/01_alters_structure.sql — all live changes
+
+- **Every change to an existing table** must be an `ALTER TABLE` (or equivalent migration SQL) appended here.
+- Examples: new columns, renamed columns, new indexes, engine/charset changes.
+- One-off module data may still live in `private_functions/SQL/*.sql`, but structural alters belong in `01_alters_structure.sql`.
+
+## New tables
+
+- Add full `CREATE TABLE` to `docs/00_tables.sql` **only for brand-new tables** that did not exist before.
+- Also add any required `ALTER`/`CREATE` rollout SQL to `01_alters_structure.sql` or a dedicated module SQL file for deployment.
+
+## Checklist before finishing DB work
+
+1. Did I avoid modifying any existing `CREATE TABLE` in `00_tables.sql`?
+2. Did I add `ALTER` statements to `01_alters_structure.sql` for every structural change?
+3. Is deploy SQL idempotent or documented if it must run once?

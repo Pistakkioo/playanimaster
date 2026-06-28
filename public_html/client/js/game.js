@@ -17,9 +17,14 @@
     var lastFrame = 0;
 
     var canvas = document.getElementById('game-canvas');
+    var canvasWrap = document.querySelector('.canvas-wrap');
+    var hudEl = document.getElementById('hud');
+    var hudFabToggle = document.getElementById('hud-fab-toggle');
     var hudPlayer = document.getElementById('hud-player');
     var hudStatus = document.getElementById('hud-status');
     var bootstrap = window.ANIMASTER_BOOTSTRAP;
+    var HUD_VISIBLE_KEY = 'animaster_hud_visible';
+    var hudVisible = false;
 
     if (!bootstrap || !bootstrap.profile)
     {
@@ -99,7 +104,96 @@
 
     bindCharactersLink();
     bindChatEnterFocus();
+    initHudToggle();
+    initCanvasResize();
     enterWorld(bootstrap.profile, bootstrap.battle);
+
+    function initCanvasResize()
+    {
+        if (!canvas || !canvasWrap)
+        {
+            return;
+        }
+
+        function resizeCanvas()
+        {
+            var width = canvasWrap.clientWidth;
+            var height = canvasWrap.clientHeight;
+
+            if (width <= 0 || height <= 0)
+            {
+                return;
+            }
+
+            if (canvas.width !== width || canvas.height !== height)
+            {
+                canvas.width = width;
+                canvas.height = height;
+            }
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        if (typeof ResizeObserver !== 'undefined')
+        {
+            var observer = new ResizeObserver(resizeCanvas);
+            observer.observe(canvasWrap);
+        }
+    }
+
+    function setHudVisible(visible)
+    {
+        hudVisible = !!visible;
+
+        if (hudEl)
+        {
+            hudEl.hidden = !hudVisible;
+            hudEl.setAttribute('aria-hidden', hudVisible ? 'false' : 'true');
+        }
+
+        if (hudFabToggle)
+        {
+            hudFabToggle.classList.toggle('is-active', hudVisible);
+            hudFabToggle.setAttribute('aria-pressed', hudVisible ? 'true' : 'false');
+
+            var titleKey = hudVisible ? 'hud.toggle_hide' : 'hud.toggle_show';
+            var label = AnimasterLang.t(titleKey);
+            hudFabToggle.title = label;
+            hudFabToggle.setAttribute('aria-label', label);
+        }
+
+        try
+        {
+            localStorage.setItem(HUD_VISIBLE_KEY, hudVisible ? '1' : '0');
+        }
+        catch (e)
+        {
+            // ignore storage errors
+        }
+    }
+
+    function initHudToggle()
+    {
+        try
+        {
+            hudVisible = localStorage.getItem(HUD_VISIBLE_KEY) === '1';
+        }
+        catch (e)
+        {
+            hudVisible = false;
+        }
+
+        setHudVisible(hudVisible);
+
+        if (hudFabToggle)
+        {
+            hudFabToggle.addEventListener('click', function ()
+            {
+                setHudVisible(!hudVisible);
+            });
+        }
+    }
 
     function canFocusChatFromWorld(e)
     {
@@ -220,6 +314,7 @@
             y: parseFloat(profile.position_y) || 0,
             z: parseFloat(profile.position_z) || 0,
             direction: profile.direction || 'D',
+            facingAngle: null,
             move_speed: parseFloat(profile.move_speed) || 5,
             level: profile.level,
             id_zone_last_recover: profile.id_zone_last_recover,
@@ -241,7 +336,7 @@
         syncWorldEntities(true);
         AnimasterNotifications.fetch();
 
-        if (battleResume && battleResume.isBattling)
+        if (battleResume && battleResume.isBattling && battleResume.id_battle)
         {
             AnimasterTarget.clear();
             state = State.COMBAT;
@@ -541,8 +636,16 @@
             AnimasterDialog.updateTalkBubble(nearbyNpc, bubblePos);
 
             var hud = AnimasterWorld.getHudText();
-            hudPlayer.textContent = hud.player;
-            hudStatus.textContent = hud.status;
+
+            if (hudPlayer)
+            {
+                hudPlayer.textContent = hud.player;
+            }
+
+            if (hudStatus)
+            {
+                hudStatus.textContent = hud.status;
+            }
         }
 
         requestAnimationFrame(gameLoop);

@@ -84,72 +84,102 @@ $bootstrap = [
                     <button type="button" id="npc-talk-btn" data-i18n="dialog.talk_button">Talk [Space]</button>
                 </div>
                 <div id="player-chat-bubbles" class="player-chat-bubbles" aria-hidden="true"></div>
+
+                <aside id="inventory-panel" class="inventory-panel side-panel" hidden aria-hidden="true">
+                    <header class="inventory-header side-panel-header">
+                        <h2 class="inventory-title" data-i18n="inventory.title">Inventory</h2>
+                        <button type="button" id="inventory-close" class="inventory-close" title="Close" data-i18n-title="ui.close">&times;</button>
+                    </header>
+                    <div class="inventory-body">
+                        <div id="inventory-list" class="inventory-list" role="list"></div>
+                        <div class="inventory-detail">
+                            <div id="inventory-detail-name" class="inventory-detail-name">—</div>
+                            <div id="inventory-detail-desc" class="inventory-detail-desc"></div>
+                            <div id="inventory-detail-meta" class="inventory-detail-meta"></div>
+                            <button type="button" id="inventory-use-btn" class="inventory-use-btn" hidden data-i18n="ui.use">Use</button>
+                        </div>
+                    </div>
+                    <p id="inventory-message" class="inventory-message"></p>
+
+                    <div id="inventory-team-overlay" class="inventory-team-overlay" hidden>
+                        <div class="inventory-team-panel">
+                            <h3 data-i18n="inventory.team_picker_title">Use on which animal?</h3>
+                            <div id="inventory-team-list" class="inventory-team-list"></div>
+                            <button type="button" id="inventory-team-cancel" class="inventory-team-cancel" data-i18n="ui.cancel">Cancel</button>
+                        </div>
+                    </div>
+                </aside>
+
+                <aside id="team-panel" class="team-panel side-panel" hidden aria-hidden="true">
+                    <header class="team-header side-panel-header">
+                        <h2 class="team-title" data-i18n="team.title">Team</h2>
+                        <div class="team-header-actions">
+                            <button type="button" id="team-reorder-toggle" class="team-icon-btn" title="Reorder team" data-i18n-title="team.reorder_toggle" aria-pressed="false" aria-label="Reorder team" disabled>&harr;</button>
+                            <button type="button" id="team-close" class="team-close" title="Close" data-i18n-title="ui.close">&times;</button>
+                        </div>
+                    </header>
+                    <div id="team-reorder-bar" class="team-reorder-bar" hidden>
+                        <span class="team-reorder-hint" data-i18n="team.reorder_hint">Drag animals to reorder your team.</span>
+                        <div class="team-reorder-actions">
+                            <button type="button" id="team-reorder-save" class="team-reorder-save" data-i18n="team.reorder_save">Save order</button>
+                            <button type="button" id="team-reorder-cancel" class="team-reorder-cancel" data-i18n="ui.cancel">Cancel</button>
+                        </div>
+                    </div>
+                    <div class="team-body">
+                        <div id="team-list" class="team-list" role="list"></div>
+                        <div class="team-detail">
+                            <div class="team-detail-header">
+                                <div id="team-detail-species" class="team-detail-species">—</div>
+                                <button type="button" id="team-detail-nickname-display" class="team-detail-nickname-display" hidden>""</button>
+                                <div id="team-nickname-edit" class="team-nickname-edit" hidden>
+                                    <label class="team-nickname-label" for="team-detail-nickname" data-i18n="team.nickname_label">Nickname</label>
+                                    <div class="team-nickname-row">
+                                        <input type="text" id="team-detail-nickname" class="team-detail-nickname" maxlength="32" autocomplete="off">
+                                        <button type="button" id="team-nickname-save" class="team-nickname-save" data-i18n="ui.save">Save</button>
+                                    </div>
+                                </div>
+                                <div id="team-detail-level" class="team-detail-level"></div>
+                                <div id="team-detail-element" class="team-detail-element"></div>
+                            </div>
+                            <div id="team-detail-tabs" class="team-detail-tabs" role="tablist"></div>
+                            <div class="team-detail-panels">
+                                <div id="team-tab-overview" class="team-detail-panel is-active" role="tabpanel">
+                                    <div id="team-detail-buffs" class="team-detail-buffs" hidden>
+                                        <div class="team-detail-buffs-title" data-i18n="team.buffs_title">Active effects</div>
+                                        <ul id="team-detail-buffs-list" class="team-detail-buffs-list"></ul>
+                                    </div>
+                                    <div class="team-detail-bar-group">
+                                        <span class="team-detail-bar-label">HP</span>
+                                        <div class="team-detail-bar team-detail-hp-bar">
+                                            <div id="team-detail-hp-fill" class="team-detail-bar-fill"></div>
+                                        </div>
+                                        <span id="team-detail-hp-text" class="team-detail-bar-text"></span>
+                                    </div>
+                                    <div class="team-detail-bar-group">
+                                        <span class="team-detail-bar-label">XP</span>
+                                        <div class="team-detail-bar team-detail-xp-bar">
+                                            <div id="team-detail-xp-fill" class="team-detail-bar-fill xp-fill"></div>
+                                        </div>
+                                        <span id="team-detail-xp-text" class="team-detail-bar-text"></span>
+                                    </div>
+                                </div>
+                                <div id="team-tab-base" class="team-detail-panel" role="tabpanel" hidden></div>
+                                <div id="team-tab-dna" class="team-detail-panel" role="tabpanel" hidden></div>
+                                <div id="team-tab-exp" class="team-detail-panel" role="tabpanel" hidden></div>
+                                <div id="team-tab-points" class="team-detail-panel" role="tabpanel" hidden></div>
+                                <div id="team-tab-abilities" class="team-detail-panel" role="tabpanel" hidden></div>
+                            </div>
+                        </div>
+                    </div>
+                    <p id="team-message" class="team-message"></p>
+                </aside>
             </div>
-
-            <aside id="inventory-panel" class="inventory-panel" hidden aria-hidden="true">
-                <header class="inventory-header">
-                    <h2 class="inventory-title" data-i18n="inventory.title">Inventory</h2>
-                    <button type="button" id="inventory-close" class="inventory-close" title="Close" data-i18n-title="ui.close">&times;</button>
-                </header>
-                <div class="inventory-body">
-                    <div id="inventory-list" class="inventory-list" role="list"></div>
-                    <div class="inventory-detail">
-                        <div id="inventory-detail-name" class="inventory-detail-name">—</div>
-                        <div id="inventory-detail-desc" class="inventory-detail-desc"></div>
-                        <div id="inventory-detail-meta" class="inventory-detail-meta"></div>
-                        <button type="button" id="inventory-use-btn" class="inventory-use-btn" hidden data-i18n="ui.use">Use</button>
-                    </div>
-                </div>
-                <p id="inventory-message" class="inventory-message"></p>
-
-                <div id="inventory-team-overlay" class="inventory-team-overlay" hidden>
-                    <div class="inventory-team-panel">
-                        <h3 data-i18n="inventory.team_picker_title">Use on which animal?</h3>
-                        <div id="inventory-team-list" class="inventory-team-list"></div>
-                        <button type="button" id="inventory-team-cancel" class="inventory-team-cancel" data-i18n="ui.cancel">Cancel</button>
-                    </div>
-                </div>
-            </aside>
-            <aside id="team-panel" class="team-panel" hidden aria-hidden="true">
-                <header class="team-header">
-                    <h2 class="team-title" data-i18n="team.title">Team</h2>
-                    <button type="button" id="team-close" class="team-close" title="Close" data-i18n-title="ui.close">&times;</button>
-                </header>
-                <div class="team-body">
-                    <div id="team-list" class="team-list" role="list"></div>
-                    <div class="team-detail">
-                        <div id="team-detail-species" class="team-detail-species">—</div>
-                        <button type="button" id="team-detail-nickname-display" class="team-detail-nickname-display" hidden>""</button>
-                        <div id="team-nickname-edit" class="team-nickname-edit" hidden>
-                            <label class="team-nickname-label" for="team-detail-nickname" data-i18n="team.nickname_label">Nickname</label>
-                            <div class="team-nickname-row">
-                                <input type="text" id="team-detail-nickname" class="team-detail-nickname" maxlength="32" autocomplete="off">
-                                <button type="button" id="team-nickname-save" class="team-nickname-save" data-i18n="ui.save">Save</button>
-                            </div>
-                        </div>
-                        <div id="team-detail-level" class="team-detail-level"></div>
-                        <div id="team-detail-element" class="team-detail-element"></div>
-                        <div class="team-detail-bar-group">
-                            <span class="team-detail-bar-label">HP</span>
-                            <div class="team-detail-bar team-detail-hp-bar">
-                                <div id="team-detail-hp-fill" class="team-detail-bar-fill"></div>
-                            </div>
-                            <span id="team-detail-hp-text" class="team-detail-bar-text"></span>
-                        </div>
-                        <div class="team-detail-bar-group">
-                            <span class="team-detail-bar-label">XP</span>
-                            <div class="team-detail-bar team-detail-xp-bar">
-                                <div id="team-detail-xp-fill" class="team-detail-bar-fill xp-fill"></div>
-                            </div>
-                            <span id="team-detail-xp-text" class="team-detail-bar-text"></span>
-                        </div>
-                    </div>
-                </div>
-                <p id="team-message" class="team-message"></p>
-            </aside>
         </div>
+    </div>
 
-        <div id="hud">
+    <div class="hud-bottom-dock">
+        <button type="button" id="hud-fab-toggle" class="hud-fab-toggle" title="Show HUD" data-i18n-title="hud.toggle_show" aria-label="Show HUD" aria-pressed="false">&#x2139;</button>
+        <div id="hud" class="hud-overlay" hidden aria-hidden="true">
             <div id="hud-player"></div>
             <div id="hud-status"></div>
             <div id="hud-help" data-i18n="hud.help">WASD move · Walk into wilds to battle · Talk to NPCs · I bag · T team</div>
@@ -196,10 +226,16 @@ $bootstrap = [
             <p id="combat-pvp-status" class="combat-pvp-status" hidden aria-live="polite"></p>
             <div id="combat-abilities" class="combat-abilities"></div>
             <div class="combat-actions">
-                <label class="combat-auto-advance-label">
-                    <input type="checkbox" id="combat-auto-advance">
-                    <span data-i18n="combat.auto_advance">Auto-advance</span>
-                </label>
+                <div class="combat-presentation-options">
+                    <label class="combat-auto-advance-label">
+                        <input type="checkbox" id="combat-auto-advance">
+                        <span data-i18n="combat.auto_advance">Auto-advance</span>
+                    </label>
+                    <label class="combat-skip-animations-label" id="combat-skip-animations-label">
+                        <input type="checkbox" id="combat-skip-animations">
+                        <span data-i18n="combat.skip_animations">Skip animations</span>
+                    </label>
+                </div>
                 <button type="button" id="combat-flee" data-i18n="combat.flee">Flee</button>
             </div>
             <p id="combat-message" class="combat-message"></p>
@@ -318,10 +354,21 @@ $bootstrap = [
     </script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/lang.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/api.js')); ?>"></script>
-    <script src="<?php echo animaster_h(animaster_asset_url('js/wild_sprites.js')); ?>"></script>
+    <script src="<?php echo animaster_h(animaster_asset_url('js/wild_sprites_core.js')); ?>"></script>
+    <?php
+    $wild_sprites_arch = animaster_wild_sprites_arch_script();
+
+    if ($wild_sprites_arch !== null)
+    {
+        echo '    <script src="' . animaster_h(animaster_asset_url($wild_sprites_arch)) . '"></script>' . "\n";
+    }
+    ?>
+    <script src="<?php echo animaster_h(animaster_asset_url(animaster_wild_sprites_script())); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/world.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/spawn.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/dialog.js')); ?>"></script>
+    <script src="<?php echo animaster_h(animaster_asset_url('js/panel-drag.js')); ?>"></script>
+    <script src="<?php echo animaster_h(animaster_asset_url('js/element-icons.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/inventory.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/team.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/notifications.js')); ?>"></script>

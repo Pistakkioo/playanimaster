@@ -1,35 +1,52 @@
 <?php
 require ($_SERVER['DOCUMENT_ROOT'].'/funzioni/i.php');
 
+if (!class_exists('PLAYER_CONVERSATIONS'))
+{
+    require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/player_conversations.php';
+}
+
 $stringone = "";
 $types_of_trigger = "";
 
-$id_user_ig = $_POST['id_user_ig'];
-$id_conversation = $_POST['id_conversation'];
-$id_option = $_POST['id_option'];
-$LANG = $_POST['lang'];
+$id_user_ig = isset($_POST['id_user_ig']) ? (int) $_POST['id_user_ig'] : 0;
+$id_conversation = isset($_POST['id_conversation']) ? (int) $_POST['id_conversation'] : 0;
+$id_option = isset($_POST['id_option']) ? (int) $_POST['id_option'] : 0;
+$LANG = isset($_POST['lang']) ? (string) $_POST['lang'] : '';
 
+$already_finished = PLAYER_CONVERSATIONS::isFinished($conn, $id_user_ig, $id_conversation);
 
-$result = $conn->query("
-    select C.id_consequence,C.consequence_type,C.id_ref,C.ref_table,C.num 
-    from conversation_consequences CC
-    join consequences C ON C.id_consequence = CC.id_consequence 
-    where CC.id_conversation = \"$id_conversation\"
-    AND CC.id_option = \"$id_option\" 
-");
-while($row = $result->fetch())
+if (!$already_finished)
 {
-    $id_consequence = $row['id_consequence'];
-    FUNZIONI::ApplyConsequence($conn,$id_user_ig,$id_consequence,$LANG);
-    
-    if($types_of_trigger!=""){$types_of_trigger.="#";}
-    $types_of_trigger.=$row['consequence_type'];
-    
-    $singolo_json = json_encode($row);
-    if($stringone!=""){$stringone.="#";}
-    $stringone.=$singolo_json;
-}
+    $result = $conn->query("
+        select C.id_consequence,C.consequence_type,C.id_ref,C.ref_table,C.num,C.params_json
+        from conversation_consequences CC
+        join consequences C ON C.id_consequence = CC.id_consequence 
+        where CC.id_conversation = \"$id_conversation\"
+        AND CC.id_option = \"$id_option\" 
+    ");
+    while($row = $result->fetch())
+    {
+        $id_consequence = $row['id_consequence'];
+        FUNZIONI::ApplyConsequence($conn,$id_user_ig,$id_consequence,$LANG);
+        
+        if($types_of_trigger!=""){$types_of_trigger.="#";}
+        $types_of_trigger.=$row['consequence_type'];
+        
+        $singolo_json = json_encode($row);
+        if($stringone!=""){$stringone.="#";}
+        $stringone.=$singolo_json;
+    }
 
+    if (PLAYER_CONVERSATIONS::shouldRegisterOnFinish($conn, $id_conversation, $id_option))
+    {
+        PLAYER_CONVERSATIONS::registerFinished($conn, $id_user_ig, $id_conversation, $id_option);
+    }
+}
+else
+{
+    $result = true;
+}
 
 if(!$result)
 {

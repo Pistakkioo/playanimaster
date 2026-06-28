@@ -152,7 +152,36 @@ $user_animal_spd = floor(0.01 * (2 * $base_spd + $dna_spd + floor(0.25 * $pt_spd
 $user_animal_acc = $base_acc;
 $user_animal_eva = $base_eva;
 $user_animal_cr = $base_cr;
-    
+
+if (!class_exists('BUFFS'))
+{
+    require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/buffs.php';
+}
+
+$buff_stats = BUFFS::applyAtBattleStart($conn, (int) $id_first_animal, (int) $id_user_ig, [
+    'atk' => (int) $user_animal_atk,
+    'def' => (int) $user_animal_def,
+    'matk' => (int) $user_animal_matk,
+    'mdef' => (int) $user_animal_mdef,
+    'spd' => (int) $user_animal_spd,
+    'acc' => (int) $user_animal_acc,
+    'eva' => (int) $user_animal_eva,
+    'cr' => (int) $user_animal_cr,
+    'hp' => (int) $user_animal_current_hp,
+    'max_hp' => (int) $user_animal_hp,
+]);
+
+$user_animal_atk = (int) $buff_stats['atk'];
+$user_animal_def = (int) $buff_stats['def'];
+$user_animal_matk = (int) $buff_stats['matk'];
+$user_animal_mdef = (int) $buff_stats['mdef'];
+$user_animal_spd = (int) $buff_stats['spd'];
+$user_animal_acc = (int) $buff_stats['acc'];
+$user_animal_eva = (int) $buff_stats['eva'];
+$user_animal_cr = (int) $buff_stats['cr'];
+$user_animal_current_hp = (int) $buff_stats['hp'];
+$user_animal_hp = (int) $buff_stats['max_hp'];
+
 
 if($user_animal_current_hp=="")
 {

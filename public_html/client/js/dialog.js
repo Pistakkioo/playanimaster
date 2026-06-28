@@ -523,14 +523,6 @@ var AnimasterDialog = (function ()
 
         var chain = Promise.resolve();
 
-        if (flgRegister && idOption === 1)
-        {
-            chain = chain.then(function ()
-            {
-                return AnimasterApi.receiveFirstAnimal(playerRef, 1, 1);
-            });
-        }
-
         if (flgRegister || idOption > 0)
         {
             chain = chain.then(function ()

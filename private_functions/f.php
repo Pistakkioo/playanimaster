@@ -385,53 +385,32 @@ class FUNZIONI
                 return false;
             }
         }
-        
-        
+
+        if ($row_req['requirement_type'] === 'conversation finished'
+            || $row_req['requirement_type'] === 'conversation not finished')
+        {
+            if (!class_exists('PLAYER_CONVERSATIONS'))
+            {
+                require_once __DIR__ . '/player_conversations.php';
+            }
+
+            $finished = PLAYER_CONVERSATIONS::isFinished($conn, $id_user_ig, (int) $id_ref);
+
+            return $row_req['requirement_type'] === 'conversation finished' ? $finished : !$finished;
+        }
+
+        return false;
     }
     
     
     public static function ApplyConsequence($conn,$id_user_ig,$id_consequence,$LANG)
     {
-        $result = $conn->query("
-            select consequence_type,id_ref,num 
-            from consequences 
-            where id_consequence = \"$id_consequence\"
-        ");
-        $row = $result->fetch();
-        $consequence_type = $row['consequence_type'];
-        $id_ref = $row['id_ref'];
-        $num = intval($row['num']);
-        
-        if($consequence_type=="[obtain item]")
+        if (!class_exists('CONSEQUENCES'))
         {
-            for($i=0;$i<$num;$i++)
-            {
-                $result_i = $conn->query("
-                    insert into items
-                    (dt_creazione,id_user_ig,id_item_type)
-                    values
-                    (now(),\"$id_user_ig\",\"$id_ref\")
-                ");
-            }
-                
-            $result_item_name = $conn->query("
-                select nome$LANG from item_types where id_item_type = \"$id_ref\"
-            ");
-            $row_item_name = $result_item_name->fetch();
-            $item_name = $row_item_name[0];
-            
-            $notification = "You obtained ($num) $item_name";
-            if($LANG=="_it"){$notification = "Hai trovato ($num) $item_name";}                
-            if($LANG=="_pt"){$notification = "Encontraste ($num) $item_name";}
-            
-            
-            $result_notification = $conn->query("
-                insert into notifications
-                (id_user_ig,description,item_type,id_item_type,flg_viewed,dt_c)
-                VALUES
-                (\"$id_user_ig\",'$notification','item',\"$id_ref\",'N',now())
-            ");
+            require_once __DIR__ . '/consequences.php';
         }
+
+        return CONSEQUENCES::Apply($conn, $id_user_ig, $id_consequence, $LANG);
     }
     
     

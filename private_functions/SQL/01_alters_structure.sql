@@ -12,6 +12,7 @@ WHERE UI.display_name IS NULL OR UI.display_name = '';
 
 ALTER TABLE language_texts ADD tag varchar(100) DEFAULT null NULL;
 ALTER TABLE language_texts CHANGE tag tag varchar(100) DEFAULT null NULL AFTER dt_c;
+ALTER TABLE playanimaster_db.language_texts ADD UNIQUE KEY uniq_language_texts_tag (tag);
 
 
 ALTER TABLE elements ADD color varchar(100) DEFAULT null NULL;
@@ -159,4 +160,22 @@ ALTER TABLE playanimaster_db.zone_animals  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 
 ALTER TABLE playanimaster_db.consequences CHANGE `ref` ref_table varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL NULL;
 ALTER TABLE playanimaster_db.requirements CHANGE `ref` ref_table varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL NULL;
+
+ALTER TABLE playanimaster_db.consequences ADD COLUMN params_json TEXT NULL DEFAULT NULL AFTER num;
+
+ALTER TABLE playanimaster_db.user_conversations ADD UNIQUE KEY uniq_user_conversation (id_user_ig, id_conversation);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

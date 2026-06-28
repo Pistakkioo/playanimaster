@@ -78,6 +78,17 @@ var AnimasterInventory = (function ()
             teamCancelBtn.addEventListener('click', hideTeamPicker);
         }
 
+        if (panel && typeof AnimasterPanelDrag !== 'undefined')
+        {
+            var dragBounds = document.querySelector('.canvas-wrap');
+            var dragHandle = panel.querySelector('.inventory-header');
+
+            if (dragBounds && dragHandle)
+            {
+                AnimasterPanelDrag.attach(panel, dragHandle, dragBounds);
+            }
+        }
+
         document.addEventListener('keydown', function (e)
         {
             if (e.code === 'KeyI' && !e.ctrlKey && !e.metaKey && !e.altKey)

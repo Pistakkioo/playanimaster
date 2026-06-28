@@ -37,13 +37,15 @@ var AnimasterCombat = (function ()
         bumpDurationMs: 220,
         hpAnimDurationMs: 450,
         stepPauseMs: 400,
-        autoAdvance: false
+        autoAdvance: false,
+        skipAnimations: false
     };
 
     var playbackToken = 0;
     var playbackRunning = false;
     var advanceResolver = null;
     var autoAdvanceEl = null;
+    var skipAnimationsEl = null;
 
     function t(tag, vars)
     {
@@ -61,6 +63,96 @@ var AnimasterCombat = (function ()
 
         return name + ' ' + t('team.lv_short', { level: animal.lvl || 1 })
             + ' — ' + hp + '/' + maxHp + ' HP';
+    }
+
+    function elementDataFromAnimal(animal)
+    {
+        if (!animal)
+        {
+            return {};
+        }
+
+        return {
+            id_element: animal.id_element,
+            element: animal.element,
+            element_color: animal.element_color
+        };
+    }
+
+    function elementDataFromStats(stats, side)
+    {
+        if (!stats)
+        {
+            return {};
+        }
+
+        if (side === 'player')
+        {
+            return {
+                id_element: stats.p_id_element,
+                element: stats.p_element,
+                element_color: stats.p_element_color
+            };
+        }
+
+        return {
+            id_element: stats.w_id_element,
+            element: stats.w_element,
+            element_color: stats.w_element_color
+        };
+    }
+
+    function appendCombatMenuRow(btn, animal, label)
+    {
+        btn.textContent = '';
+
+        var row = document.createElement('span');
+        row.className = 'combat-menu-row';
+
+        if (typeof AnimasterElements !== 'undefined')
+        {
+            row.appendChild(AnimasterElements.createIcon(elementDataFromAnimal(animal), 'element-icon--md'));
+        }
+
+        var text = document.createElement('span');
+        text.className = 'combat-menu-row-text';
+        text.textContent = label;
+        row.appendChild(text);
+        btn.appendChild(row);
+
+        if (animal && animal.element)
+        {
+            btn.title = animal.element + ' ' + (animal.species || animal.nickname || '');
+        }
+    }
+
+    function setUnitElementIcon(card, elementData)
+    {
+        if (!card)
+        {
+            return;
+        }
+
+        var slot = card.querySelector('.unit-element-slot');
+
+        if (!slot)
+        {
+            return;
+        }
+
+        slot.innerHTML = '';
+
+        if (typeof AnimasterElements === 'undefined')
+        {
+            return;
+        }
+
+        if (!elementData || (!elementData.element && !(parseInt(elementData.id_element, 10) > 0)))
+        {
+            return;
+        }
+
+        slot.appendChild(AnimasterElements.createIcon(elementData, 'element-icon--lg'));
     }
 
     function init(options)
@@ -121,6 +213,26 @@ var AnimasterCombat = (function ()
                 localStorage.setItem('animaster_combat_auto', autoAdvanceEl.checked ? '1' : '0');
             });
         }
+
+        skipAnimationsEl = document.getElementById('combat-skip-animations');
+
+        if (skipAnimationsEl)
+        {
+            COMBAT_PRESENTATION.skipAnimations = localStorage.getItem('animaster_combat_skip') === '1';
+            skipAnimationsEl.checked = COMBAT_PRESENTATION.skipAnimations;
+            skipAnimationsEl.addEventListener('change', function ()
+            {
+                COMBAT_PRESENTATION.skipAnimations = skipAnimationsEl.checked;
+                localStorage.setItem('animaster_combat_skip', skipAnimationsEl.checked ? '1' : '0');
+            });
+        }
+    }
+
+    function isSoloPveFastPresentation()
+    {
+        return !!(battle
+            && battle.type !== 'pvp'
+            && COMBAT_PRESENTATION.skipAnimations);
     }
 
     function canClose()
@@ -680,6 +792,12 @@ var AnimasterCombat = (function ()
         loadTurn(resumeTurn, resumeTurn > 0);
     }
 
+    function abortFailedResume(reason)
+    {
+        console.warn('[AnimasterCombat] battle resume aborted:', reason || 'unknown');
+        hide();
+    }
+
     function loadTurn(turn, restarting)
     {
         if (!battle || !player)
@@ -700,6 +818,13 @@ var AnimasterCombat = (function ()
         }).then(function (result)
         {
             moves = normalizeBattleResponse(result);
+
+            if (!moves.length)
+            {
+                abortFailedResume(t('combat.load_failed'));
+                return;
+            }
+
             applyStateFromMoves({ deferTerminalUi: true });
 
             if (battle.type === 'pvp')
@@ -731,8 +856,7 @@ var AnimasterCombat = (function ()
             presentTurn(null, true);
         }).catch(function (err)
         {
-            setMessage(err.message || t('combat.load_failed'));
-            presentTurn(null, true);
+            abortFailedResume(err && err.message ? err.message : t('combat.load_failed'));
         }).finally(function ()
         {
             if (!blackoutHandled && !playbackRunning && battle && battle.type !== 'pvp')
@@ -809,13 +933,23 @@ var AnimasterCombat = (function ()
 
         blackoutHandled = true;
         busy = true;
-        setMessage(t('combat.status_blackout_loading'));
+        setMessage(battle && battle.type === 'pvp'
+            ? t('duel.recovering')
+            : t('combat.status_blackout_loading'));
         abilitiesEl.innerHTML = '';
         fleeBtn.disabled = true;
         closeBtn.disabled = true;
 
         onBlackout().then(function ()
         {
+            if (battle && battle.type === 'pvp')
+            {
+                setMessage(t('duel.lose_teleported'));
+                closeBtn.disabled = false;
+                busy = false;
+                return;
+            }
+
             hide();
         }).catch(function (err)
         {
@@ -1212,7 +1346,7 @@ var AnimasterCombat = (function ()
                 var btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'combat-menu-btn';
-                btn.textContent = label;
+                appendCombatMenuRow(btn, animal, label);
                 btn.disabled = busy || hp <= 0;
                 btn.addEventListener('click', function ()
                 {
@@ -1294,8 +1428,7 @@ var AnimasterCombat = (function ()
                     btn.className += ' combat-target-active';
                 }
 
-                btn.textContent = label;
-                btn.title = (animal.element || '') + ' ' + (animal.species || '');
+                appendCombatMenuRow(btn, animal, label);
                 btn.disabled = busy;
                 btn.addEventListener('click', function ()
                 {
@@ -1447,11 +1580,17 @@ var AnimasterCombat = (function ()
             p_lvl: move.p_a_lvl,
             p_hp: parseInt(move.p_a_res_hp, 10) || 0,
             p_max_hp: parseInt(move.p_a_res_max_hp, 10) || 1,
+            p_element: move.p_a_element || '',
+            p_id_element: parseInt(move.p_a_id_element, 10) || 0,
+            p_element_color: move.p_a_element_color || '',
             w_name: move.w_a_species || t('combat.unit_wild'),
             w_a_id: parseInt(move.w_a_id, 10) || 0,
             w_lvl: move.w_a_lvl,
             w_hp: parseInt(move.w_a_res_hp, 10) || 0,
-            w_max_hp: parseInt(move.w_a_res_max_hp, 10) || 1
+            w_max_hp: parseInt(move.w_a_res_max_hp, 10) || 1,
+            w_element: move.w_a_element || '',
+            w_id_element: parseInt(move.w_a_id_element, 10) || 0,
+            w_element_color: move.w_a_element_color || ''
         };
     }
 
@@ -1525,9 +1664,34 @@ var AnimasterCombat = (function ()
         return Math.abs(prevValue - nextValue) > 0.001;
     }
 
+    function sideUnitId(move, side)
+    {
+        if (!move)
+        {
+            return 0;
+        }
+
+        var field = side === 'player' ? 'p_a_id' : 'w_a_id';
+
+        return parseInt(move[field], 10) || 0;
+    }
+
+    function sideActiveUnitChanged(prevMove, move, side)
+    {
+        var prevId = sideUnitId(prevMove, side);
+        var nextId = sideUnitId(move, side);
+
+        return prevId > 0 && nextId > 0 && prevId !== nextId;
+    }
+
     function appendStatChangeLines(lines, move, prevMove, side)
     {
         if (!prevMove)
+        {
+            return;
+        }
+
+        if (sideActiveUnitChanged(prevMove, move, side))
         {
             return;
         }
@@ -1840,6 +2004,7 @@ var AnimasterCombat = (function ()
         var animalId = side === 'player' ? stats.p_a_id : stats.w_a_id;
 
         nameEl.textContent = name + ' ' + t('team.lv_short', { level: lvl || 1 });
+        setUnitElementIcon(card, elementDataFromStats(stats, side));
 
         if (animalId)
         {
@@ -1995,7 +2160,7 @@ var AnimasterCombat = (function ()
         abilitiesEl.innerHTML = '';
         fleeBtn.disabled = true;
 
-        if (instant || !playable.length)
+        if (instant || !playable.length || isSoloPveFastPresentation())
         {
             playbackRunning = false;
             renderUnitsFromStats(statsFromMove(stats));
@@ -2055,8 +2220,24 @@ var AnimasterCombat = (function ()
         }
 
         unitsEl.innerHTML = '';
-        unitsEl.appendChild(buildUnitCard(unitStats.p_name, unitStats.p_lvl, unitStats.p_hp, unitStats.p_max_hp, false, unitStats.p_a_id));
-        unitsEl.appendChild(buildUnitCard(unitStats.w_name, unitStats.w_lvl, unitStats.w_hp, unitStats.w_max_hp, true, unitStats.w_a_id));
+        unitsEl.appendChild(buildUnitCard(
+            unitStats.p_name,
+            unitStats.p_lvl,
+            unitStats.p_hp,
+            unitStats.p_max_hp,
+            false,
+            unitStats.p_a_id,
+            elementDataFromStats(unitStats, 'player')
+        ));
+        unitsEl.appendChild(buildUnitCard(
+            unitStats.w_name,
+            unitStats.w_lvl,
+            unitStats.w_hp,
+            unitStats.w_max_hp,
+            true,
+            unitStats.w_a_id,
+            elementDataFromStats(unitStats, 'enemy')
+        ));
     }
 
     function renderLogComplete(turnMoves)
@@ -2087,7 +2268,7 @@ var AnimasterCombat = (function ()
         presentTurn(null, true);
     }
 
-    function buildUnitCard(name, lvl, hp, maxHp, isEnemy, animalId)
+    function buildUnitCard(name, lvl, hp, maxHp, isEnemy, animalId, elementData)
     {
         var card = document.createElement('div');
         card.className = 'unit-card' + (isEnemy ? ' enemy' : '');
@@ -2103,9 +2284,14 @@ var AnimasterCombat = (function ()
         var pct = Math.max(0, Math.min(100, (hpVal / maxVal) * 100));
 
         card.innerHTML =
-            '<div class="unit-name">' + escapeHtml(name) + ' ' + escapeHtml(t('team.lv_short', { level: lvl })) + '</div>' +
+            '<div class="unit-name-row">' +
+                '<span class="unit-element-slot"></span>' +
+                '<span class="unit-name">' + escapeHtml(name) + ' ' + escapeHtml(t('team.lv_short', { level: lvl })) + '</span>' +
+            '</div>' +
             '<div class="hp-bar"><div class="hp-fill" style="width:' + pct + '%"></div></div>' +
             '<div class="hp-text">' + escapeHtml(t('stats.hp_value', { current: hpVal, max: maxVal })) + '</div>';
+
+        setUnitElementIcon(card, elementData || {});
 
         return card;
     }

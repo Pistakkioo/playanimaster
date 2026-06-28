@@ -35,6 +35,8 @@ $flat_conversations = dev_npc_flat_conversations($tree);
 $flat_dialogues = dev_npc_flat_dialogues($tree);
 $flat_options = dev_npc_flat_options($tree);
 $flat_quests = dev_npc_flat_quests($tree);
+$item_types = dev_npc_fetch_item_types($conn);
+$requirement_ref_tables = dev_npc_requirement_ref_tables();
 $token = dev_admin_token();
 ?>
 <!DOCTYPE html>
@@ -76,6 +78,7 @@ $token = dev_admin_token();
             <p class="meta mb-0">Token-protected. Not linked from the game client.</p>
         </div>
         <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_species.php')); ?>">Species / abilities</a>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_static_data.php')); ?>">Static data</a>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_url()); ?>">Refresh</a>
         </div>
@@ -182,7 +185,7 @@ $token = dev_admin_token();
                                     <?php if (!empty($dlg['consequences'])): ?>
                                     <?php foreach ($dlg['consequences'] as $cons): ?>
                                     <?php if ((int) $cons['id_option'] === (int) $opt['id_dialog_option']): ?>
-                                    <div class="small"><span class="badge badge-cons">consequence</span> #<?php echo (int) $cons['id_consequence']; ?> <?php echo dev_admin_h($cons['consequence_type']); ?> ref_table=<?php echo dev_admin_h($cons['ref_table']); ?> ×<?php echo (int) $cons['num']; ?></div>
+                                    <div class="small"><span class="badge badge-cons">consequence</span> #<?php echo (int) $cons['id_consequence']; ?> <?php echo dev_admin_h($cons['consequence_type']); ?> ref_table=<?php echo dev_admin_h($cons['ref_table']); ?> ×<?php echo (int) $cons['num']; ?><?php if (!empty($cons['params_json'])): ?> params=<?php echo dev_admin_h($cons['params_json']); ?><?php endif; ?></div>
                                     <?php endif; ?>
                                     <?php endforeach; ?>
                                     <?php endif; ?>
@@ -295,10 +298,17 @@ $token = dev_admin_token();
                             <form method="post" action="<?php echo dev_admin_h(dev_admin_url()); ?>">
                                 <input type="hidden" name="T" value="<?php echo dev_admin_h($token); ?>">
                                 <input type="hidden" name="action" value="add_dialog_option">
+                                <div class="mb-2"><label class="form-label">Conversation</label>
+                                    <select class="form-select form-select-sm" id="opt-filter-conversation">
+                                        <?php foreach ($flat_conversations as $c): ?>
+                                        <option value="<?php echo (int) $c['id_conversation']; ?>">#<?php echo (int) $c['id_conversation']; ?> — <?php echo dev_admin_h($c['npc']); ?>: <?php echo dev_admin_h($c['title']); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
                                 <div class="mb-2"><label class="form-label">Dialogue (must have flg_options=S)</label>
-                                    <select class="form-select form-select-sm" name="id_dialog" required>
+                                    <select class="form-select form-select-sm" name="id_dialog" id="opt-id-dialog" required>
                                         <?php foreach ($flat_dialogues as $d): ?>
-                                        <option value="<?php echo (int) $d['id_dialog']; ?>">#<?php echo (int) $d['id_dialog']; ?> [<?php echo (int) $d['order']; ?>] <?php echo dev_admin_h(mb_substr($d['dialog'], 0, 60)); ?></option>
+                                        <option value="<?php echo (int) $d['id_dialog']; ?>" data-id_conversation="<?php echo (int) $d['id_conversation']; ?>">#<?php echo (int) $d['id_dialog']; ?> [<?php echo (int) $d['order']; ?>] <?php echo dev_admin_h(mb_substr($d['dialog'], 0, 60)); ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
@@ -316,22 +326,48 @@ $token = dev_admin_token();
                         <!-- Requirements -->
                         <div class="tab-pane fade" id="tab-req">
                             <h6 class="text-secondary">New requirement</h6>
-                            <form method="post" action="<?php echo dev_admin_h(dev_admin_url()); ?>" class="mb-4">
+                            <form method="post" action="<?php echo dev_admin_h(dev_admin_url()); ?>" class="mb-4" id="form-add-requirement">
                                 <input type="hidden" name="T" value="<?php echo dev_admin_h($token); ?>">
                                 <input type="hidden" name="action" value="add_requirement">
                                 <div class="mb-2"><label class="form-label">Type</label>
-                                    <select class="form-select form-select-sm" name="requirement_type">
+                                    <select class="form-select form-select-sm" name="requirement_type" id="req-requirement-type">
                                         <option value="user lvl">user lvl</option>
                                         <option value="number of animals">number of animals</option>
                                         <option value="item">item</option>
+                                        <option value="conversation finished">conversation finished</option>
+                                        <option value="conversation not finished">conversation not finished</option>
+                                    </select>
+                                </div>
+                                <div class="mb-2"><label class="form-label">ref_table</label>
+                                    <select class="form-select form-select-sm" name="ref_table" id="req-ref-table">
+                                        <?php foreach ($requirement_ref_tables as $ref_row): ?>
+                                        <option value="<?php echo dev_admin_h($ref_row['value']); ?>"><?php echo dev_admin_h($ref_row['label']); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="mb-2"><label class="form-label">id_ref</label>
+                                    <select class="form-select form-select-sm" name="id_ref" id="req-id-ref">
+                                        <option value="0" data-ref-table="">0 — not used</option>
+                                        <?php foreach ($item_types as $item): ?>
+                                        <option value="<?php echo (int) $item['id_item_type']; ?>" data-ref-table="POTION">
+                                            #<?php echo (int) $item['id_item_type']; ?> <?php echo dev_admin_h($item['nome'] ?: $item['item_type']); ?>
+                                        </option>
+                                        <?php endforeach; ?>
+                                        <?php foreach ($flat_conversations as $c): ?>
+                                        <option value="<?php echo (int) $c['id_conversation']; ?>" data-ref-table="CONVERSATION">
+                                            #<?php echo (int) $c['id_conversation']; ?> — <?php echo dev_admin_h($c['npc']); ?>: <?php echo dev_admin_h($c['title']); ?>
+                                        </option>
+                                        <?php endforeach; ?>
+                                        <option value="0" data-ref-table="ZERO">0 — not used</option>
+                                        <option value="0" data-ref-table="HAS_ANIMALS">0 — not used</option>
+                                        <option value="0" data-ref-table="LT_2">0 — not used</option>
+                                        <option value="0" data-ref-table="LT_3">0 — not used</option>
                                     </select>
                                 </div>
                                 <div class="row g-2 mb-2">
-                                    <div class="col-4"><label class="form-label">id_ref</label><input class="form-control form-control-sm" name="id_ref" type="number" value="0"></div>
-                                    <div class="col-4"><label class="form-label">min</label><input class="form-control form-control-sm" name="min" type="number" value="0"></div>
-                                    <div class="col-4"><label class="form-label">max</label><input class="form-control form-control-sm" name="max" type="number" value="9999"></div>
+                                    <div class="col-6"><label class="form-label">min</label><input class="form-control form-control-sm" name="min" type="number" value="0" id="req-min"></div>
+                                    <div class="col-6"><label class="form-label">max</label><input class="form-control form-control-sm" name="max" type="number" value="9999" id="req-max"></div>
                                 </div>
-                                <div class="mb-2"><label class="form-label">ref_table</label><input class="form-control form-control-sm" name="ref_table" maxlength="100" placeholder="POTION, HAS_ANIMALS..."></div>
                                 <div class="mb-2"><label class="form-label">Description</label><input class="form-control form-control-sm" name="descrizione" maxlength="100"></div>
                                 <button class="btn btn-primary btn-sm" type="submit">Create requirement</button>
                             </form>
@@ -350,7 +386,7 @@ $token = dev_admin_token();
                                 <input type="hidden" name="T" value="<?php echo dev_admin_h($token); ?>">
                                 <input type="hidden" name="action" value="link_conversation_requirement">
                                 <div class="row g-2 align-items-end">
-                                    <div class="col-5"><label class="form-label">Conversation</label><select class="form-select form-select-sm" name="id_conversation"><?php foreach ($flat_conversations as $c): ?><option value="<?php echo (int) $c['id_conversation']; ?>">#<?php echo (int) $c['id_conversation']; ?> <?php echo dev_admin_h($c['title']); ?></option><?php endforeach; ?></select></div>
+                                    <div class="col-5"><label class="form-label">Conversation</label><select class="form-select form-select-sm" name="id_conversation"><?php foreach ($flat_conversations as $c): ?><option value="<?php echo (int) $c['id_conversation']; ?>">#<?php echo (int) $c['id_conversation']; ?> — <?php echo dev_admin_h($c['npc']); ?>: <?php echo dev_admin_h($c['title']); ?></option><?php endforeach; ?></select></div>
                                     <div class="col-5"><label class="form-label">Requirement</label><select class="form-select form-select-sm" name="id_requirement"><?php foreach ($requirements as $r): ?><option value="<?php echo (int) $r['id_requirement']; ?>">#<?php echo (int) $r['id_requirement']; ?> <?php echo dev_admin_h($r['descrizione']); ?></option><?php endforeach; ?></select></div>
                                     <div class="col-2"><button class="btn btn-outline-light btn-sm w-100" type="submit">→ Conv</button></div>
                                 </div>
@@ -378,6 +414,7 @@ $token = dev_admin_token();
                                     <div class="col-4"><label class="form-label">num</label><input class="form-control form-control-sm" name="num" type="number" value="1" min="1"></div>
                                     <div class="col-4"><label class="form-label">ref_table</label><input class="form-control form-control-sm" name="ref_table" value="POTION" maxlength="100"></div>
                                 </div>
+                                <div class="mb-2"><label class="form-label">params_json</label><textarea class="form-control form-control-sm font-monospace" name="params_json" rows="2" placeholder='{"species_pool":[1,2,3],"element_pool":[1,2,3,4,5,6,7]}'></textarea></div>
                                 <button class="btn btn-primary btn-sm" type="submit">Create consequence</button>
                             </form>
 
@@ -385,8 +422,8 @@ $token = dev_admin_token();
                             <form method="post" action="<?php echo dev_admin_h(dev_admin_url()); ?>">
                                 <input type="hidden" name="T" value="<?php echo dev_admin_h($token); ?>">
                                 <input type="hidden" name="action" value="link_conversation_consequence">
-                                <div class="mb-2"><label class="form-label">Conversation</label><select class="form-select form-select-sm" name="id_conversation"><?php foreach ($flat_conversations as $c): ?><option value="<?php echo (int) $c['id_conversation']; ?>">#<?php echo (int) $c['id_conversation']; ?> <?php echo dev_admin_h($c['title']); ?></option><?php endforeach; ?></select></div>
-                                <div class="mb-2"><label class="form-label">Dialog option (id_dialog_option)</label><select class="form-select form-select-sm" name="id_option"><?php foreach ($flat_options as $o): ?><option value="<?php echo (int) $o['id_dialog_option']; ?>">#<?php echo (int) $o['id_dialog_option']; ?> — <?php echo dev_admin_h($o['option_text']); ?></option><?php endforeach; ?></select></div>
+                                <div class="mb-2"><label class="form-label">Conversation</label><select class="form-select form-select-sm" name="id_conversation" id="cons-link-conversation"><?php foreach ($flat_conversations as $c): ?><option value="<?php echo (int) $c['id_conversation']; ?>">#<?php echo (int) $c['id_conversation']; ?> — <?php echo dev_admin_h($c['npc']); ?>: <?php echo dev_admin_h($c['title']); ?></option><?php endforeach; ?></select></div>
+                                <div class="mb-2"><label class="form-label">Dialog option (id_dialog_option)</label><select class="form-select form-select-sm" name="id_option" id="cons-link-option"><?php foreach ($flat_options as $o): ?><option value="<?php echo (int) $o['id_dialog_option']; ?>" data-id_conversation="<?php echo (int) $o['id_conversation']; ?>">#<?php echo (int) $o['id_dialog_option']; ?> — <?php echo dev_admin_h($o['option_text']); ?></option><?php endforeach; ?></select></div>
                                 <div class="mb-2"><label class="form-label">Consequence</label><select class="form-select form-select-sm" name="id_consequence"><?php foreach ($consequences as $c): ?><option value="<?php echo (int) $c['id_consequence']; ?>">#<?php echo (int) $c['id_consequence']; ?> <?php echo dev_admin_h($c['consequence_type']); ?> <?php echo dev_admin_h($c['ref_table']); ?></option><?php endforeach; ?></select></div>
                                 <button class="btn btn-primary btn-sm" type="submit">Link consequence</button>
                             </form>
@@ -429,5 +466,126 @@ $token = dev_admin_token();
     </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function ()
+{
+    function setupConversationChildFilter(conversationEl, childEl, dataAttr)
+    {
+        if (!conversationEl || !childEl)
+        {
+            return;
+        }
+
+        function filterChildOptions()
+        {
+            var conversationId = conversationEl.value;
+            var options = childEl.querySelectorAll('option');
+            var firstMatch = null;
+
+            options.forEach(function (opt)
+            {
+                var match = opt.getAttribute(dataAttr) === conversationId;
+                opt.hidden = !match;
+                opt.disabled = !match;
+
+                if (match && firstMatch === null)
+                {
+                    firstMatch = opt;
+                }
+            });
+
+            if (firstMatch)
+            {
+                childEl.value = firstMatch.value;
+            }
+        }
+
+        conversationEl.addEventListener('change', filterChildOptions);
+        filterChildOptions();
+    }
+
+    setupConversationChildFilter(
+        document.getElementById('cons-link-conversation'),
+        document.getElementById('cons-link-option'),
+        'data-id_conversation'
+    );
+
+    setupConversationChildFilter(
+        document.getElementById('opt-filter-conversation'),
+        document.getElementById('opt-id-dialog'),
+        'data-id_conversation'
+    );
+})();
+
+(function ()
+{
+    var refTableEl = document.getElementById('req-ref-table');
+    var idRefEl = document.getElementById('req-id-ref');
+    var typeEl = document.getElementById('req-requirement-type');
+
+    if (!refTableEl || !idRefEl)
+    {
+        return;
+    }
+
+    function filterIdRefOptions()
+    {
+        var refTable = refTableEl.value;
+        var options = idRefEl.querySelectorAll('option');
+        var firstMatch = null;
+
+        options.forEach(function (opt)
+        {
+            var match = opt.getAttribute('data-ref-table') === refTable;
+            opt.hidden = !match;
+            opt.disabled = !match;
+
+            if (match && firstMatch === null)
+            {
+                firstMatch = opt;
+            }
+        });
+
+        if (firstMatch)
+        {
+            idRefEl.value = firstMatch.value;
+        }
+    }
+
+    function suggestRefTableForType()
+    {
+        if (!typeEl)
+        {
+            return;
+        }
+
+        var map = {
+            'user lvl': '',
+            'number of animals': 'ZERO',
+            'item': 'POTION',
+            'conversation finished': 'CONVERSATION',
+            'conversation not finished': 'CONVERSATION'
+        };
+        var suggested = map[typeEl.value];
+
+        if (suggested === undefined)
+        {
+            return;
+        }
+
+        refTableEl.value = suggested;
+        filterIdRefOptions();
+    }
+
+    refTableEl.addEventListener('change', filterIdRefOptions);
+
+    if (typeEl)
+    {
+        typeEl.addEventListener('change', suggestRefTableForType);
+    }
+
+    filterIdRefOptions();
+})();
+</script>
 </body>
 </html>

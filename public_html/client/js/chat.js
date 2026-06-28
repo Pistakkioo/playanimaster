@@ -696,6 +696,13 @@ var AnimasterChat = (function ()
         }
     }
 
+    function syncChatLayoutClasses()
+    {
+        document.body.classList.toggle('animaster-chat-left', positionSide === 'left');
+        document.body.classList.toggle('animaster-chat-right', positionSide === 'right');
+        document.body.classList.toggle('animaster-chat-icon-only', viewMode === 'icon');
+    }
+
     function applyPosition()
     {
         if (!panel)
@@ -705,6 +712,7 @@ var AnimasterChat = (function ()
 
         panel.classList.toggle('chat-pos-left', positionSide === 'left');
         panel.classList.toggle('chat-pos-right', positionSide === 'right');
+        syncChatLayoutClasses();
     }
 
     function loadViewMode()
@@ -789,6 +797,8 @@ var AnimasterChat = (function ()
                 btn.setAttribute('aria-label', collapsed ? t('chat.expand') : t('chat.collapse'));
             }
         }
+
+        syncChatLayoutClasses();
     }
 
     function toggleCollapsed()

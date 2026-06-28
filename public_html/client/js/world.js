@@ -1,5 +1,5 @@
 /**
- * Canvas world rendering, WASD input, entity display.
+ * Canvas world rendering, WASD + click-hold mouse movement, entity display.
  */ 
 var AnimasterWorld = (function ()
 {
@@ -12,6 +12,8 @@ var AnimasterWorld = (function ()
     var canvas = null;
     var ctx = null;
     var keys = {};
+    var holdMoveActive = false;
+    var holdTargetWorld = null;
     var player = null;
     var others = [];
     var wilds = [];
@@ -42,6 +44,7 @@ var AnimasterWorld = (function ()
         onEntityClick = entityClickCallback;
 
         canvas.addEventListener('click', onCanvasClick);
+        canvas.addEventListener('mousedown', onCanvasMouseDown);
 
         window.addEventListener('keydown', function (e)
         {
@@ -331,6 +334,178 @@ var AnimasterWorld = (function ()
         return null;
     }
 
+    function onCanvasMouseDown(e)
+    {
+        if (!player || !canvas || e.button !== 0)
+        {
+            return;
+        }
+
+        var pos = canvasPointerPos(e);
+
+        if (pickEntityAtCanvas(pos.x, pos.y))
+        {
+            return;
+        }
+
+        e.preventDefault();
+        beginHoldMove(pos.x, pos.y);
+    }
+
+    function updateHoldTargetFromCanvasPos(canvasX, canvasY)
+    {
+        if (!player)
+        {
+            return;
+        }
+
+        var world = screenToWorld(canvasX, canvasY);
+        holdTargetWorld = {
+            x: world.x,
+            z: world.z
+        };
+    }
+
+    function onHoldMove(e)
+    {
+        if (!holdMoveActive || !canvas)
+        {
+            return;
+        }
+
+        var rect = canvas.getBoundingClientRect();
+        var scaleX = canvas.width / rect.width;
+        var scaleY = canvas.height / rect.height;
+        var canvasX = (e.clientX - rect.left) * scaleX;
+        var canvasY = (e.clientY - rect.top) * scaleY;
+
+        updateHoldTargetFromCanvasPos(canvasX, canvasY);
+    }
+
+    function beginHoldMove(canvasX, canvasY)
+    {
+        holdMoveActive = true;
+        updateHoldTargetFromCanvasPos(canvasX, canvasY);
+        window.addEventListener('mousemove', onHoldMove);
+        window.addEventListener('mouseup', endHoldMove);
+    }
+
+    function endHoldMove()
+    {
+        holdMoveActive = false;
+        holdTargetWorld = null;
+        window.removeEventListener('mousemove', onHoldMove);
+        window.removeEventListener('mouseup', endHoldMove);
+    }
+
+    function keyboardStep(dt)
+    {
+        var step = (parseFloat(player.move_speed) || 5) * dt * 0.35;
+        var dirX = 0;
+        var dirZ = 0;
+
+        if (keys['KeyW'] || keys['ArrowUp'])
+        {
+            dirZ -= 1;
+        }
+
+        if (keys['KeyS'] || keys['ArrowDown'])
+        {
+            dirZ += 1;
+        }
+
+        if (keys['KeyA'] || keys['ArrowLeft'])
+        {
+            dirX -= 1;
+        }
+
+        if (keys['KeyD'] || keys['ArrowRight'])
+        {
+            dirX += 1;
+        }
+
+        if (dirX === 0 && dirZ === 0)
+        {
+            return { dx: 0, dz: 0 };
+        }
+
+        var len = Math.sqrt((dirX * dirX) + (dirZ * dirZ));
+
+        return {
+            dx: (dirX / len) * step,
+            dz: (dirZ / len) * step
+        };
+    }
+
+    function holdStep(dt)
+    {
+        if (!holdMoveActive || !holdTargetWorld)
+        {
+            return { dx: 0, dz: 0 };
+        }
+
+        var step = (parseFloat(player.move_speed) || 5) * dt * 0.35;
+        var toX = holdTargetWorld.x - player.x;
+        var toZ = holdTargetWorld.z - player.z;
+        var dist = Math.sqrt((toX * toX) + (toZ * toZ));
+
+        if (dist < 0.05)
+        {
+            return { dx: 0, dz: 0 };
+        }
+
+        if (step >= dist)
+        {
+            return { dx: toX, dz: toZ };
+        }
+
+        return {
+            dx: (toX / dist) * step,
+            dz: (toZ / dist) * step
+        };
+    }
+
+    function cardinalToAngle(direction)
+    {
+        if (direction === 'U')
+        {
+            return -Math.PI / 2;
+        }
+
+        if (direction === 'D')
+        {
+            return Math.PI / 2;
+        }
+
+        if (direction === 'L')
+        {
+            return Math.PI;
+        }
+
+        return 0;
+    }
+
+    function applyMovement(dx, dz)
+    {
+        if (dx === 0 && dz === 0)
+        {
+            return;
+        }
+
+        player.x += dx;
+        player.z += dz;
+        player.facingAngle = Math.atan2(dz, dx);
+
+        if (Math.abs(dx) >= Math.abs(dz))
+        {
+            player.direction = dx < 0 ? 'L' : 'R';
+        }
+        else
+        {
+            player.direction = dz < 0 ? 'U' : 'D';
+        }
+    }
+
     function onCanvasClick(e)
     {
         if (!onEntityClick || !player || !canvas)
@@ -354,42 +529,17 @@ var AnimasterWorld = (function ()
             return;
         }
 
-        var speed = parseFloat(player.move_speed) || 5;
-        var step = speed * dt * 0.35;
-        var dx = 0;
-        var dz = 0;
+        var keyboard = keyboardStep(dt);
+        var useKeyboard = keyboard.dx !== 0 || keyboard.dz !== 0;
 
-        if (keys['KeyW'] || keys['ArrowUp'])
+        if (useKeyboard)
         {
-            dz -= step;
-        }
-        if (keys['KeyS'] || keys['ArrowDown'])
-        {
-            dz += step;
-        }
-        if (keys['KeyA'] || keys['ArrowLeft'])
-        {
-            dx -= step;
-        }
-        if (keys['KeyD'] || keys['ArrowRight'])
-        {
-            dx += step;
+            applyMovement(keyboard.dx, keyboard.dz);
+            return;
         }
 
-        if (dx !== 0 || dz !== 0)
-        {
-            player.x += dx;
-            player.z += dz;
-
-            if (Math.abs(dx) >= Math.abs(dz))
-            {
-                player.direction = dx < 0 ? 'L' : 'R';
-            }
-            else
-            {
-                player.direction = dz < 0 ? 'U' : 'D';
-            }
-        }
+        var hold = holdStep(dt);
+        applyMovement(hold.dx, hold.dz);
     }
 
     function drawGrid()
@@ -444,7 +594,9 @@ var AnimasterWorld = (function ()
     function drawWildMarker(wx, wz, wild, near)
     {
         var p = worldToScreen(wx, wz);
-        var pixelSize = near ? 3 : 2;
+        var pixelSize = near
+            ? (AnimasterWildSprites.nearPixelSize || 3)
+            : (AnimasterWildSprites.defaultPixelSize || 2);
 
         if (typeof AnimasterWildSprites !== 'undefined')
         {
@@ -478,29 +630,12 @@ var AnimasterWorld = (function ()
         ctx.fillRect(p.x - size, p.y - size, size * 2, size * 2);
     }
 
-    function drawDirectionArrow(wx, wz, direction)
+    function drawDirectionArrow(wx, wz, angleRadians)
     {
         var p = worldToScreen(wx, wz);
         var len = 12;
-        var dx = 0;
-        var dy = 0;
-
-        if (direction === 'U')
-        {
-            dy = -len;
-        }
-        else if (direction === 'D')
-        {
-            dy = len;
-        }
-        else if (direction === 'L')
-        {
-            dx = -len;
-        }
-        else
-        {
-            dx = len;
-        }
+        var dx = Math.cos(angleRadians) * len;
+        var dy = Math.sin(angleRadians) * len;
 
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
@@ -709,7 +844,13 @@ var AnimasterWorld = (function ()
         });
 
         drawCircle(player.x, player.z, 9, '#2ecc71', '#1e8449');
-        drawDirectionArrow(player.x, player.z, player.direction || 'D');
+        drawDirectionArrow(
+            player.x,
+            player.z,
+            typeof player.facingAngle === 'number'
+                ? player.facingAngle
+                : cardinalToAngle(player.direction || 'D')
+        );
         drawLabel(player.x, player.z, player.display_name || t('hud.default_you'));
 
         try

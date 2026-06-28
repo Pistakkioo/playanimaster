@@ -21,12 +21,41 @@ function dev_npc_fetch_requirements(PDO $conn)
 function dev_npc_fetch_consequences(PDO $conn)
 {
     $stmt = $conn->query('
-        SELECT id_consequence, consequence_type, id_ref, ref_table, num
+        SELECT id_consequence, consequence_type, id_ref, ref_table, num, params_json
         FROM consequences
         ORDER BY id_consequence
     ');
 
     return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+}
+
+function dev_npc_fetch_item_types(PDO $conn)
+{
+    $stmt = $conn->query('
+        SELECT id_item_type, item_type, nome
+        FROM item_types
+        ORDER BY id_item_type
+    ');
+
+    return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+}
+
+/**
+ * ref_table values used by requirements (labels for the dev form).
+ *
+ * @return array<int, array{value: string, label: string}>
+ */
+function dev_npc_requirement_ref_tables()
+{
+    return [
+        ['value' => '', 'label' => '— none —'],
+        ['value' => 'POTION', 'label' => 'POTION (item type)'],
+        ['value' => 'CONVERSATION', 'label' => 'CONVERSATION'],
+        ['value' => 'ZERO', 'label' => 'ZERO (no animals)'],
+        ['value' => 'HAS_ANIMALS', 'label' => 'HAS_ANIMALS'],
+        ['value' => 'LT_2', 'label' => 'LT_2 (fewer than 2 animals)'],
+        ['value' => 'LT_3', 'label' => 'LT_3 (fewer than 3 animals)'],
+    ];
 }
 
 function dev_npc_fetch_tree(PDO $conn)
@@ -414,15 +443,29 @@ function dev_npc_handle_post(PDO $conn, array $post)
                 return ['ok' => true, 'message' => 'Requirement linked to quest.'];
 
             case 'add_consequence':
+                $params_json = dev_npc_post_str($post, 'params_json', 65535);
+                $params_json = trim($params_json) === '' ? null : $params_json;
+
+                if ($params_json !== null)
+                {
+                    json_decode($params_json, true);
+
+                    if (json_last_error() !== JSON_ERROR_NONE)
+                    {
+                        return ['ok' => false, 'message' => 'params_json is not valid JSON.'];
+                    }
+                }
+
                 $stmt = $conn->prepare('
-                    INSERT INTO consequences (consequence_type, id_ref, ref_table, num)
-                    VALUES (:consequence_type, :id_ref, :ref_table, :num)
+                    INSERT INTO consequences (consequence_type, id_ref, ref_table, num, params_json)
+                    VALUES (:consequence_type, :id_ref, :ref_table, :num, :params_json)
                 ');
                 $stmt->execute([
                     ':consequence_type' => dev_npc_post_str($post, 'consequence_type', 100),
                     ':id_ref' => dev_npc_post_int($post, 'id_ref'),
                     ':ref_table' => dev_npc_post_str($post, 'ref_table', 100),
-                    ':num' => dev_npc_post_int($post, 'num', 1)
+                    ':num' => dev_npc_post_int($post, 'num', 1),
+                    ':params_json' => $params_json,
                 ]);
 
                 return ['ok' => true, 'message' => 'Consequence created (id ' . $conn->lastInsertId() . ').'];
@@ -476,7 +519,7 @@ function dev_npc_flat_dialogues(array $tree)
 {
     $list = [];
 
-    foreach ($tree as $npc)
+    foreach ($tree as $id_npc => $npc)
     {
         foreach ($npc['conversations'] as $id_conv => $conv)
         {
@@ -485,6 +528,7 @@ function dev_npc_flat_dialogues(array $tree)
                 $list[] = [
                     'id_dialog' => $id_dialog,
                     'id_conversation' => $id_conv,
+                    'npc' => $npc['npc'],
                     'title' => $conv['title'],
                     'order' => $dlg['order'],
                     'dialog' => $dlg['dialog']
@@ -500,7 +544,7 @@ function dev_npc_flat_options(array $tree)
 {
     $list = [];
 
-    foreach ($tree as $npc)
+    foreach ($tree as $id_npc => $npc)
     {
         foreach ($npc['conversations'] as $id_conv => $conv)
         {
@@ -512,6 +556,7 @@ function dev_npc_flat_options(array $tree)
                         'id_dialog_option' => (int) $opt['id_dialog_option'],
                         'id_dialog' => $id_dialog,
                         'id_conversation' => $id_conv,
+                        'npc' => $npc['npc'],
                         'option_text' => $opt['option_text'],
                         'conversation_title' => $conv['title']
                     ];

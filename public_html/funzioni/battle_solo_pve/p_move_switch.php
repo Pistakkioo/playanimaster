@@ -55,15 +55,49 @@ $p_a_res_spd = floor(0.01 * (2 * $base_spd + $dna_spd + floor(0.25 * $pt_spd) + 
 $p_a_res_acc = $base_acc;
 $p_a_res_eva = $base_eva;
 $p_a_res_cr = $base_cr;
-    
-if($p_a_res_hp=="")
+
+$hp_was_empty = ($p_a_res_hp == "");
+
+if ($hp_was_empty)
 {
-    // SET THE CURRENT HP OF THE ANIMAL TO MAX HP
+    $p_a_res_hp = $p_a_res_max_hp;
+}
+
+if (!class_exists('BUFFS'))
+{
+    require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/buffs.php';
+}
+
+$buff_stats = BUFFS::applyForActiveBattleAnimal($conn, 'solo_pve', (int) $id_battle, (int) $p_a_id, (int) $id_user_ig, [
+    'atk' => (int) $p_a_res_atk,
+    'def' => (int) $p_a_res_def,
+    'matk' => (int) $p_a_res_matk,
+    'mdef' => (int) $p_a_res_mdef,
+    'spd' => (int) $p_a_res_spd,
+    'acc' => (int) $p_a_res_acc,
+    'eva' => (int) $p_a_res_eva,
+    'cr' => (int) $p_a_res_cr,
+    'hp' => (int) $p_a_res_hp,
+    'max_hp' => (int) $p_a_res_max_hp,
+]);
+
+$p_a_res_atk = (int) $buff_stats['atk'];
+$p_a_res_def = (int) $buff_stats['def'];
+$p_a_res_matk = (int) $buff_stats['matk'];
+$p_a_res_mdef = (int) $buff_stats['mdef'];
+$p_a_res_spd = (int) $buff_stats['spd'];
+$p_a_res_acc = (int) $buff_stats['acc'];
+$p_a_res_eva = (int) $buff_stats['eva'];
+$p_a_res_cr = (int) $buff_stats['cr'];
+$p_a_res_hp = (int) $buff_stats['hp'];
+$p_a_res_max_hp = (int) $buff_stats['max_hp'];
+
+if ($hp_was_empty)
+{
     $result_hp = $conn->query("
-        update animals set current_hp = \"$p_a_res_max_hp\", max_hp = \"$p_a_res_max_hp\"
+        update animals set current_hp = \"$p_a_res_hp\", max_hp = \"$p_a_res_max_hp\"
         where id_animal = \"$id\"
     ");
-    $p_a_res_hp=$p_a_res_max_hp;
 }
     
                 $b_status = "ongoing";

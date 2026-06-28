@@ -5,9 +5,19 @@ if (!defined('ANIMASTER_MAX_CHARACTERS'))
     define('ANIMASTER_MAX_CHARACTERS', 5);
 }
 
+if (!defined('ANIMASTER_WILD_SPRITES_VARIANT'))
+{
+    define('ANIMASTER_WILD_SPRITES_VARIANT', 'default');
+}
+
 if (!defined('ANIMASTER_ASSET_VERSION'))
 {
-    define('ANIMASTER_ASSET_VERSION', '76');
+    define('ANIMASTER_ASSET_VERSION', '99');
+}
+
+if (!defined('ANIMASTER_SERVER_TIMEZONE'))
+{
+    define('ANIMASTER_SERVER_TIMEZONE', 'UTC');
 }
 
 function animaster_get_genders() 

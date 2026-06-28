@@ -429,3 +429,38 @@ function animaster_asset_url($path)
 {
     return $path . '?v=' . ANIMASTER_ASSET_VERSION;
 }
+
+function animaster_wild_sprites_script()
+{
+    $variants = [
+        'default' => 'js/wild_sprites.js',
+        'mid' => 'js/wild_sprites_mid.js',
+        'large' => 'js/wild_sprites_large.js',
+    ];
+
+    $variant = defined('ANIMASTER_WILD_SPRITES_VARIANT') ? ANIMASTER_WILD_SPRITES_VARIANT : 'default';
+
+    if (!isset($variants[$variant]))
+    {
+        $variant = 'default';
+    }
+
+    return $variants[$variant];
+}
+
+function animaster_wild_sprites_arch_script()
+{
+    $variant = defined('ANIMASTER_WILD_SPRITES_VARIANT') ? ANIMASTER_WILD_SPRITES_VARIANT : 'default';
+
+    if ($variant === 'mid')
+    {
+        return 'js/wild_sprites_arch_16.js';
+    }
+
+    if ($variant === 'large')
+    {
+        return 'js/wild_sprites_arch_32.js';
+    }
+
+    return null;
+}

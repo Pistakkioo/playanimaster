@@ -63,12 +63,23 @@ function animaster_build_login_envelope($conn, array $profile_row)
     if ($result_pvp && $result_pvp->rowCount() > 0)
     {
         $row_pvp = $result_pvp->fetch(PDO::FETCH_ASSOC);
-        $stringone_is_battling = json_encode([
-            'isBattling' => true,
-            'id_battle' => (int) $row_pvp['id_battle_pvp'],
-            'battle_type' => 'pvp',
-            'current_battle_turn' => (int) $row_pvp['current_turn']
-        ]);
+        $id_battle_pvp = (int) $row_pvp['id_battle_pvp'];
+        $count_moves = $conn->query("
+            SELECT COUNT(*) AS cnt
+            FROM battles_pvp_moves
+            WHERE id_battle_pvp = \"$id_battle_pvp\"
+        ");
+        $row_count = $count_moves ? $count_moves->fetch(PDO::FETCH_ASSOC) : null;
+
+        if ($row_count && (int) $row_count['cnt'] > 0)
+        {
+            $stringone_is_battling = json_encode([
+                'isBattling' => true,
+                'id_battle' => $id_battle_pvp,
+                'battle_type' => 'pvp',
+                'current_battle_turn' => (int) $row_pvp['current_turn']
+            ]);
+        }
     }
     else
     {
@@ -82,20 +93,30 @@ function animaster_build_login_envelope($conn, array $profile_row)
         {
             $row_battle = $result_battle->fetch();
             $id_battle = $row_battle['id_battle_solo_pve'];
-            $current_battle_turn = 0;
-            $result_turn = $conn->query("
-                SELECT MAX(turn) FROM battles_solo_pve_moves
+            $result_count = $conn->query("
+                SELECT COUNT(*) AS cnt
+                FROM battles_solo_pve_moves
                 WHERE id_battle_solo_pve = \"$id_battle\"
             ");
-            $row_turn = $result_turn->fetch();
-            $current_battle_turn = intval($row_turn[0]);
+            $row_count = $result_count ? $result_count->fetch(PDO::FETCH_ASSOC) : null;
 
-            $stringone_is_battling = json_encode([
-                'isBattling' => true,
-                'id_battle' => $id_battle,
-                'battle_type' => 'solo_pve',
-                'current_battle_turn' => $current_battle_turn
-            ]);
+            if ($row_count && (int) $row_count['cnt'] > 0)
+            {
+                $current_battle_turn = 0;
+                $result_turn = $conn->query("
+                    SELECT MAX(turn) FROM battles_solo_pve_moves
+                    WHERE id_battle_solo_pve = \"$id_battle\"
+                ");
+                $row_turn = $result_turn->fetch();
+                $current_battle_turn = intval($row_turn[0]);
+
+                $stringone_is_battling = json_encode([
+                    'isBattling' => true,
+                    'id_battle' => $id_battle,
+                    'battle_type' => 'solo_pve',
+                    'current_battle_turn' => $current_battle_turn
+                ]);
+            }
         }
     }
 

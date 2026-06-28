@@ -31,6 +31,15 @@ Deploy steps: [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md)
 | Target UI | `target.js`, `world.js`, `game.css` | language_texts_game_ui | yes |
 | Trade | `trade.php`, `trade.js`, `open_actions/*trade*` | trade_system | yes |
 | PvP 1v1 | `pvp.php`, `duel.js`, `open_actions/*duel*`, `pvp_get_battle_info.php` | pvp_system | yes |
+| Buff / debuff | `buffs.php`, `get_team_info.php`, `team.js`, battle start hooks | buff_system | yes |
+
+## Buff / debuff (module 016)
+
+Run once per environment:
+
+- `private_functions/SQL/buff_system.sql`
+
+See [modules/016_BUFF_SYSTEM.md](modules/016_BUFF_SYSTEM.md).
 
 After each module: commit → test local Docker → deploy → run new SQL on server → smoke test live site.  
 Deploy steps: [DEPLOY_GUIDE.md](DEPLOY_GUIDE.md)

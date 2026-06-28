@@ -1,6 +1,11 @@
 <?php
 require ($_SERVER['DOCUMENT_ROOT'].'/funzioni/i.php');
 
+if (!class_exists('PLAYER_CONVERSATIONS'))
+{
+    require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/player_conversations.php';
+}
+
 $stringone = "";
 
 $id_zone = $_POST['id_zone'];
@@ -33,7 +38,11 @@ while($row = $result->fetch())
     ");
     while($row_req = $result_requirements->fetch())
     {
-        $requirements_met=FUNZIONI::CheckRequirement($conn,$id_user_ig,$row_req['id_requirement']);
+        if (!FUNZIONI::CheckRequirement($conn, $id_user_ig, $row_req['id_requirement']))
+        {
+            $requirements_met = false;
+            break;
+        }
     }
     
     if($requirements_met)
@@ -53,12 +62,21 @@ while($row = $result->fetch())
             ");
             while($row_req = $result_requirements->fetch())
             {
-                $requirements_met2=FUNZIONI::CheckRequirement($conn,$id_user_ig,$row_req['id_requirement']);
+                if (!FUNZIONI::CheckRequirement($conn, $id_user_ig, $row_req['id_requirement']))
+                {
+                    $requirements_met2 = false;
+                    break;
+                }
             }
             
             if($requirements_met2)
             {
-                
+                if ($row_conv['flg_register'] === 'S'
+                    && PLAYER_CONVERSATIONS::isFinished($conn, $id_user_ig, $id_conversation))
+                {
+                    continue;
+                }
+
                 $result_dialogs = $conn->query("
                     select id_dialog,`order`,flg_last,flg_options,dialog$LANG as dialog
                     from dialogues

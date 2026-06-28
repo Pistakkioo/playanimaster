@@ -70,7 +70,7 @@ if($turn>0 && $restarting_old_battle!="S")
             ,p_a_res_atk,p_a_res_def,p_a_res_matk,p_a_res_mdef,p_a_res_hp,p_a_res_acc,p_a_res_eva,p_a_res_cr,p_a_res_spd,p_a_res_max_hp
             ,w_a_id,w_a_id_element,w_a_id_species,WL.species$LANG as w_a_species,w_a_lvl,WL.species$LANG as w_a_nickname
             ,p_a_id,p_a_id_element,p_a_id_species,PL.species$LANG as p_a_species,p_a_lvl,p_a_nickname,p_a_cur_exp
-            ,move_description,move_hit,resulting_battle_status,WE.element$LANG as w_a_element  ,PE.element$LANG as p_a_element  
+            ,move_description,move_hit,resulting_battle_status,WE.element$LANG as w_a_element,PE.element$LANG as p_a_element,WE.color as w_a_element_color,PE.color as p_a_element_color
         from battles_solo_pve_moves M
         left join elements WE ON WE.id_element = M.w_a_id_element
         left join elements PE ON PE.id_element = M.p_a_id_element
@@ -182,7 +182,7 @@ $moves_sql = "
             ,p_a_res_atk,p_a_res_def,p_a_res_matk,p_a_res_mdef,p_a_res_hp,p_a_res_acc,p_a_res_eva,p_a_res_cr,p_a_res_spd,p_a_res_max_hp
             ,w_a_id,w_a_id_element,w_a_id_species,WL.species$LANG as w_a_species,w_a_lvl,WL.species$LANG as w_a_nickname
             ,p_a_id,p_a_id_element,p_a_id_species,PL.species$LANG as p_a_species,p_a_lvl,p_a_nickname,p_a_cur_exp
-            ,move_description,move_hit,resulting_battle_status,WE.element$LANG as w_a_element  ,PE.element$LANG as p_a_element  
+            ,move_description,move_hit,resulting_battle_status,WE.element$LANG as w_a_element,PE.element$LANG as p_a_element,WE.color as w_a_element_color,PE.color as p_a_element_color
         from battles_solo_pve_moves M
         left join elements WE ON WE.id_element = M.w_a_id_element
         left join elements PE ON PE.id_element = M.p_a_id_element
@@ -213,7 +213,7 @@ if ($restarting_old_battle == "S" && $result_moves && $result_moves->rowCount() 
                     ,p_a_res_atk,p_a_res_def,p_a_res_matk,p_a_res_mdef,p_a_res_hp,p_a_res_acc,p_a_res_eva,p_a_res_cr,p_a_res_spd,p_a_res_max_hp
                     ,w_a_id,w_a_id_element,w_a_id_species,WL.species$LANG as w_a_species,w_a_lvl,WL.species$LANG as w_a_nickname
                     ,p_a_id,p_a_id_element,p_a_id_species,PL.species$LANG as p_a_species,p_a_lvl,p_a_nickname,p_a_cur_exp
-                    ,move_description,move_hit,resulting_battle_status,WE.element$LANG as w_a_element  ,PE.element$LANG as p_a_element  
+                    ,move_description,move_hit,resulting_battle_status,WE.element$LANG as w_a_element,PE.element$LANG as p_a_element,WE.color as w_a_element_color,PE.color as p_a_element_color
                 from battles_solo_pve_moves M
                 left join elements WE ON WE.id_element = M.w_a_id_element
                 left join elements PE ON PE.id_element = M.p_a_id_element

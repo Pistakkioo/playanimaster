@@ -83,10 +83,75 @@ var AnimasterApi = (function ()
             return Array.isArray(rows) ? rows : [];
         }
 
-        return str.split('#').filter(function (chunk)
+        var chunks = [];
+        var depth = 0;
+        var inString = false;
+        var escaped = false;
+        var start = 0;
+
+        for (var i = 0; i < trimmed.length; i++)
         {
-            return chunk !== '';
-        }).map(function (chunk)
+            var ch = trimmed.charAt(i);
+
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+
+            if (inString)
+            {
+                if (ch === '\\')
+                {
+                    escaped = true;
+                }
+                else if (ch === '"')
+                {
+                    inString = false;
+                }
+
+                continue;
+            }
+
+            if (ch === '"')
+            {
+                inString = true;
+                continue;
+            }
+
+            if (ch === '{' || ch === '[')
+            {
+                depth++;
+                continue;
+            }
+
+            if (ch === '}' || ch === ']')
+            {
+                depth--;
+                continue;
+            }
+
+            if (ch === '#' && depth === 0)
+            {
+                var part = trimmed.slice(start, i).trim();
+
+                if (part)
+                {
+                    chunks.push(part);
+                }
+
+                start = i + 1;
+            }
+        }
+
+        var tail = trimmed.slice(start).trim();
+
+        if (tail)
+        {
+            chunks.push(tail);
+        }
+
+        return chunks.map(function (chunk)
         {
             return JSON.parse(chunk);
         });
@@ -211,20 +276,6 @@ var AnimasterApi = (function ()
         });
     }
 
-    function receiveFirstAnimal(player, idSpecies, idElement)
-    {
-        return postJson(BASE + 'receive_first_animal.php', {
-            id_user_ig: player.id_user_ig || 0,
-            id_species: idSpecies,
-            id_element: idElement,
-            lang: LANG
-        }).then(function (envelope)
-        {
-            unwrap(envelope);
-            apiLog('receiveFirstAnimal', '[AnimasterApi] receiveFirstAnimal', envelope);
-            return envelope;
-        });
-    }
 
     function startBattle(player, wildId)
     {
@@ -437,6 +488,20 @@ var AnimasterApi = (function ()
         });
     }
 
+    function saveTeamOrder(player, animalIds)
+    {
+        return postJson(BASE + 'save_team_order.php', {
+            id_user_ig: player.id_user_ig || 0,
+            team_order: (animalIds || []).join(','),
+            lang: LANG
+        }).then(function (envelope)
+        {
+            unwrap(envelope);
+            apiLog('saveTeamOrder', '[AnimasterApi] saveTeamOrder', envelope);
+            return envelope;
+        });
+    }
+
     function sendChat(player, message)
     {
         return postJson(BASE + 'send_chat.php', {
@@ -619,7 +684,6 @@ var AnimasterApi = (function ()
         checkSpawn: checkSpawn,
         fetchNpcs: fetchNpcs,
         getConversationConsequences: getConversationConsequences,
-        receiveFirstAnimal: receiveFirstAnimal,
         startBattle: startBattle,
         getBattleInfo: getBattleInfo,
         getAbilityList: getAbilityList,
@@ -630,6 +694,7 @@ var AnimasterApi = (function ()
         recoverTeamHp: recoverTeamHp,
         getNotifications: getNotifications,
         changeAnimalNickname: changeAnimalNickname,
+        saveTeamOrder: saveTeamOrder,
         sendChat: sendChat,
         pollChat: pollChat,
         sendTradeRequest: sendTradeRequest,

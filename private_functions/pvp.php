@@ -490,6 +490,52 @@ function animaster_pvp_fetch_animal_snapshot($conn, $id_animal, $lang_suffix)
     ];
 }
 
+function animaster_pvp_apply_battle_start_buffs($conn, array $snap)
+{
+    if (!class_exists('BUFFS'))
+    {
+        require_once __DIR__ . '/buffs.php';
+    }
+
+    $stats = BUFFS::applyAtBattleStart($conn, (int) $snap['id_animal'], (int) $snap['id_user_ig'], [
+        'atk' => (int) $snap['atk'],
+        'def' => (int) $snap['def'],
+        'matk' => (int) $snap['matk'],
+        'mdef' => (int) $snap['mdef'],
+        'spd' => (int) $snap['spd'],
+        'acc' => (int) $snap['acc'],
+        'eva' => (int) $snap['eva'],
+        'cr' => (int) $snap['cr'],
+        'hp' => (int) $snap['current_hp'],
+        'max_hp' => (int) $snap['max_hp'],
+    ]);
+
+    $snap['atk'] = (int) $stats['atk'];
+    $snap['def'] = (int) $stats['def'];
+    $snap['matk'] = (int) $stats['matk'];
+    $snap['mdef'] = (int) $stats['mdef'];
+    $snap['spd'] = (int) $stats['spd'];
+    $snap['acc'] = (int) $stats['acc'];
+    $snap['eva'] = (int) $stats['eva'];
+    $snap['cr'] = (int) $stats['cr'];
+    $snap['current_hp'] = (int) $stats['hp'];
+    $snap['max_hp'] = (int) $stats['max_hp'];
+
+    return $snap;
+}
+
+function animaster_pvp_fetch_animal_snapshot_buffed($conn, $id_animal, $lang_suffix)
+{
+    $snap = animaster_pvp_fetch_animal_snapshot($conn, $id_animal, $lang_suffix);
+
+    if (!$snap)
+    {
+        return null;
+    }
+
+    return animaster_pvp_apply_battle_start_buffs($conn, $snap);
+}
+
 function animaster_pvp_snapshot_to_move_fields($snap, $prefix)
 {
     return [
@@ -606,8 +652,8 @@ function animaster_pvp_start_battle($conn, $id_duel_request, $id_challenger, $id
         return ['error' => 'NO_TEAM'];
     }
 
-    $snap_a = animaster_pvp_fetch_animal_snapshot($conn, $animal_a, $lang_suffix);
-    $snap_b = animaster_pvp_fetch_animal_snapshot($conn, $animal_b, $lang_suffix);
+    $snap_a = animaster_pvp_fetch_animal_snapshot_buffed($conn, $animal_a, $lang_suffix);
+    $snap_b = animaster_pvp_fetch_animal_snapshot_buffed($conn, $animal_b, $lang_suffix);
 
     if (!$snap_a || !$snap_b)
     {
@@ -804,6 +850,8 @@ function animaster_pvp_fetch_moves_for_turn($conn, $id_battle, $turn, $lang_suff
         SELECT M.*,
                WE.element' . $lang_suffix . ' AS w_a_element,
                PE.element' . $lang_suffix . ' AS p_a_element,
+               WE.color AS w_a_element_color,
+               PE.color AS p_a_element_color,
                WL.species' . $lang_suffix . ' AS w_a_species_i18n,
                PL.species' . $lang_suffix . ' AS p_a_species_i18n
         FROM battles_pvp_moves M
@@ -833,6 +881,8 @@ function animaster_pvp_fetch_all_moves($conn, $id_battle, $lang_suffix)
         SELECT M.*,
                WE.element' . $lang_suffix . ' AS w_a_element,
                PE.element' . $lang_suffix . ' AS p_a_element,
+               WE.color AS w_a_element_color,
+               PE.color AS p_a_element_color,
                WL.species' . $lang_suffix . ' AS w_a_species_i18n,
                PL.species' . $lang_suffix . ' AS p_a_species_i18n
         FROM battles_pvp_moves M
@@ -904,6 +954,13 @@ function animaster_pvp_finish_battle($conn, $battle_row, $winner_id, $end_reason
 
     animaster_pvp_clear_user_flags($conn, (int) $battle_row['id_user_ig_a']);
     animaster_pvp_clear_user_flags($conn, (int) $battle_row['id_user_ig_b']);
+
+    if (!class_exists('BUFFS'))
+    {
+        require_once __DIR__ . '/buffs.php';
+    }
+
+    BUFFS::clearBattleTurnBuffs($conn, 'pvp', $id_battle);
 }
 
 function animaster_pvp_viewer_status($battle_row, $viewer_id, $raw_status)

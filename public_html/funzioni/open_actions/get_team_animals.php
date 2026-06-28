@@ -53,7 +53,7 @@ $result = $conn->query("
 		  ,dna_atk,dna_def,dna_matk,dna_mdef,dna_hp,dna_acc,dna_eva,dna_cr,dna_spd
           ,pt_atk,pt_def,pt_matk,pt_mdef,pt_hp,pt_acc,pt_eva,pt_cr,pt_spd
           ,xp_atk,xp_def,xp_matk,xp_mdef,xp_hp,xp_acc,xp_eva,xp_cr,xp_spd
-          ,lvl, current_hp, max_hp,L.species$LANG as species,L.id_species,E.id_element,E.element$LANG as element,nickname 
+          ,lvl, current_hp, max_hp,L.species$LANG as species,L.id_species,E.id_element,E.element$LANG as element,E.color as element_color,nickname 
         from animals A 
         join species L ON L.id_species = A.id_species 
         left join elements E ON E.id_element = A.id_element
@@ -62,7 +62,9 @@ $result = $conn->query("
     ".$where_motive."
     
 ");
-while($row_user_animal=$result->fetch())
+$rows = [];
+
+while ($row_user_animal = $result->fetch())
 {
     $id_element = $row_user_animal['id_element'];
     $element = $row_user_animal['element'];
@@ -100,7 +102,7 @@ while($row_user_animal=$result->fetch())
     
     
     
-    $rig = array(
+    $rows[] = array(
         'id'=>$row_user_animal['id_animal'],
         'type'=>"team",
         'maxHP'=>$user_animal_hp,
@@ -119,11 +121,16 @@ while($row_user_animal=$result->fetch())
         'nickname'=>$nick,
         'element'=>$element,
         'id_element'=>$id_element,
+        'element_color'=>$row_user_animal['element_color'] ?? '',
         'side'=>"none"
     );
-    $singolo_json = json_encode($rig);
-    if($stringone!=""){$stringone.="#";}
-    $stringone.=$singolo_json;
+}
+
+$stringone = json_encode($rows);
+
+if ($stringone === false)
+{
+    $stringone = '[]';
 }
 
 
