@@ -1,6 +1,6 @@
 -- ANIMASTER static data export
 -- Database: playanimaster_db
--- Generated: 2026-06-29 16:48:43
+-- Generated: 2026-06-29 18:08:24
 -- Tables: elements, classes, subclasses, abilities, species, species_abilities, item_types, costanti, buff_definitions, player_classes, player_class_abilities, requirements, consequences, zones, npcs, conversations, dialogues, dialogues_options, conversation_requirements, conversation_consequences, npc_requirements, quests, quest_requirements, spawn_points, zone_animals, wild_animal_drop_types, language_texts, chat_word_replacements, chat_global_item_config
 -- Sync: php scripts/sync_static_data.php
 --       dev_static_data.php (download or write to repo)
@@ -391,21 +391,21 @@ ON DUPLICATE KEY UPDATE
     `unlock_level` = VALUES(`unlock_level`),
     `flg_active` = VALUES(`flg_active`);
 
--- requirements (6 rows — type catalog only)
+-- requirements (6 rows)
 INSERT INTO `playanimaster_db`.`requirements` (`id_requirement`, `requirement_type`) VALUES
-(2, 'item'),
-(3, 'number of animals'),
-(8, 'user lvl'),
 (10, 'conversation finished'),
 (11, 'conversation not finished'),
-(13, 'player class')
+(2, 'item'),
+(3, 'number of animals'),
+(13, 'player class'),
+(8, 'user lvl')
 ON DUPLICATE KEY UPDATE
     `requirement_type` = VALUES(`requirement_type`);
 
--- consequences (3 rows — catalog type only)
+-- consequences (3 rows)
 INSERT INTO `playanimaster_db`.`consequences` (`id_consequence`, `consequence_type`) VALUES
-(1, '[obtain item]'),
 (2, 'receive_random_animal'),
+(1, '[obtain item]'),
 (3, '[set player_class]')
 ON DUPLICATE KEY UPDATE
     `consequence_type` = VALUES(`consequence_type`);
@@ -441,7 +441,7 @@ ON DUPLICATE KEY UPDATE
     `euler_z` = VALUES(`euler_z`),
     `gender` = VALUES(`gender`);
 
--- conversations (9 rows)
+-- conversations (11 rows)
 INSERT INTO `playanimaster_db`.`conversations` (`id_conversation`, `id_npc`, `visible`, `title`, `title_it`, `title_pt`, `flg_register`) VALUES
 (3, 1, 'S', 'Greeting', 'Saluto', 'Saudacao', 'N'),
 (4, 1, 'S', 'First Companion', 'Primo compagno', 'Primeiro companheiro', 'S'),
@@ -451,7 +451,9 @@ INSERT INTO `playanimaster_db`.`conversations` (`id_conversation`, `id_npc`, `vi
 (9, 3, 'S', 'Third is the charm', 'La terza e la volta buona', 'A terceira e a da certeza', 'S'),
 (10, 4, 'S', 'Scientific specialization', 'Specializzazione scientifica', 'Especializacao cientifica', 'S'),
 (11, 3, 'S', 'Work hard', 'Allenati', 'Treina', 'N'),
-(12, 3, 'S', 'Hows it going?', 'Come va?', 'Como vai?', 'N')
+(12, 3, 'S', 'Hows it going?', 'Come va?', 'Como vai?', 'N'),
+(13, 4, 'S', 'Greetings', 'Salve', 'Saudaçoes', 'N'),
+(14, 4, 'S', 'Welcome', 'Benvenuto', 'Bem-vindo', 'N')
 ON DUPLICATE KEY UPDATE
     `id_npc` = VALUES(`id_npc`),
     `visible` = VALUES(`visible`),
@@ -460,7 +462,7 @@ ON DUPLICATE KEY UPDATE
     `title_pt` = VALUES(`title_pt`),
     `flg_register` = VALUES(`flg_register`);
 
--- dialogues (15 rows)
+-- dialogues (20 rows)
 INSERT INTO `playanimaster_db`.`dialogues` (`id_dialog`, `id_conversation`, `order`, `flg_last`, `flg_options`, `dialog`, `dialog_it`, `dialog_pt`) VALUES
 (4, 3, 1, 'S', 'N', 'Hello! Good to see you again.', 'Ciao! Che piacere rivederti.', 'Ola! Bom te ver outra vez.'),
 (5, 4, 1, 'N', 'N', 'Hello! Welcome to Animaster.', 'Ciao! Benvenuto in Animaster.', 'Ola! Bem-vindo ao Animaster.'),
@@ -476,7 +478,12 @@ INSERT INTO `playanimaster_db`.`dialogues` (`id_dialog`, `id_conversation`, `ord
 (19, 11, 1, 'S', 'N', 'Keep training and come back (lvl8)', 'Continua ad allenarti e torna da me (lvl8)', 'Continua a treinar e volta aqui (lvl8)'),
 (20, 8, 1, 'N', 'N', 'Hi there! My name is Tamer. I\'m here to help the Prof\'s animal friends continue to improve.', 'Ciao! Mi chiamo Tamer. Sono qui per aiutare gli amici del Prof a migliorare.', 'Ola! Sou o Tamer. Estou aqui para ajudar os novos amigos do Prof a melhorar.'),
 (21, 12, 1, 'N', 'N', 'Hello there! How are the puppies?', 'Ciao! Come stanno i cuccioli?', 'Ola! Como estao os bebes?'),
-(22, 12, 2, 'S', 'N', 'Ohh I can see they\'re growing well. Keep up the good work :)', 'Ahh vedo che stanno crescendo! Continua cosi :)', 'AHH tou a ver que estao a crescer bem! continua assim :)')
+(22, 12, 2, 'S', 'N', 'Ohh I can see they\'re growing well. Keep up the good work :)', 'Ahh vedo che stanno crescendo! Continua cosi :)', 'AHH tou a ver que estao a crescer bem! continua assim :)'),
+(23, 13, 1, 'N', 'N', 'Hello there. I specialize in those who seek to master knowledge.', 'Hello there. I specialize in those who seek to master knowledge.', 'Hello there. I specialize in those who seek to master knowledge.'),
+(24, 13, 1, 'N', 'N', 'You seem more of a... \"hands-on\" type of individual...', 'You seem more of a... \"hands-on\" type of individual...', 'You seem more of a... \"hands-on\" type of individual...'),
+(25, 13, 1, 'N', 'N', 'I\'m sure you\'ll find better guidance on the opposite side of town. Have a nice day', 'I\'m sure you\'ll find better guidance on the opposite side of town. Have a nice day', 'I\'m sure you\'ll find better guidance on the opposite side of town. Have a nice day'),
+(26, 14, 1, 'N', 'N', 'You\'ve come to the right place. But perhaps a little too soon.', 'You\'ve come to the right place. But perhaps a little too soon.', 'You\'ve come to the right place. But perhaps a little too soon.'),
+(27, 14, 1, 'N', 'N', 'I have great guidance to offer you, but you need to become a little stronger first. Come back at lvl 25', 'I have great guidance to offer you, but you need to become a little stronger first. Come back at lvl 25', 'I have great guidance to offer you, but you need to become a little stronger first. Come back at lvl 25')
 ON DUPLICATE KEY UPDATE
     `id_conversation` = VALUES(`id_conversation`),
     `order` = VALUES(`order`),
@@ -508,7 +515,7 @@ ON DUPLICATE KEY UPDATE
     `option_text_it` = VALUES(`option_text_it`),
     `option_text_pt` = VALUES(`option_text_pt`);
 
--- conversation_requirements (15 rows)
+-- conversation_requirements (18 rows)
 INSERT INTO `playanimaster_db`.`conversation_requirements` (`id_conversation_requirement`, `id_conversation`, `id_requirement`, `id_ref`, `ref_table`, `ref_description`, `min`, `max`, `descrizione`) VALUES
 (3, 3, 3, 0, 'animals', NULL, 1, NULL, 'Account has at least one animal'),
 (4, 4, 3, 0, 'ZERO', NULL, 0, 0, 'Account has no animals'),
@@ -524,7 +531,10 @@ INSERT INTO `playanimaster_db`.`conversation_requirements` (`id_conversation_req
 (14, 10, 2, 7, 'item_types', NULL, 3, NULL, 'At least 3 Field Notes'),
 (15, 10, 2, 8, 'item_types', NULL, 1, NULL, 'At least 1 Microscope Trinket'),
 (16, 11, 8, 0, NULL, NULL, 0, 7, 'character under lvl 8'),
-(17, 12, 10, 9, 'CONVERSATION', NULL, 0, 0, 'finished conversation 9 - Third is the charm')
+(17, 12, 10, 9, 'CONVERSATION', NULL, 0, 0, 'finished conversation 9 - Third is the charm'),
+(18, 13, 13, 2, 'PLAYER_CLASS', 'stud', 0, NULL, 'Player class stud'),
+(19, 14, 13, 1, 'PLAYER_CLASS', 'nerd', 0, NULL, NULL),
+(20, 14, 8, 0, NULL, NULL, 0, 24, 'Player lvl under 25')
 ON DUPLICATE KEY UPDATE
     `id_conversation` = VALUES(`id_conversation`),
     `id_requirement` = VALUES(`id_requirement`),
@@ -535,9 +545,8 @@ ON DUPLICATE KEY UPDATE
     `max` = VALUES(`max`),
     `descrizione` = VALUES(`descrizione`);
 
--- conversation_consequences (6 rows — per-link refs / num / params)
+-- conversation_consequences (5 rows)
 INSERT INTO `playanimaster_db`.`conversation_consequences` (`id_conversation_consequence`, `id_conversation`, `id_option`, `id_consequence`, `id_ref`, `ref_table`, `ref_description`, `num`, `params_json`) VALUES
-(1, 5, 1, 1, 1, 'item_types', NULL, 1, NULL),
 (2, 6, 5, 1, 1, 'item_types', NULL, 1, NULL),
 (4, 8, 6, 2, 0, NULL, NULL, 1, '{\"species_pool\":[1,2,3],\"element_pool\":[1,2,3,4,5,6,7]}'),
 (5, 9, 8, 2, 0, NULL, NULL, 1, '{\"species_pool\":[1,2,3],\"element_pool\":[1,2,3,4,5,6,7]}'),
