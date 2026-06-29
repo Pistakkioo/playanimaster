@@ -4,8 +4,8 @@
  * Dialog / quest consequence handlers.
  *
  * Register new handlers in CONSEQUENCES::handlers().
- * Optional JSON params live in consequences.params_json; id_ref, ref_table and num
- * are merged in as defaults when a key is not present in the JSON.
+ * Optional JSON params live on conversation_consequences.params_json; id_ref, ref_table
+ * and num on the link row are merged in as defaults when a key is not present in the JSON.
  */
 class CONSEQUENCES
 {
@@ -49,22 +49,23 @@ class CONSEQUENCES
         return call_user_func($handlers[$handler_type], $conn, $id_user_ig, $row, $merged, $LANG);
     }
 
-    public static function Apply($conn, $id_user_ig, $id_consequence, $LANG)
+    /**
+     * @param array<string, mixed>|int $row Merged link + catalog row, or legacy catalog id (unsupported).
+     */
+    public static function Apply($conn, $id_user_ig, $row, $LANG)
     {
-        $row = self::fetchRow($conn, $id_consequence);
+        if (is_numeric($row))
+        {
+            error_log('[CONSEQUENCES] Apply by catalog id alone is no longer supported; pass a merged link row.');
+            return false;
+        }
 
-        if (!$row)
+        if (!is_array($row) || empty($row['consequence_type']))
         {
             return false;
         }
 
-        $type = trim((string) ($row['consequence_type'] ?? ''));
-
-        if ($type === '')
-        {
-            error_log('[CONSEQUENCES] empty consequence_type for id ' . (int) $id_consequence);
-            return false;
-        }
+        $type = trim((string) $row['consequence_type']);
 
         $handlers = self::handlers();
 
@@ -77,23 +78,6 @@ class CONSEQUENCES
         $params = self::resolveParams($row);
 
         return call_user_func($handlers[$type], $conn, $id_user_ig, $row, $params, $LANG);
-    }
-
-    /**
-     * @return array<string, mixed>|false
-     */
-    private static function fetchRow($conn, $id_consequence)
-    {
-        $stmt = $conn->prepare('
-            SELECT id_consequence, consequence_type, id_ref, ref_table, num, params_json
-            FROM consequences
-            WHERE id_consequence = :id_consequence
-            LIMIT 1
-        ');
-        $stmt->execute([':id_consequence' => (int) $id_consequence]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        return $row ?: false;
     }
 
     /**
@@ -474,6 +458,16 @@ class CONSEQUENCES
         if ($target_id <= 0 && !empty($params['class_code']))
         {
             $by_code = PLAYER_CLASS::fetchByCode($conn, (string) $params['class_code']);
+
+            if ($by_code)
+            {
+                $target_id = (int) $by_code['id_player_class'];
+            }
+        }
+
+        if ($target_id <= 0 && !empty($row['ref_description']))
+        {
+            $by_code = PLAYER_CLASS::fetchByCode($conn, (string) $row['ref_description']);
 
             if ($by_code)
             {

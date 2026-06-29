@@ -32,13 +32,15 @@ while($row = $result->fetch())
     $id_npc = $row['id_npc'];
     $requirements_met = true;
     $result_requirements = $conn->query("
-        select R.* from npc_requirements NR
+        select R.requirement_type, NR.id_requirement, NR.id_ref, NR.ref_table, NR.ref_description,
+               NR.min, NR.max, NR.descrizione
+        from npc_requirements NR
         JOIN requirements R ON R.id_requirement = NR.id_requirement
         where id_npc = \"$id_npc\"
     ");
     while($row_req = $result_requirements->fetch())
     {
-        if (!FUNZIONI::CheckRequirement($conn, $id_user_ig, $row_req['id_requirement']))
+        if (!FUNZIONI::CheckRequirement($conn, $id_user_ig, $row_req))
         {
             $requirements_met = false;
             break;
@@ -56,13 +58,15 @@ while($row = $result->fetch())
             $requirements_met2 = true;
             $id_conversation = $row_conv['id_conversation'];
             $result_requirements = $conn->query("
-                select R.* from conversation_requirements CR
+                select R.requirement_type, CR.id_requirement, CR.id_ref, CR.ref_table, CR.ref_description,
+                       CR.min, CR.max, CR.descrizione
+                from conversation_requirements CR
                 JOIN requirements R ON R.id_requirement = CR.id_requirement
                 where id_conversation = \"$id_conversation\"
             ");
             while($row_req = $result_requirements->fetch())
             {
-                if (!FUNZIONI::CheckRequirement($conn, $id_user_ig, $row_req['id_requirement']))
+                if (!FUNZIONI::CheckRequirement($conn, $id_user_ig, $row_req))
                 {
                     $requirements_met2 = false;
                     break;

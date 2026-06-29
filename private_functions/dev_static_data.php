@@ -11,7 +11,15 @@ function dev_static_runtime_excludes()
         'battles_solo_pve_moves',
         'storico_battles_solo_pve_moves',
         'alliances',
-        'clans'
+        'clans',
+        'battle_turn_buffs',
+        'battles_pvp',
+        'battles_pvp_moves',
+        'chat_messages',
+        'entity_buffs',
+        'pvp_duel_requests',
+        'trade_requests',
+        'trades',
     ];
 }
 
@@ -26,6 +34,9 @@ function dev_static_preferred_order()
         'species_abilities',
         'item_types',
         'costanti',
+        'buff_definitions',
+        'player_classes',
+        'player_class_abilities',
         'requirements',
         'consequences',
         'zones',
@@ -170,46 +181,77 @@ function dev_static_export_table(PDO $conn, $table, $dbName)
 
     $quoted = dev_static_quote_ident($table);
     $stmt = $conn->query('SELECT * FROM ' . $quoted);
+
     if (!$stmt)
     {
         return '';
     }
 
-    $lines = [];
-    $columns = null;
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC))
+    if (!$rows)
     {
-        if ($columns === null)
-        {
-            $columns = array_keys($row);
-        }
+        return '-- ' . $table . ': (empty)' . "\n";
+    }
 
-        $colList = implode(', ', array_map('dev_static_quote_ident', $columns));
+    $columns = array_keys($rows[0]);
+    $col_list = implode(', ', array_map('dev_static_quote_ident', $columns));
+    $pk_cols = dev_static_table_primary_key_columns($conn, $dbName, $table);
+    $skip_update = dev_static_upsert_skip_update_columns();
+    $value_lines = [];
+
+    foreach ($rows as $row)
+    {
         $values = [];
+
         foreach ($columns as $col)
         {
             $values[] = dev_static_sql_literal($conn, $row[$col]);
         }
 
-        $lines[] = 'INSERT INTO ' . dev_static_quote_ident($dbName) . '.' . $quoted
-            . ' (' . $colList . ') VALUES(' . implode(', ', $values) . ');';
+        $value_lines[] = '(' . implode(', ', $values) . ')';
     }
 
-    if (!$lines)
+    $update_cols = [];
+
+    foreach ($columns as $col)
     {
-        return '-- ' . $table . ': (empty)' . "\n";
+        if (in_array($col, $pk_cols, true))
+        {
+            continue;
+        }
+
+        if (in_array($col, $skip_update, true))
+        {
+            continue;
+        }
+
+        $q = dev_static_quote_ident($col);
+        $update_cols[] = $q . ' = VALUES(' . $q . ')';
     }
 
-    $out = '-- ' . $table . ' (' . count($lines) . " rows)\n";
-    $out .= implode("\n", $lines) . "\n";
+    $sql = 'INSERT INTO ' . dev_static_quote_ident($dbName) . '.' . $quoted
+        . ' (' . $col_list . ") VALUES\n"
+        . implode(",\n", $value_lines);
+
+    if ($update_cols)
+    {
+        $sql .= "\nON DUPLICATE KEY UPDATE\n    " . implode(",\n    ", $update_cols);
+    }
+
+    $sql .= ';';
+
+    $out = '-- ' . $table . ' (' . count($rows) . " rows)\n";
+    $out .= $sql . "\n";
 
     return $out;
 }
 
-function dev_static_export_sql(PDO $conn, array $tables)
+/**
+ * @return string[]
+ */
+function dev_static_resolve_export_tables(PDO $conn, array $tables)
 {
-    $dbName = dev_static_db_name($conn);
     $allowed = dev_static_discover_tables($conn);
     $selected = [];
 
@@ -221,16 +263,31 @@ function dev_static_export_sql(PDO $conn, array $tables)
         }
     }
 
-    $selected = dev_static_sort_tables($selected);
+    if (!$selected)
+    {
+        $selected = $allowed;
+    }
+
+    return dev_static_sort_tables($selected);
+}
+
+function dev_static_export_sql(PDO $conn, array $tables)
+{
+    $dbName = dev_static_db_name($conn);
+    $selected = dev_static_resolve_export_tables($conn, $tables);
 
     $header = "-- ANIMASTER static data export\n";
     $header .= '-- Database: ' . $dbName . "\n";
     $header .= '-- Generated: ' . date('Y-m-d H:i:s') . "\n";
-    $header .= "-- Tables: " . implode(', ', $selected) . "\n\n";
+    $header .= "-- Tables: " . implode(', ', $selected) . "\n";
+    $header .= "-- Sync: php scripts/sync_static_data.php\n";
+    $header .= "--       dev_static_data.php (download or write to repo)\n";
+    $header .= "-- One INSERT per table with ON DUPLICATE KEY UPDATE (see SQL/README.md).\n\n";
     $header .= "SET NAMES utf8mb4;\n";
     $header .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
 
     $body = '';
+
     foreach ($selected as $table)
     {
         $body .= dev_static_export_table($conn, $table, $dbName) . "\n";
@@ -239,6 +296,11 @@ function dev_static_export_sql(PDO $conn, array $tables)
     $footer = "SET FOREIGN_KEY_CHECKS=1;\n";
 
     return $header . $body . $footer;
+}
+
+function dev_static_export_sql_upsert(PDO $conn, array $tables)
+{
+    return dev_static_export_sql($conn, $tables);
 }
 
 function dev_static_split_sql_statements($sql)
@@ -436,4 +498,89 @@ function dev_static_filter_selected_tables(array $posted, PDO $conn)
     }
 
     return dev_static_sort_tables($selected);
+}
+
+function dev_static_repo_sql_path()
+{
+    return __DIR__ . '/SQL/02_insert_static_data.sql';
+}
+
+/**
+ * @return string[]
+ */
+function dev_static_table_primary_key_columns(PDO $conn, $db, $table)
+{
+    if (!dev_static_valid_table_name($table))
+    {
+        return [];
+    }
+
+    $stmt = $conn->prepare('
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = :db
+          AND TABLE_NAME = :table
+          AND CONSTRAINT_NAME = \'PRIMARY\'
+        ORDER BY ORDINAL_POSITION
+    ');
+    $stmt->execute([
+        ':db' => $db,
+        ':table' => $table
+    ]);
+
+    $cols = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    return $cols ?: [];
+}
+
+/**
+ * Columns omitted from ON DUPLICATE KEY UPDATE (creation timestamps).
+ *
+ * @return string[]
+ */
+function dev_static_upsert_skip_update_columns()
+{
+    return ['dt_c', 'dt_creazione'];
+}
+
+/**
+ * @return array{ok:bool,message:string,path:string,tables:int,bytes:int}
+ */
+function dev_static_sync_to_repo(PDO $conn, array $tables = null)
+{
+    $path = dev_static_repo_sql_path();
+    $allowed = dev_static_discover_tables($conn);
+    $selected = $tables ? dev_static_filter_selected_tables($tables, $conn) : $allowed;
+    $sql = dev_static_export_sql($conn, $selected);
+    $dir = dirname($path);
+
+    if (!is_dir($dir))
+    {
+        return [
+            'ok' => false,
+            'message' => 'SQL directory not found: ' . $dir,
+            'path' => $path,
+            'tables' => 0,
+            'bytes' => 0
+        ];
+    }
+
+    if (file_put_contents($path, $sql) === false)
+    {
+        return [
+            'ok' => false,
+            'message' => 'Failed to write ' . $path,
+            'path' => $path,
+            'tables' => count($selected),
+            'bytes' => 0
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'message' => 'Wrote ' . count($selected) . ' tables to ' . $path,
+        'path' => $path,
+        'tables' => count($selected),
+        'bytes' => strlen($sql)
+    ];
 }

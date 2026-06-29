@@ -1,0 +1,90 @@
+/**
+ * Dev admin pages — dark UI overrides for Bootstrap 5.3 CSS variables.
+ */
+:root,
+body {
+    --bs-body-color: #e7ecf1;
+    --bs-body-bg: #0f1419;
+    --bs-emphasis-color: #f8fafc;
+    --bs-secondary-color: #94a3b8;
+    --bs-tertiary-color: #adb5bd;
+    --bs-heading-color: #e7ecf1;
+    --bs-link-color: #4dabf7;
+    --bs-link-hover-color: #74c0fc;
+    --bs-border-color: #2d3a4d;
+    --bs-card-color: #e7ecf1;
+    --bs-card-bg: #1a2435;
+    --bs-card-border-color: #3a4d63;
+    --bs-card-cap-color: #dce8f5;
+    --bs-card-cap-bg: #243a52;
+    --dev-card-body-bg: #161f2e;
+}
+
+body {
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+}
+
+.dev-card {
+    background: var(--bs-card-bg);
+    border: 1px solid var(--bs-card-border-color);
+    color: var(--bs-card-color);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
+    overflow: hidden;
+}
+
+.dev-card .card-header {
+    background: linear-gradient(135deg, #2a4563 0%, var(--bs-card-cap-bg) 55%, #1e3348 100%);
+    border-bottom: 1px solid #3d5a80;
+    color: var(--bs-card-cap-color);
+}
+
+.dev-card .card-header strong {
+    color: #8ec8f8;
+}
+
+.dev-card .card-body {
+    background: linear-gradient(180deg, var(--bs-card-bg) 0%, var(--dev-card-body-bg) 100%);
+    color: var(--bs-card-color);
+}
+.dev-card .card-title,
+.dev-card p,
+.dev-card li,
+.dev-card code,
+.dev-card small,
+.dev-card .form-label {
+    color: inherit;
+}
+
+.dev-card .text-secondary {
+    color: var(--bs-secondary-color) !important;
+}
+
+.form-control,
+.form-select {
+    background: #0f1419;
+    color: #e7ecf1;
+    border-color: #495057;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background: #0f1419;
+    color: #fff;
+    border-color: #4dabf7;
+    box-shadow: 0 0 0 0.2rem rgba(77, 171, 247, 0.2);
+}
+
+.nav-pills .nav-link {
+    color: #adb5bd;
+}
+
+.nav-pills .nav-link.active {
+    background: #364fc7;
+    color: #fff;
+}
+
+.meta {
+    color: #94a3b8;
+    font-size: 0.85rem;
+}

@@ -1,53 +1,247 @@
 /**
- * Notification queue (Unity IGManager / Notification.cs).
+ * System log — append-only feed for server notifications (replaces alert popups).
  */
 var AnimasterNotifications = (function ()
 {
-    var overlay = null;
-    var textEl = null;
-    var metaEl = null;
-    var dismissBtn = null;
-    var queue = [];
+    var panel = null;
+    var messagesEl = null;
+    var collapseBtn = null;
+    var timeToggleBtn = null;
     var playerRef = null;
-    var showing = false;
     var busy = false;
+    var collapsed = false;
+    var showTimestamps = true;
+    var maxLines = 200;
+    var timePrefKey = 'animaster_syslog_times';
 
-    function init()
+    var typeClassMap = {
+        lvl_up: 'syslog-lvl_up',
+        item: 'syslog-item',
+        gold: 'syslog-gold',
+        lvl_down: 'syslog-lvl_down',
+        class_promotion: 'syslog-class_promotion'
+    };
+
+    function t(tag, vars)
     {
-        overlay = document.getElementById('notification-overlay');
-        textEl = document.getElementById('notification-text');
-        metaEl = document.getElementById('notification-meta');
-        dismissBtn = document.getElementById('notification-dismiss');
+        if (typeof AnimasterLang !== 'undefined')
+        {
+            return AnimasterLang.t(tag, vars);
+        }
 
-        if (!overlay)
+        return tag;
+    }
+
+    function pad2(n)
+    {
+        return String(n).padStart(2, '0');
+    }
+
+    function parseNoteDate(note)
+    {
+        if (note && note.dt_c)
+        {
+            var parsed = new Date(note.dt_c);
+
+            if (!isNaN(parsed.getTime()))
+            {
+                return parsed;
+            }
+        }
+
+        return new Date();
+    }
+
+    function formatTimestamp(date)
+    {
+        var now = new Date();
+        var sameDay = date.getFullYear() === now.getFullYear()
+            && date.getMonth() === now.getMonth()
+            && date.getDate() === now.getDate();
+        var time = pad2(date.getHours()) + ':' + pad2(date.getMinutes()) + ':' + pad2(date.getSeconds());
+
+        if (sameDay)
+        {
+            return time;
+        }
+
+        return pad2(date.getMonth() + 1) + '-' + pad2(date.getDate()) + ' ' + time;
+    }
+
+    function applyTimestampVisibility()
+    {
+        if (!panel)
         {
             return;
         }
 
-        overlay.hidden = true;
-        overlay.setAttribute('aria-hidden', 'true');
+        panel.classList.toggle('system-log-show-times', showTimestamps);
 
-        if (dismissBtn)
+        if (timeToggleBtn)
         {
-            dismissBtn.addEventListener('click', function ()
+            timeToggleBtn.classList.toggle('is-active', showTimestamps);
+            timeToggleBtn.setAttribute('aria-pressed', showTimestamps ? 'true' : 'false');
+            timeToggleBtn.title = showTimestamps
+                ? t('system_log.timestamps_hide')
+                : t('system_log.timestamps_show');
+        }
+    }
+
+    function init()
+    {
+        panel = document.getElementById('system-log-panel');
+        messagesEl = document.getElementById('system-log-messages');
+        collapseBtn = document.getElementById('system-log-collapse');
+        timeToggleBtn = document.getElementById('system-log-time-toggle');
+
+        if (!panel || !messagesEl)
+        {
+            return;
+        }
+
+        try
+        {
+            var stored = sessionStorage.getItem(timePrefKey);
+
+            if (stored === '0')
             {
-                showNext();
+                showTimestamps = false;
+            }
+            else if (stored === '1')
+            {
+                showTimestamps = true;
+            }
+        }
+        catch (e)
+        {
+            showTimestamps = true;
+        }
+
+        applyTimestampVisibility();
+
+        if (timeToggleBtn)
+        {
+            timeToggleBtn.addEventListener('click', function ()
+            {
+                showTimestamps = !showTimestamps;
+
+                try
+                {
+                    sessionStorage.setItem(timePrefKey, showTimestamps ? '1' : '0');
+                }
+                catch (e)
+                {
+                    // ignore
+                }
+
+                applyTimestampVisibility();
             });
         }
 
-        document.addEventListener('keydown', function (e)
+        if (collapseBtn)
         {
-            if (e.code === 'Enter' && showing && overlay && !overlay.hidden)
+            collapseBtn.addEventListener('click', function ()
             {
-                e.preventDefault();
-                showNext();
-            }
-        });
+                collapsed = !collapsed;
+                panel.classList.toggle('system-log-collapsed', collapsed);
+                collapseBtn.textContent = collapsed ? '+' : '\u2212';
+                collapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            });
+        }
+
+        renderEmptyState();
     }
 
     function setPlayer(player)
     {
         playerRef = player;
+    }
+
+    function typeClass(itemType)
+    {
+        var key = String(itemType || '').toLowerCase();
+
+        return typeClassMap[key] || 'syslog-default';
+    }
+
+    function renderEmptyState()
+    {
+        if (!messagesEl || messagesEl.children.length > 0)
+        {
+            return;
+        }
+
+        var empty = document.createElement('p');
+        empty.className = 'system-log-line system-log-empty';
+        empty.textContent = t('system_log.empty');
+        messagesEl.appendChild(empty);
+    }
+
+    function trimOldLines()
+    {
+        if (!messagesEl)
+        {
+            return;
+        }
+
+        var lines = messagesEl.querySelectorAll('.system-log-line:not(.system-log-empty)');
+
+        while (lines.length > maxLines)
+        {
+            lines[0].parentNode.removeChild(lines[0]);
+            lines = messagesEl.querySelectorAll('.system-log-line:not(.system-log-empty)');
+        }
+    }
+
+    function scrollToBottom()
+    {
+        if (!messagesEl)
+        {
+            return;
+        }
+
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function appendLine(note)
+    {
+        if (!messagesEl || !note)
+        {
+            return;
+        }
+
+        var text = note.description || '';
+
+        if (!text)
+        {
+            return;
+        }
+
+        var empty = messagesEl.querySelector('.system-log-empty');
+
+        if (empty)
+        {
+            empty.parentNode.removeChild(empty);
+        }
+
+        var when = parseNoteDate(note);
+        var line = document.createElement('p');
+        line.className = 'system-log-line ' + typeClass(note.item_type);
+
+        var timeEl = document.createElement('time');
+        timeEl.className = 'system-log-time';
+        timeEl.dateTime = when.toISOString();
+        timeEl.textContent = '[' + formatTimestamp(when) + ']';
+
+        var textEl = document.createElement('span');
+        textEl.className = 'system-log-text';
+        textEl.textContent = text;
+
+        line.appendChild(timeEl);
+        line.appendChild(textEl);
+        messagesEl.appendChild(line);
+        trimOldLines();
+        scrollToBottom();
     }
 
     function fetch()
@@ -63,7 +257,10 @@ var AnimasterNotifications = (function ()
         {
             if (list && list.length)
             {
-                enqueue(list);
+                list.forEach(function (item)
+                {
+                    appendLine(item);
+                });
             }
 
             return list || [];
@@ -86,56 +283,23 @@ var AnimasterNotifications = (function ()
 
         items.forEach(function (item)
         {
-            queue.push(item);
+            appendLine(item);
         });
-
-        if (!showing)
-        {
-            showNext();
-        }
     }
 
-    function showLocal(description, itemType, nome)
+    function showLocal(description, itemType)
     {
         enqueue([{
             id_notification: 0,
             description: description,
-            item_type: itemType || 'close',
-            nome: nome || 'close'
+            item_type: itemType || 'default',
+            dt_c: new Date().toISOString()
         }]);
-    }
-
-    function showNext()
-    {
-        if (!overlay)
-        {
-            queue = [];
-            showing = false;
-            return;
-        }
-
-        if (!queue.length)
-        {
-            showing = false;
-            overlay.hidden = true;
-            overlay.setAttribute('aria-hidden', 'true');
-            return;
-        }
-
-        showing = true;
-        var note = queue.shift();
-        var label = note.nome || note.item_type || '';
-
-        textEl.textContent = note.description || '';
-        metaEl.textContent = (note.item_type && note.item_type !== 'close') ? label : '';
-
-        overlay.hidden = false;
-        overlay.setAttribute('aria-hidden', 'false');
     }
 
     function isVisible()
     {
-        return overlay && !overlay.hidden;
+        return false;
     }
 
     return {

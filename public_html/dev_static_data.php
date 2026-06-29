@@ -30,6 +30,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
         exit;
     }
 
+    if ($action === 'sync_repo')
+    {
+        $result = dev_static_sync_to_repo($conn, null);
+        $flash_ok = $result['ok'];
+        $flash = $result['message'];
+
+        header('Location: ' . dev_admin_page_url('dev_static_data.php', [
+            'msg' => $flash,
+            'ok' => $flash_ok ? '1' : '0'
+        ]));
+        exit;
+    }
+
     if ($action === 'import')
     {
         $sql = '';
@@ -71,15 +84,11 @@ $pageUrl = dev_admin_page_url('dev_static_data.php');
     <meta name="robots" content="noindex,nofollow">
     <title>Animaster — Static Data Export</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/dev_admin.css">
     <style>
-        body { background: #0f1419; color: #e7ecf1; }
-        .dev-card { background: #1a2332; border: 1px solid #2d3a4d; }
-        .dev-card .card-header { background: #243044; border-bottom: 1px solid #2d3a4d; }
-        .meta { color: #94a3b8; font-size: .85rem; }
-        .form-control, .form-select, .form-check-input { background: #0f1419; color: #e7ecf1; border-color: #495057; }
-        .form-control:focus { background: #0f1419; color: #fff; border-color: #4dabf7; box-shadow: 0 0 0 .2rem rgba(77,171,247,.2); }
         .table-dark-ish { --bs-table-bg: #121a24; --bs-table-color: #e7ecf1; --bs-table-border-color: #2d3a4d; }
         textarea.sql-box { font-family: ui-monospace, monospace; font-size: .8rem; min-height: 220px; }
+        .form-check-input { background-color: #0f1419; border-color: #495057; }
     </style>
 </head>
 <body>
@@ -107,7 +116,7 @@ $pageUrl = dev_admin_page_url('dev_static_data.php');
                     <span class="badge bg-secondary"><?php echo count($tableInfo); ?> tables</span>
                 </div>
                 <div class="card-body">
-                    <p class="meta">Generates <code>INSERT</code> statements compatible with <code>docs/02_insert_static_data.sql</code>.</p>
+                    <p class="meta">One bulk <code>INSERT … ON DUPLICATE KEY UPDATE</code> per table — same format for download, repo write, and CLI sync.</p>
                     <p class="meta mb-3">Excluded at runtime: <?php echo dev_admin_h(implode(', ', dev_static_runtime_excludes())); ?></p>
 
                     <form method="post" action="<?php echo dev_admin_h($pageUrl); ?>">
@@ -145,6 +154,23 @@ $pageUrl = dev_admin_page_url('dev_static_data.php');
 
                         <button class="btn btn-primary" type="submit">Download .sql</button>
                     </form>
+
+                    <hr class="border-secondary my-4">
+
+                    <p class="meta mb-2">
+                        Overwrite <code>private_functions/SQL/02_insert_static_data.sql</code>
+                        with the current DB (same SQL as download).
+                        Run this after editing NPCs/species in dev so IDs in git match your local DB.
+                    </p>
+
+                    <form method="post" action="<?php echo dev_admin_h($pageUrl); ?>"
+                          onsubmit="return confirm('Overwrite 02_insert_static_data.sql with ALL static tables from this database?');">
+                        <input type="hidden" name="T" value="<?php echo dev_admin_h($token); ?>">
+                        <input type="hidden" name="action" value="sync_repo">
+                        <button class="btn btn-success" type="submit">Write to SQL/02_insert_static_data.sql</button>
+                    </form>
+
+                    <p class="meta small mt-2 mb-0">CLI: <code>php scripts/sync_static_data.php</code> from repo root.</p>
                 </div>
             </div>
         </div>
@@ -188,7 +214,8 @@ $pageUrl = dev_admin_page_url('dev_static_data.php');
                         <li>Auto-includes tables with no <code>id_user</code> / <code>id_user_ig</code> column.</li>
                         <li>Export order respects FK dependencies (species before npcs, etc.).</li>
                         <li>Player tables (<code>users</code>, <code>animals</code>, <code>items</code>, chat, trades…) are never included.</li>
-                        <li>After editing NPCs on dev, export → commit SQL file → import on another environment.</li>
+                        <li>After editing NPCs on dev, <strong>sync to repo</strong> (button above or CLI) → commit <code>02_insert_static_data.sql</code>.</li>
+                        <li>Download and repo sync produce identical SQL (bulk upsert, one statement per table).</li>
                     </ul>
                 </div>
             </div>

@@ -324,14 +324,54 @@ class FUNZIONI
     }
     
     
-    public static function CheckRequirement($conn,$id_user_ig,$id_requirement)
+    public static function CheckRequirement($conn, $id_user_ig, $row_req)
     {
-        $result_req = $conn->query("
-            select * from requirements where id_requirement = \"$id_requirement\"
-        ");
-        $row_req = $result_req->fetch();
-        $min = intval($row_req['min']);
-        $max = intval($row_req['max']);
+        if (is_numeric($row_req))
+        {
+            $id_requirement = (int) $row_req;
+            $result_req = $conn->query("
+                select * from requirements where id_requirement = \"$id_requirement\"
+            ");
+            $row_req = $result_req ? $result_req->fetch(PDO::FETCH_ASSOC) : null;
+        }
+
+        if (!is_array($row_req) || empty($row_req['requirement_type']))
+        {
+            return false;
+        }
+
+        if (!isset($row_req['min']) || !array_key_exists('max', $row_req)
+            || !array_key_exists('id_ref', $row_req))
+        {
+            $id_requirement = isset($row_req['id_requirement']) ? (int) $row_req['id_requirement'] : 0;
+
+            if ($id_requirement <= 0)
+            {
+                return false;
+            }
+
+            $result_req = $conn->query("
+                select * from requirements where id_requirement = \"$id_requirement\"
+            ");
+            $catalog = $result_req ? $result_req->fetch(PDO::FETCH_ASSOC) : null;
+
+            if (!$catalog)
+            {
+                return false;
+            }
+
+            $row_req = array_merge($catalog, $row_req);
+        }
+
+        if (!function_exists('requirement_value_in_range'))
+        {
+            require_once __DIR__ . '/requirement_range.php';
+        }
+
+        $min = (int) $row_req['min'];
+        $max = array_key_exists('max', $row_req) && $row_req['max'] !== '' && $row_req['max'] !== null
+            ? (int) $row_req['max']
+            : null;
         $id_ref = $row_req['id_ref'];
         
         if($row_req['requirement_type']=="user lvl")
@@ -341,14 +381,8 @@ class FUNZIONI
             ");
             $row_user = $result_user->fetch();
             $lvl = intval($row_user['level']);
-            if($lvl>=$min && $lvl<=$max )
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
+
+            return requirement_value_in_range($lvl, $min, $max);
         }
         
         if($row_req['requirement_type']=="number of animals")
@@ -357,14 +391,8 @@ class FUNZIONI
                 select id_animal from animals where id_user_ig = \"$id_user_ig\" 
             ");
             $num_animals = $result_user->rowCount();
-            if($num_animals>=$min && $num_animals<=$max )
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
+
+            return requirement_value_in_range($num_animals, $min, $max);
         }
         
         if($row_req['requirement_type']=="item")
@@ -376,14 +404,8 @@ class FUNZIONI
                 AND dt_used is null
             ");
             $num_items = $result_item->rowCount();
-            if($num_items>=$min && $num_items<=$max )
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
+
+            return requirement_value_in_range($num_items, $min, $max);
         }
 
         if ($row_req['requirement_type'] === 'conversation finished'
@@ -426,14 +448,17 @@ class FUNZIONI
     }
     
     
-    public static function ApplyConsequence($conn,$id_user_ig,$id_consequence,$LANG)
+    /**
+     * @param array<string, mixed> $row Merged conversation_consequences + consequences row.
+     */
+    public static function ApplyConsequence($conn, $id_user_ig, $row, $LANG)
     {
         if (!class_exists('CONSEQUENCES'))
         {
             require_once __DIR__ . '/consequences.php';
         }
 
-        return CONSEQUENCES::Apply($conn, $id_user_ig, $id_consequence, $LANG);
+        return CONSEQUENCES::Apply($conn, $id_user_ig, $row, $LANG);
     }
     
     

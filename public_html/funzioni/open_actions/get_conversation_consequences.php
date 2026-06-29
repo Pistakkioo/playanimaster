@@ -18,24 +18,46 @@ $already_finished = PLAYER_CONVERSATIONS::isFinished($conn, $id_user_ig, $id_con
 
 if (!$already_finished)
 {
-    $result = $conn->query("
-        select C.id_consequence,C.consequence_type,C.id_ref,C.ref_table,C.num,C.params_json
-        from conversation_consequences CC
-        join consequences C ON C.id_consequence = CC.id_consequence 
-        where CC.id_conversation = \"$id_conversation\"
-        AND CC.id_option = \"$id_option\" 
-    ");
-    while($row = $result->fetch())
+    $stmt = $conn->prepare('
+        SELECT C.consequence_type,
+               CC.id_conversation_consequence,
+               CC.id_consequence,
+               CC.id_ref,
+               CC.ref_table,
+               CC.ref_description,
+               CC.num,
+               CC.params_json
+        FROM conversation_consequences CC
+        JOIN consequences C ON C.id_consequence = CC.id_consequence
+        WHERE CC.id_conversation = :id_conversation
+          AND CC.id_option = :id_option
+    ');
+    $stmt->execute([
+        ':id_conversation' => $id_conversation,
+        ':id_option' => $id_option
+    ]);
+
+    $result = true;
+
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC))
     {
-        $id_consequence = $row['id_consequence'];
-        FUNZIONI::ApplyConsequence($conn,$id_user_ig,$id_consequence,$LANG);
-        
-        if($types_of_trigger!=""){$types_of_trigger.="#";}
-        $types_of_trigger.=$row['consequence_type'];
-        
+        FUNZIONI::ApplyConsequence($conn, $id_user_ig, $row, $LANG);
+
+        if ($types_of_trigger != "")
+        {
+            $types_of_trigger .= "#";
+        }
+
+        $types_of_trigger .= $row['consequence_type'];
+
         $singolo_json = json_encode($row);
-        if($stringone!=""){$stringone.="#";}
-        $stringone.=$singolo_json;
+
+        if ($stringone != "")
+        {
+            $stringone .= "#";
+        }
+
+        $stringone .= $singolo_json;
     }
 
     if (PLAYER_CONVERSATIONS::shouldRegisterOnFinish($conn, $id_conversation, $id_option))
@@ -48,7 +70,7 @@ else
     $result = true;
 }
 
-if(!$result)
+if (!$result)
 {
     $stato = "KO";
     $msg = "KO";
@@ -58,12 +80,12 @@ else
     $stato = "OK";
     $msg = "OK";
 }
-    
+
 $riga = array(
-    "stato"=>$stato,
-    "msg"=>$msg,
-    "response"=>$stringone,
-    "response2"=>$types_of_trigger
+    "stato" => $stato,
+    "msg" => $msg,
+    "response" => $stringone,
+    "response2" => $types_of_trigger
 );
 
 echo json_encode($riga);

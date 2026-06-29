@@ -230,11 +230,6 @@
             return false;
         }
 
-        if (AnimasterNotifications.isVisible())
-        {
-            return false;
-        }
-
         if (typeof AnimasterChat !== 'undefined' && AnimasterChat.isInputFocused())
         {
             return false;
@@ -650,7 +645,6 @@
                 && !AnimasterInventory.isOpen()
                 && !AnimasterTeam.isOpen()
                 && !AnimasterSelf.isOpen()
-                && !AnimasterNotifications.isVisible()
                 && !(typeof AnimasterChat !== 'undefined' && AnimasterChat.isInputFocused()))
             {
                 AnimasterWorld.tickWildEncounter();

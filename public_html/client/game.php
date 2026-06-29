@@ -240,13 +240,20 @@ $bootstrap = [
         </div>
     </div>
 
-    <div id="notification-overlay" class="notification-overlay" hidden aria-hidden="true">
-        <div class="notification-panel" role="alertdialog" aria-labelledby="notification-text">
-            <p id="notification-text" class="notification-text"></p>
-            <p id="notification-meta" class="notification-meta"></p>
-            <button type="button" id="notification-dismiss" class="notification-dismiss" data-i18n="ui.ok">OK</button>
-        </div>
-    </div>
+    <aside id="system-log-panel" class="system-log-panel" aria-label="System log">
+        <header class="system-log-header">
+            <span class="system-log-title" data-i18n="system_log.title">System log</span>
+            <div class="system-log-header-actions">
+                <button type="button" id="system-log-time-toggle" class="system-log-icon-btn system-log-time-toggle-btn is-active"
+                        title="Hide timestamps" data-i18n-title="system_log.timestamps_hide"
+                        aria-pressed="true" aria-label="Toggle timestamps">&#x231B;</button>
+                <button type="button" id="system-log-collapse" class="system-log-icon-btn system-log-collapse-btn"
+                        title="Collapse" data-i18n-title="system_log.collapse"
+                        aria-expanded="true" aria-label="Collapse system log">&minus;</button>
+            </div>
+        </header>
+        <div id="system-log-messages" class="system-log-messages" role="log" aria-live="polite"></div>
+    </aside>
 
     <div id="dialog-overlay" class="dialog-overlay" hidden aria-hidden="true">
         <div class="dialog-panel">

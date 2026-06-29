@@ -47,6 +47,22 @@ Append **only** at the end of the file. Never reorder or edit past statements.
 
 Use short comment blocks before each logical change (what / why). Statements should be safe to re-run where possible, or clearly documented if run-once.
 
+### Sync from local database (recommended after dev tool edits)
+
+When you create NPCs, conversations, species, etc. in `dev_npcs.php` / `dev_species.php`, auto-increment IDs in your local DB diverge from the repo file. **Re-sync before hand-writing new seeds** so IDs stay authoritative.
+
+**CLI (repo root, DB running):**
+
+```bash
+php scripts/sync_static_data.php
+```
+
+Optional table filter: `php scripts/sync_static_data.php conversations dialogues npcs`
+
+**Web:** `dev_static_data.php` → **Write to SQL/02_insert_static_data.sql** (exports all static tables with `ON DUPLICATE KEY UPDATE`).
+
+This **replaces** `02_insert_static_data.sql` with a full snapshot from the connected database. Commit the result so agents and other environments see current IDs.
+
 ---
 
 ## `02_insert_static_data.sql` — static data (inserts & updates)
@@ -117,6 +133,7 @@ Before finishing a task that touches the database:
 - [ ] `00_tables.sql` was **not** edited (unless the user explicitly asked for a greenfield baseline change)
 - [ ] New alters appended to `01_alters_structure.sql`
 - [ ] New static data appended to `02_insert_static_data.sql` with full `ON DUPLICATE KEY UPDATE`
+- [ ] After dev-page content edits, ran `php scripts/sync_static_data.php` (or web sync) so IDs match local DB
 - [ ] No secrets or environment-specific credentials in SQL files
 
 ---

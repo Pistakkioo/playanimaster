@@ -37,7 +37,8 @@ while ($row_notifications = $result_notifications->fetch())
         'item_type' => $row_notifications['item_type'],
         'nome' => $row_notifications['nome'],
         'description' => $row_notifications['description'],
-        'flg_viewed' => $row_notifications['flg_viewed']
+        'flg_viewed' => $row_notifications['flg_viewed'],
+        'dt_c' => $row_notifications['dt_c']
     );
 
     $singolo_json = json_encode($rig);

@@ -163,6 +163,9 @@ ALTER TABLE playanimaster_db.requirements CHANGE `ref` ref_table varchar(100) CH
 
 ALTER TABLE playanimaster_db.consequences ADD COLUMN params_json TEXT NULL DEFAULT NULL AFTER num;
 
+ALTER TABLE playanimaster_db.requirements ADD COLUMN ref_description varchar(200) NULL DEFAULT NULL AFTER ref_table;
+ALTER TABLE playanimaster_db.consequences ADD COLUMN ref_description varchar(200) NULL DEFAULT NULL AFTER ref_table;
+
 ALTER TABLE playanimaster_db.user_conversations ADD UNIQUE KEY uniq_user_conversation (id_user_ig, id_conversation);
 
 
@@ -177,13 +180,141 @@ SET id_player_class = 1
 WHERE id_player_class IS NULL;
 
 
+-- Requirements: min/max/descrizione on link tables (catalog row is reusable).
+ALTER TABLE playanimaster_db.npc_requirements
+    ADD COLUMN min int(11) NOT NULL DEFAULT 0 AFTER id_requirement,
+    ADD COLUMN max int(11) NOT NULL DEFAULT 9999 AFTER min,
+    ADD COLUMN descrizione varchar(100) NULL DEFAULT NULL AFTER max;
+
+ALTER TABLE playanimaster_db.conversation_requirements
+    ADD COLUMN min int(11) NOT NULL DEFAULT 0 AFTER id_requirement,
+    ADD COLUMN max int(11) NOT NULL DEFAULT 9999 AFTER min,
+    ADD COLUMN descrizione varchar(100) NULL DEFAULT NULL AFTER max;
+
+ALTER TABLE playanimaster_db.quest_requirements
+    ADD COLUMN min int(11) NOT NULL DEFAULT 0 AFTER id_requirement,
+    ADD COLUMN max int(11) NOT NULL DEFAULT 9999 AFTER min,
+    ADD COLUMN descrizione varchar(100) NULL DEFAULT NULL AFTER max;
+
+UPDATE playanimaster_db.npc_requirements NR
+    INNER JOIN playanimaster_db.requirements R ON R.id_requirement = NR.id_requirement
+SET NR.min = R.min,
+    NR.max = R.max,
+    NR.descrizione = R.descrizione;
+
+UPDATE playanimaster_db.conversation_requirements CR
+    INNER JOIN playanimaster_db.requirements R ON R.id_requirement = CR.id_requirement
+SET CR.min = R.min,
+    CR.max = R.max,
+    CR.descrizione = R.descrizione;
+
+UPDATE playanimaster_db.quest_requirements QR
+    INNER JOIN playanimaster_db.requirements R ON R.id_requirement = QR.id_requirement
+SET QR.min = R.min,
+    QR.max = R.max,
+    QR.descrizione = R.descrizione;
+
+UPDATE playanimaster_db.conversation_requirements SET id_requirement = 2 WHERE id_requirement = 7;
+UPDATE playanimaster_db.conversation_requirements SET id_requirement = 8 WHERE id_requirement IN (11, 14);
+UPDATE playanimaster_db.npc_requirements SET id_requirement = 8 WHERE id_requirement IN (11, 14);
+
+DELETE FROM playanimaster_db.requirements WHERE id_requirement IN (7, 11, 14);
+
+ALTER TABLE playanimaster_db.requirements
+    DROP COLUMN min,
+    DROP COLUMN max,
+    DROP COLUMN descrizione;
 
 
+-- Requirement link max: NULL = no upper bound (legacy 999 / 9999 meant unbounded).
+ALTER TABLE playanimaster_db.npc_requirements
+    MODIFY COLUMN max int(11) NULL DEFAULT NULL COMMENT 'NULL = no upper bound';
+
+ALTER TABLE playanimaster_db.conversation_requirements
+    MODIFY COLUMN max int(11) NULL DEFAULT NULL COMMENT 'NULL = no upper bound';
+
+ALTER TABLE playanimaster_db.quest_requirements
+    MODIFY COLUMN max int(11) NULL DEFAULT NULL COMMENT 'NULL = no upper bound';
+
+UPDATE playanimaster_db.npc_requirements SET max = NULL WHERE max >= 999 OR max = 9999;
+UPDATE playanimaster_db.conversation_requirements SET max = NULL WHERE max >= 999 OR max = 9999;
+UPDATE playanimaster_db.quest_requirements SET max = NULL WHERE max >= 999 OR max = 9999;
 
 
+-- Requirements catalog = type only; id_ref/ref_table/ref_description on link tables.
+ALTER TABLE playanimaster_db.npc_requirements
+    ADD COLUMN id_ref int(11) NULL DEFAULT NULL AFTER id_requirement,
+    ADD COLUMN ref_table varchar(100) NULL DEFAULT NULL AFTER id_ref,
+    ADD COLUMN ref_description varchar(200) NULL DEFAULT NULL AFTER ref_table;
+
+ALTER TABLE playanimaster_db.conversation_requirements
+    ADD COLUMN id_ref int(11) NULL DEFAULT NULL AFTER id_requirement,
+    ADD COLUMN ref_table varchar(100) NULL DEFAULT NULL AFTER id_ref,
+    ADD COLUMN ref_description varchar(200) NULL DEFAULT NULL AFTER ref_table;
+
+ALTER TABLE playanimaster_db.quest_requirements
+    ADD COLUMN id_ref int(11) NULL DEFAULT NULL AFTER id_requirement,
+    ADD COLUMN ref_table varchar(100) NULL DEFAULT NULL AFTER id_ref,
+    ADD COLUMN ref_description varchar(200) NULL DEFAULT NULL AFTER ref_table;
+
+UPDATE playanimaster_db.npc_requirements NR
+    INNER JOIN playanimaster_db.requirements R ON R.id_requirement = NR.id_requirement
+SET NR.id_ref = R.id_ref,
+    NR.ref_table = R.ref_table,
+    NR.ref_description = R.ref_description;
+
+UPDATE playanimaster_db.conversation_requirements CR
+    INNER JOIN playanimaster_db.requirements R ON R.id_requirement = CR.id_requirement
+SET CR.id_ref = R.id_ref,
+    CR.ref_table = R.ref_table,
+    CR.ref_description = R.ref_description;
+
+UPDATE playanimaster_db.quest_requirements QR
+    INNER JOIN playanimaster_db.requirements R ON R.id_requirement = QR.id_requirement
+SET QR.id_ref = R.id_ref,
+    QR.ref_table = R.ref_table,
+    QR.ref_description = R.ref_description;
+
+UPDATE playanimaster_db.conversation_requirements SET id_requirement = 3 WHERE id_requirement IN (4, 9, 12);
+UPDATE playanimaster_db.conversation_requirements SET id_requirement = 2 WHERE id_requirement IN (15, 16, 17);
+UPDATE playanimaster_db.conversation_requirements SET id_requirement = 10 WHERE id_requirement = 18;
+
+DELETE FROM playanimaster_db.requirements WHERE id_requirement IN (4, 9, 12, 15, 16, 17, 18);
+
+INSERT IGNORE INTO playanimaster_db.requirements (id_requirement, requirement_type) VALUES (11, 'conversation not finished');
+
+ALTER TABLE playanimaster_db.requirements
+    DROP COLUMN id_ref,
+    DROP COLUMN ref_table,
+    DROP COLUMN ref_description;
+
+ALTER TABLE playanimaster_db.requirements
+    ADD UNIQUE KEY uniq_requirements_type (requirement_type);
 
 
+-- Consequences catalog = type only; instance fields on conversation_consequences.
+ALTER TABLE playanimaster_db.conversation_consequences
+    ADD COLUMN id_ref int(11) NULL DEFAULT NULL AFTER id_consequence,
+    ADD COLUMN ref_table varchar(100) NULL DEFAULT NULL AFTER id_ref,
+    ADD COLUMN ref_description varchar(200) NULL DEFAULT NULL AFTER ref_table,
+    ADD COLUMN num int(11) NOT NULL DEFAULT 1 AFTER ref_description,
+    ADD COLUMN params_json text NULL DEFAULT NULL AFTER num;
 
+UPDATE playanimaster_db.conversation_consequences CC
+    INNER JOIN playanimaster_db.consequences C ON C.id_consequence = CC.id_consequence
+SET CC.id_ref = C.id_ref,
+    CC.ref_table = C.ref_table,
+    CC.ref_description = C.ref_description,
+    CC.num = C.num,
+    CC.params_json = C.params_json;
 
+ALTER TABLE playanimaster_db.consequences
+    DROP COLUMN id_ref,
+    DROP COLUMN ref_table,
+    DROP COLUMN ref_description,
+    DROP COLUMN num,
+    DROP COLUMN params_json;
 
+ALTER TABLE playanimaster_db.consequences
+    ADD UNIQUE KEY uniq_consequences_type (consequence_type);
 
