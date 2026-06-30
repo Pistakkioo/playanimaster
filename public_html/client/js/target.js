@@ -10,6 +10,7 @@ var AnimasterTarget = (function ()
     var dragHandle = null;
     var closeBtn = null;
     var tradeBtn = null;
+    var partyBtn = null;
     var duelBtn = null;
 
     var current = null;
@@ -39,6 +40,7 @@ var AnimasterTarget = (function ()
         dragHandle = document.getElementById('target-drag-handle');
         closeBtn = document.getElementById('target-close');
         tradeBtn = document.getElementById('target-trade-btn');
+        partyBtn = document.getElementById('target-party-btn');
         duelBtn = document.getElementById('target-duel-btn');
 
         if (!panel || !wrap || !nameEl || !typeEl || !dragHandle || !closeBtn)
@@ -66,6 +68,24 @@ var AnimasterTarget = (function ()
                 if (typeof AnimasterTrade !== 'undefined')
                 {
                     AnimasterTrade.requestToPlayer(current);
+                }
+            });
+        }
+
+        if (partyBtn)
+        {
+            partyBtn.addEventListener('click', function (e)
+            {
+                e.stopPropagation();
+
+                if (!current || current.kind !== 'player')
+                {
+                    return;
+                }
+
+                if (typeof AnimasterParty !== 'undefined')
+                {
+                    AnimasterParty.requestToPlayer(current);
                 }
             });
         }
@@ -126,7 +146,7 @@ var AnimasterTarget = (function ()
                 return;
             }
 
-            if (e.target.closest('.target-close') || e.target.closest('.target-trade-btn') || e.target.closest('.target-duel-btn'))
+            if (e.target.closest('.target-close') || e.target.closest('.target-trade-btn') || e.target.closest('.target-party-btn') || e.target.closest('.target-duel-btn'))
             {
                 return;
             }
@@ -206,6 +226,11 @@ var AnimasterTarget = (function ()
         if (tradeBtn)
         {
             tradeBtn.hidden = info.kind !== 'player';
+        }
+
+        if (partyBtn)
+        {
+            partyBtn.hidden = info.kind !== 'player';
         }
 
         if (duelBtn)

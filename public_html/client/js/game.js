@@ -15,6 +15,7 @@
     var presenceBusy = false;
     var entitiesBusy = false;
     var lastFrame = 0;
+    var pendingPartyBattleId = 0;
 
     var canvas = document.getElementById('game-canvas');
     var canvasWrap = document.querySelector('.canvas-wrap');
@@ -35,6 +36,7 @@
     AnimasterCombat.init({
         onEnd: function ()
         {
+            pendingPartyBattleId = 0;
             state = State.WORLD;
             AnimasterInventory.setToggleEnabled(true);
             AnimasterTeam.setToggleEnabled(true);
@@ -79,6 +81,7 @@
     AnimasterChat.init();
     AnimasterTarget.init();
     AnimasterTrade.init();
+    AnimasterParty.init();
     AnimasterDuel.init({
         onBattleStart: function (battleInfo)
         {
@@ -412,7 +415,62 @@
         AnimasterNotifications.setPlayer(player);
         AnimasterChat.setPlayer(player);
         AnimasterTrade.setPlayer(player);
+        AnimasterParty.setPlayer(player);
         AnimasterDuel.setPlayer(player);
+
+        if (typeof AnimasterParty.setOnPartyBattleJoin === 'function')
+        {
+            AnimasterParty.setOnPartyBattleJoin(joinPartyBattle);
+        }
+    }
+
+    function joinPartyBattle(battleInfo)
+    {
+        if (!player || !battleInfo || !battleInfo.id_battle)
+        {
+            return;
+        }
+
+        if (AnimasterCombat.isVisible())
+        {
+            return;
+        }
+
+        if (pendingPartyBattleId === parseInt(battleInfo.id_battle, 10))
+        {
+            return;
+        }
+
+        if (state !== State.WORLD && state !== State.COMBAT)
+        {
+            return;
+        }
+
+        pendingPartyBattleId = parseInt(battleInfo.id_battle, 10);
+
+        state = State.COMBAT;
+        AnimasterInventory.close();
+        AnimasterTeam.close();
+        AnimasterSelf.close();
+        AnimasterInventory.setToggleEnabled(false);
+        AnimasterTeam.setToggleEnabled(false);
+        AnimasterSelf.setToggleEnabled(false);
+        AnimasterTarget.clear();
+
+        var info = {
+            id_battle: battleInfo.id_battle,
+            battle_type: battleInfo.battle_type || 'party_pve',
+            current_battle_turn: battleInfo.current_battle_turn || 0
+        };
+
+        if (parseInt(info.current_battle_turn, 10) > 0)
+        {
+            AnimasterCombat.resume(player, info);
+        }
+        else
+        {
+            AnimasterCombat.start(player, info);
+        }
     }
 
     function applyProfileToPlayer(profile)
@@ -545,15 +603,49 @@
         AnimasterTeam.setToggleEnabled(false);
         AnimasterSelf.setToggleEnabled(false);
 
-        AnimasterApi.startBattle(player, wild.id_wild_animal).then(function (info)
+        var inParty = typeof AnimasterParty !== 'undefined' && AnimasterParty.isInParty();
+
+        if (inParty && !AnimasterParty.isLeader())
         {
-            AnimasterCombat.start(player, info);
-        }).catch(function (err)
-        {
+            alert(AnimasterLang.t('party_pve.error_not_leader'));
             state = State.WORLD;
             AnimasterWorld.resetWildEncounter();
-            alert(err.message || AnimasterLang.t('error.start_battle_failed'));
+            return;
+        }
+
+        var startPromise = inParty
+            ? AnimasterApi.startPartyBattle(player, wild.id_wild_animal)
+            : AnimasterApi.startBattle(player, wild.id_wild_animal);
+
+        startPromise.then(function (info)
+        {
+            pendingPartyBattleId = parseInt(info.id_battle, 10) || 0;
+
+            AnimasterCombat.start(player, {
+                id_battle: info.id_battle,
+                battle_type: info.battle_type || (inParty ? 'party_pve' : 'solo_pve'),
+                current_battle_turn: info.current_battle_turn || 0
+            });
+        }).catch(function (err)
+        {
+            pendingPartyBattleId = 0;
+            state = State.WORLD;
+            AnimasterWorld.resetWildEncounter();
+            alert(mapPartyPveStartError(err.message) || AnimasterLang.t('error.start_battle_failed'));
         });
+    }
+
+    function mapPartyPveStartError(code)
+    {
+        if (!code)
+        {
+            return '';
+        }
+
+        var key = 'party_pve.error_' + String(code).toLowerCase();
+        var mapped = AnimasterLang.t(key);
+
+        return mapped !== key ? mapped : code;
     }
 
     function syncPresence(force)
@@ -665,6 +757,11 @@
             AnimasterSpawn.tick(false);
             AnimasterWorld.render();
             AnimasterPlayerChatBubbles.update();
+
+            if (typeof AnimasterParty !== 'undefined')
+            {
+                AnimasterParty.tickDistanceIndicators();
+            }
 
             var nearbyNpc = AnimasterDialog.isActive()
                 ? null

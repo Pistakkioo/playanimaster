@@ -288,17 +288,44 @@ function animaster_trade_request_row_to_api($row, $viewer_id)
     $viewer_id = (int) $viewer_id;
     $is_incoming = (int) $row['id_user_ig_target'] === $viewer_id;
     $other_id = $is_incoming ? (int) $row['id_user_ig_sender'] : (int) $row['id_user_ig_target'];
-    $expires_at = $row['dt_expires'];
-    $seconds_left = max(0, strtotime($expires_at) - time());
+
+    if (isset($row['seconds_left']))
+    {
+        $seconds_left = max(0, (int) $row['seconds_left']);
+    }
+    else
+    {
+        $seconds_left = max(0, strtotime((string) $row['dt_expires']) - time());
+    }
 
     return [
         'id_trade_request' => (int) $row['id_trade_request'],
         'incoming' => $is_incoming,
         'other_id' => $other_id,
         'other_name' => $row['other_name'] ?? 'Player',
-        'dt_expires' => $expires_at,
+        'dt_expires' => $row['dt_expires'],
         'seconds_left' => $seconds_left
     ];
+}
+
+function animaster_trade_fetch_pending_request($conn, $id_trade_request, $id_user_ig_target)
+{
+    $stmt = $conn->prepare('
+        SELECT *,
+               GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), dt_expires)) AS seconds_left
+        FROM trade_requests
+        WHERE id_trade_request = :id
+          AND id_user_ig_target = :id_user_ig
+          AND flg_status = \'P\'
+          AND dt_expires >= NOW()
+        LIMIT 1
+    ');
+    $stmt->execute([
+        ':id' => (int) $id_trade_request,
+        ':id_user_ig' => (int) $id_user_ig_target
+    ]);
+
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
 function animaster_trade_poll($conn, $id_user_ig, $lang_suffix = '')
@@ -309,7 +336,8 @@ function animaster_trade_poll($conn, $id_user_ig, $lang_suffix = '')
 
     $incoming = [];
     $stmt = $conn->prepare('
-        SELECT tr.*, ui.display_name AS other_name
+        SELECT tr.*, ui.display_name AS other_name,
+               GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), tr.dt_expires)) AS seconds_left
         FROM trade_requests tr
         INNER JOIN users_ig ui ON ui.id_user_ig = tr.id_user_ig_sender
         WHERE tr.id_user_ig_target = :id_user_ig
@@ -326,7 +354,8 @@ function animaster_trade_poll($conn, $id_user_ig, $lang_suffix = '')
 
     $outgoing = null;
     $stmt = $conn->prepare('
-        SELECT tr.*, ui.display_name AS other_name
+        SELECT tr.*, ui.display_name AS other_name,
+               GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), tr.dt_expires)) AS seconds_left
         FROM trade_requests tr
         INNER JOIN users_ig ui ON ui.id_user_ig = tr.id_user_ig_target
         WHERE tr.id_user_ig_sender = :id_user_ig
@@ -364,36 +393,37 @@ function animaster_trade_poll($conn, $id_user_ig, $lang_suffix = '')
     ];
 }
 
-function animaster_trade_respond_request($conn, $id_user_ig, $id_trade_request, $accept)
+function animaster_trade_respond_request($conn, $id_user_ig, $id_trade_request, $accept, $lang_suffix = '')
 {
     $id_user_ig = (int) $id_user_ig;
     $id_trade_request = (int) $id_trade_request;
     $accept = $accept ? true : false;
+    $lang_suffix = preg_replace('/[^_a-z]/i', '', (string) $lang_suffix);
 
-    animaster_trade_expire_requests($conn);
+    $request = animaster_trade_fetch_pending_request($conn, $id_trade_request, $id_user_ig);
 
-    $stmt = $conn->prepare('
-        SELECT *
-        FROM trade_requests
-        WHERE id_trade_request = :id
-        LIMIT 1
-    ');
-    $stmt->execute(['id' => $id_trade_request]);
-    $request = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$request || trim((string) $request['flg_status']) !== 'P')
+    if (!$request)
     {
+        $stmt = $conn->prepare('
+            UPDATE trade_requests
+            SET flg_status = \'X\', dt_m = NOW()
+            WHERE id_trade_request = :id
+              AND id_user_ig_target = :id_user_ig
+              AND flg_status = \'P\'
+              AND dt_expires < NOW()
+            LIMIT 1
+        ');
+        $stmt->execute([
+            ':id' => $id_trade_request,
+            ':id_user_ig' => $id_user_ig
+        ]);
+
+        if ($stmt->rowCount() > 0)
+        {
+            return ['error' => 'EXPIRED'];
+        }
+
         return ['error' => 'NOT_FOUND'];
-    }
-
-    if ((int) $request['id_user_ig_target'] !== $id_user_ig)
-    {
-        return ['error' => 'FORBIDDEN'];
-    }
-
-    if (strtotime($request['dt_expires']) < time())
-    {
-        return ['error' => 'EXPIRED'];
     }
 
     if (!$accept)
@@ -402,6 +432,8 @@ function animaster_trade_respond_request($conn, $id_user_ig, $id_trade_request, 
             UPDATE trade_requests
             SET flg_status = \'D\', dt_m = NOW()
             WHERE id_trade_request = :id
+              AND flg_status = \'P\'
+            LIMIT 1
         ');
         $stmt->execute(['id' => $id_trade_request]);
 
@@ -424,7 +456,9 @@ function animaster_trade_respond_request($conn, $id_user_ig, $id_trade_request, 
         $stmt = $conn->prepare('
             UPDATE trade_requests
             SET flg_status = \'A\', dt_m = NOW()
-            WHERE id_trade_request = :id AND flg_status = \'P\'
+            WHERE id_trade_request = :id
+              AND flg_status = \'P\'
+              AND dt_expires >= NOW()
         ');
         $stmt->execute(['id' => $id_trade_request]);
 
@@ -451,10 +485,15 @@ function animaster_trade_respond_request($conn, $id_user_ig, $id_trade_request, 
         $id_trade = (int) $conn->lastInsertId();
         $conn->commit();
 
+        $trade_row = animaster_trade_fetch_trade_row($conn, $id_trade);
+
         return [
             'ok' => true,
             'accepted' => true,
-            'id_trade' => $id_trade
+            'id_trade' => $id_trade,
+            'trade' => $trade_row
+                ? animaster_trade_build_trade_state($conn, $trade_row, $id_user_ig, $lang_suffix)
+                : null
         ];
     }
     catch (Throwable $e)
@@ -463,6 +502,8 @@ function animaster_trade_respond_request($conn, $id_user_ig, $id_trade_request, 
         {
             $conn->rollBack();
         }
+
+        error_log('[trade] respond: ' . $e->getMessage());
 
         return ['error' => 'RESPOND_FAILED'];
     }

@@ -645,13 +645,26 @@ var AnimasterWorld = (function ()
         ctx.stroke();
     }
 
-    function drawLabel(wx, wz, text, subtext)
+    function drawLabel(wx, wz, text, subtext, showFarWarning)
     {
         var p = worldToScreen(wx, wz);
+        var y = p.y - 14;
+
         ctx.textAlign = 'center';
+        ctx.font = '11px Segoe UI, sans-serif';
+
+        if (showFarWarning)
+        {
+            var textWidth = ctx.measureText(text).width;
+
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold 12px Segoe UI, sans-serif';
+            ctx.fillText('!', p.x - (textWidth / 2) - 7, y);
+        }
+
         ctx.fillStyle = 'rgba(255,255,255,0.85)';
         ctx.font = '11px Segoe UI, sans-serif';
-        ctx.fillText(text, p.x, p.y - 14);
+        ctx.fillText(text, p.x, y);
 
         if (subtext)
         {
@@ -840,7 +853,12 @@ var AnimasterWorld = (function ()
             }
 
             drawCircle(ox, oz, 8, '#4488ff', '#2266cc');
-            drawLabel(ox, oz, other.displayName || t('world.other_player_fallback'));
+
+            var otherName = other.displayName || t('world.other_player_fallback');
+            var showFarWarning = typeof AnimasterParty !== 'undefined'
+                && AnimasterParty.isPlayerFarFromParty(parseInt(other.id_player, 10));
+
+            drawLabel(ox, oz, otherName, null, showFarWarning);
         });
 
         drawCircle(player.x, player.z, 9, '#2ecc71', '#1e8449');

@@ -68,6 +68,18 @@ function dev_npc_fetch_player_classes(PDO $conn)
     return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
 }
 
+function dev_npc_fetch_buff_definitions(PDO $conn)
+{
+    $stmt = $conn->query('
+        SELECT id_buff_definition, buff_code, name, name_it, target_entity, stat_key, is_debuff
+        FROM buff_definitions
+        WHERE flg_active = \'S\'
+        ORDER BY id_buff_definition ASC
+    ');
+
+    return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+}
+
 /**
  * ref_table values used by requirements (labels for the dev form).
  *
@@ -100,6 +112,7 @@ function dev_npc_consequence_ref_tables()
         ['value' => 'item_types', 'label' => 'item_types'],
         ['value' => 'POTION', 'label' => 'POTION (item type alias)'],
         ['value' => 'PLAYER_CLASS', 'label' => 'PLAYER_CLASS'],
+        ['value' => 'buff_definitions', 'label' => 'buff_definitions'],
     ];
 }
 
@@ -112,6 +125,7 @@ function dev_npc_consequence_types()
         ['value' => '[obtain item]', 'label' => '[obtain item]'],
         ['value' => 'receive_random_animal', 'label' => 'receive_random_animal'],
         ['value' => '[set player_class]', 'label' => '[set player_class]'],
+        ['value' => 'grant_team_buff', 'label' => 'grant_team_buff'],
     ];
 }
 
@@ -590,7 +604,8 @@ function dev_npc_requirement_link_ref_fields(array $ctx)
  *   row?:array,
  *   consequence_ref_tables:array,
  *   item_types:array,
- *   player_classes:array
+ *   player_classes:array,
+ *   buff_definitions:array
  * } $ctx
  */
 function dev_npc_consequence_link_ref_fields(array $ctx)
@@ -632,6 +647,11 @@ function dev_npc_consequence_link_ref_fields(array $ctx)
                     #<?php echo (int) $pc['id_player_class']; ?> <?php echo dev_admin_h($pc['code']); ?> — <?php echo dev_admin_h($pc['name']); ?>
                 </option>
                 <?php endforeach; ?>
+                <?php foreach (($ctx['buff_definitions'] ?? []) as $buff): ?>
+                <option value="<?php echo (int) $buff['id_buff_definition']; ?>" data-ref-table="buff_definitions" data-ref-description="<?php echo dev_admin_h($buff['buff_code']); ?>"<?php echo $ref_table === 'buff_definitions' && $id_ref === (int) $buff['id_buff_definition'] ? ' selected' : ''; ?>>
+                    #<?php echo (int) $buff['id_buff_definition']; ?> <?php echo dev_admin_h($buff['buff_code']); ?> — <?php echo dev_admin_h($buff['name']); ?> (<?php echo dev_admin_h($buff['target_entity']); ?>)
+                </option>
+                <?php endforeach; ?>
             </select>
         </div>
         <div class="mb-2">
@@ -639,12 +659,12 @@ function dev_npc_consequence_link_ref_fields(array $ctx)
             <input class="form-control form-control-sm dev-cons-ref-description" name="ref_description" id="<?php echo dev_admin_h($ref_desc_id); ?>" maxlength="200" placeholder="e.g. scientist (class code label)" value="<?php echo dev_admin_h($ref_description); ?>">
         </div>
         <div class="mb-2">
-            <label class="form-label">num</label>
+            <label class="form-label">num <span class="text-muted">(quantity, or duration seconds for grant_team_buff)</span></label>
             <input class="form-control form-control-sm" name="num" type="number" value="<?php echo $num; ?>" min="1" id="<?php echo dev_admin_h($num_id); ?>">
         </div>
         <div class="mb-2">
             <label class="form-label">params_json</label>
-            <textarea class="form-control form-control-sm font-monospace dev-cons-params-json" name="params_json" rows="2" id="<?php echo dev_admin_h($params_id); ?>" placeholder='{"species_pool":[1,2,3],"element_pool":[1,2,3,4,5,6,7]}'><?php echo dev_admin_h($params_json); ?></textarea>
+            <textarea class="form-control form-control-sm font-monospace dev-cons-params-json" name="params_json" rows="2" id="<?php echo dev_admin_h($params_id); ?>" placeholder='{"duration_seconds":3600,"alive_only":false}'><?php echo dev_admin_h($params_json); ?></textarea>
         </div>
     </div>
     <?php

@@ -316,6 +316,355 @@ button:disabled {
     display: none !important;
 }
 
+.target-party-btn {
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 6px;
+    background: #2d3a4d;
+    color: #5dade2;
+    font-size: 0.95rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.target-party-btn:hover {
+    background: #3d5168;
+}
+
+.target-party-btn[hidden] {
+    display: none !important;
+}
+
+.party-panel {
+    top: 12px;
+    right: 12px;
+    width: min(320px, calc(100% - 24px));
+    height: min(420px, calc(100% - 24px));
+    min-height: 240px;
+}
+
+.party-panel[hidden] {
+    display: none !important;
+}
+
+.party-body {
+    padding: 10px 12px 14px;
+    overflow-y: auto;
+}
+
+.party-status {
+    margin: 0 0 10px;
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+
+.party-member-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.party-member-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: rgba(45, 58, 77, 0.55);
+}
+
+.party-member-name {
+    flex: 1 1 8rem;
+    font-weight: 600;
+    color: #e8eef5;
+    font-size: 0.9rem;
+}
+
+.party-member-online {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.party-member-online.is-online {
+    color: #69db7c;
+}
+
+.party-member-actions {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+}
+
+.party-member-action-btn,
+.party-create-btn,
+.party-leave-btn {
+    border: 1px solid #3d5168;
+    border-radius: 6px;
+    background: #243044;
+    color: #e8eef5;
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.party-member-action-btn:hover,
+.party-create-btn:hover,
+.party-leave-btn:hover {
+    background: #2f3f55;
+}
+
+.party-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.party-invite-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.party-invite-overlay[hidden] {
+    display: none !important;
+}
+
+.party-invite-panel {
+    min-width: 280px;
+    max-width: 90vw;
+    padding: 20px 24px;
+    border-radius: 10px;
+    background: #1a2332;
+    border: 1px solid #3d5168;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.party-invite-text {
+    margin: 0 0 14px;
+    color: #e8eef5;
+    font-size: 1rem;
+    text-align: center;
+}
+
+.party-invite-timer {
+    height: 4px;
+    margin-bottom: 16px;
+    border-radius: 2px;
+    background: #2d3a4d;
+    overflow: hidden;
+}
+
+.party-invite-timer-fill {
+    height: 100%;
+    width: 100%;
+    background: #5dade2;
+    transition: width 0.2s linear;
+}
+
+.party-invite-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.party-invite-accept,
+.party-invite-decline {
+    min-width: 100px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.party-invite-accept {
+    background: #2ecc71;
+    color: #0d1a12;
+}
+
+.party-invite-decline {
+    background: #4a5568;
+    color: #e8eef5;
+}
+
+.hud-party-toggle {
+    margin-left: 0.35rem;
+}
+
+.party-hud {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 36;
+    pointer-events: none;
+    user-select: none;
+}
+
+.party-hud[hidden] {
+    display: none !important;
+}
+
+.party-hud-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 168px;
+    max-width: min(220px, calc(100vw - 24px));
+}
+
+.party-hud-member {
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: rgba(15, 20, 25, 0.88);
+    border: 1px solid rgba(58, 77, 99, 0.95);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+
+.party-hud-member.is-offline {
+    opacity: 0.58;
+}
+
+.party-hud-member.is-self {
+    border-color: rgba(46, 204, 113, 0.55);
+}
+
+.party-hud-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.party-hud-class-wrap {
+    position: relative;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.party-hud-class {
+    flex: 0 0 26px;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid #3a4d63;
+    background: linear-gradient(145deg, #243044, #1a2332);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.party-hud-class-nerd {
+    border-color: #5dade2;
+    box-shadow: inset 0 0 0 1px rgba(93, 173, 226, 0.35);
+}
+
+.party-hud-class-stud {
+    border-color: #e67e22;
+    box-shadow: inset 0 0 0 1px rgba(230, 126, 34, 0.35);
+}
+
+.party-hud-class-initial {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #e7ecf1;
+    line-height: 1;
+}
+
+.party-hud-leader-star {
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    line-height: 1;
+    color: #f1c40f;
+    text-shadow: 0 0 6px rgba(241, 196, 15, 0.45);
+}
+
+.party-hud-far-icon {
+    flex: 0 0 auto;
+    font-size: 0.82rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #e74c3c;
+    text-shadow: 0 0 6px rgba(231, 76, 60, 0.45);
+}
+
+.party-hud-far-icon[hidden] {
+    display: none !important;
+}
+
+.party-hud-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #e7ecf1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.party-hud-pet {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 5px;
+    padding-left: 2px;
+    min-width: 0;
+}
+
+.party-hud-pet-thumb {
+    position: relative;
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    background: #1a2330;
+    border: 1px solid #2d3a4d;
+    overflow: hidden;
+}
+
+.party-hud-pet-thumb-canvas {
+    display: block;
+    width: 24px;
+    height: 24px;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+.party-hud-pet-meta {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.party-hud-pet-lvl {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #f1c40f;
+    line-height: 1;
+}
+
+.party-hud-pet-hp {
+    width: 100%;
+}
+
+.party-hud-pet-empty {
+    font-size: 0.68rem;
+    color: #64748b;
+    line-height: 1.2;
+}
+
 .duel-request-overlay {
     position: fixed;
     inset: 0;
@@ -2338,10 +2687,12 @@ body:not(.animaster-chat-icon-only).animaster-chat-right .hud-bottom-dock {
 
 .combat-panel {
     width: min(560px, 94vw);
-    height: min(500px, 90vh);
+    max-height: min(560px, 92vh);
+    height: auto;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     background: #1a2332;
     border: 1px solid #3a4d63;
     border-radius: 10px;
@@ -2381,12 +2732,66 @@ body:not(.animaster-chat-icon-only).animaster-chat-right .hud-bottom-dock {
     margin-bottom: 12px;
 }
 
+.combat-units.combat-units-party-cols {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+    flex: 0 1 auto;
+    flex-shrink: 1;
+    min-height: 0;
+    max-height: min(34vh, 220px);
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+
+.combat-units-column {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    max-height: 100%;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.combat-units-party-col {
+    padding-left: 2px;
+}
+
+.combat-units-wild-col {
+    padding-right: 2px;
+}
+
+.unit-owner {
+    font-size: 0.72rem;
+    color: #8fa3b8;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .unit-card {
     background: #0f1419;
     border-radius: 8px;
     padding: 10px;
     border: 1px solid #2d3a4d;
     transition: transform 0.15s ease;
+}
+
+.unit-card.unit-card-actor {
+    border-color: #5a9fd4;
+    box-shadow: 0 0 0 1px rgba(90, 159, 212, 0.35);
+}
+
+.unit-card.unit-card-self {
+    border-color: #6bbf59;
+}
+
+.unit-card.unit-card-fainted {
+    opacity: 0.45;
 }
 
 .unit-card.combat-bump {
@@ -2514,8 +2919,9 @@ body:not(.animaster-chat-icon-only).animaster-chat-right .hud-bottom-dock {
     flex-wrap: wrap;
     align-content: flex-start;
     gap: 8px;
-    flex: 1 1 0;
-    min-height: 0;
+    flex: 0 0 auto;
+    min-height: 44px;
+    max-height: min(28vh, 160px);
     overflow-y: auto;
     margin-bottom: 10px;
     box-sizing: border-box;

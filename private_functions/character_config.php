@@ -12,7 +12,7 @@ if (!defined('ANIMASTER_WILD_SPRITES_VARIANT'))
 
 if (!defined('ANIMASTER_ASSET_VERSION'))
 {
-    define('ANIMASTER_ASSET_VERSION', '106');
+    define('ANIMASTER_ASSET_VERSION', '122');
 }
 
 if (!defined('ANIMASTER_SERVER_TIMEZONE'))

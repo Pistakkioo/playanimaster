@@ -294,14 +294,83 @@ var AnimasterApi = (function ()
         });
     }
 
+    function startPartyBattle(player, wildId)
+    {
+        return postJson(BASE + 'party_pve_start_battle.php', {
+            id_user_ig: player.id_user_ig || 0,
+            id_zone: player.id_zone,
+            id_wild_animal: wildId,
+            pos_x: player.x,
+            pos_z: player.z,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            unwrap(envelope);
+            var rows = parseHashResponse(envelope.response);
+            var result = rows[0] || {};
+            apiLog('startPartyBattle', '[AnimasterApi] startPartyBattle', result);
+
+            return {
+                id_battle: result.id_battle,
+                battle_type: result.battle_type || 'party_pve',
+                current_battle_turn: result.current_battle_turn || 0
+            };
+        });
+    }
+
+    function parsePartyPveMeta(envelope)
+    {
+        var meta = {};
+
+        if (envelope && envelope.party_pve_meta)
+        {
+            if (typeof envelope.party_pve_meta === 'object')
+            {
+                meta = envelope.party_pve_meta;
+            }
+            else
+            {
+                try
+                {
+                    meta = JSON.parse(envelope.party_pve_meta);
+                }
+                catch (e)
+                {
+                    meta = {};
+                }
+            }
+        }
+
+        return meta;
+    }
+
     function getBattleInfo(params)
     {
-        var endpoint = params.battle_type === 'pvp'
-            ? 'pvp_get_battle_info.php'
-            : 'solo_pve_get_battle_info.php';
+        var endpoint = 'solo_pve_get_battle_info.php';
+
+        if (params.battle_type === 'pvp')
+        {
+            endpoint = 'pvp_get_battle_info.php';
+        }
+        else if (params.battle_type === 'party_pve')
+        {
+            endpoint = 'party_pve_get_battle_info.php';
+        }
 
         return postJson(BASE + endpoint, params).then(function (envelope)
         {
+            if (params.battle_type === 'party_pve' && envelope && envelope.msg === 'WAITING')
+            {
+                var waitingMeta = parsePartyPveMeta(envelope);
+                apiLog('getBattleInfo', '[AnimasterApi] getBattleInfo waiting', waitingMeta);
+
+                return {
+                    moves: [],
+                    meta: waitingMeta,
+                    waiting: true
+                };
+            }
+
             unwrap(envelope);
             var moves = parseHashResponse(envelope.response);
             apiLog('getBattleInfo', '[AnimasterApi] getBattleInfo', moves);
@@ -325,6 +394,15 @@ var AnimasterApi = (function ()
                 return {
                     moves: moves,
                     meta: meta
+                };
+            }
+
+            if (params.battle_type === 'party_pve')
+            {
+                return {
+                    moves: moves,
+                    meta: parsePartyPveMeta(envelope),
+                    waiting: false
                 };
             }
 
@@ -588,6 +666,95 @@ var AnimasterApi = (function ()
         return parseTradeEnvelope(envelope);
     }
 
+    function parsePartyEnvelope(envelope)
+    {
+        return parseTradeEnvelope(envelope);
+    }
+
+    function createParty(player)
+    {
+        return postJson(BASE + 'party_create.php', {
+            id_user_ig: player.id_user_ig || 0,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            return parsePartyEnvelope(envelope);
+        });
+    }
+
+    function sendPartyInvite(player, idTarget)
+    {
+        return postJson(BASE + 'party_invite.php', {
+            id_user_ig: player.id_user_ig || 0,
+            id_target: idTarget,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            unwrap(envelope);
+
+            return envelope;
+        });
+    }
+
+    function pollParty(player)
+    {
+        return postJson(BASE + 'party_poll.php', {
+            id_user_ig: player.id_user_ig || 0,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            return parsePartyEnvelope(envelope);
+        });
+    }
+
+    function respondPartyInvite(player, idPartyInvite, accept)
+    {
+        return postJson(BASE + 'party_respond.php', {
+            id_user_ig: player.id_user_ig || 0,
+            id_party_invite: idPartyInvite,
+            accept: accept ? 'S' : 'N',
+            lang: LANG
+        }).then(function (envelope)
+        {
+            return parsePartyEnvelope(envelope);
+        });
+    }
+
+    function leaveParty(player)
+    {
+        return postJson(BASE + 'party_leave.php', {
+            id_user_ig: player.id_user_ig || 0,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            return parsePartyEnvelope(envelope);
+        });
+    }
+
+    function kickPartyMember(player, idTarget)
+    {
+        return postJson(BASE + 'party_kick.php', {
+            id_user_ig: player.id_user_ig || 0,
+            id_target: idTarget,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            return parsePartyEnvelope(envelope);
+        });
+    }
+
+    function transferPartyLeader(player, idNewLeader)
+    {
+        return postJson(BASE + 'party_transfer_leader.php', {
+            id_user_ig: player.id_user_ig || 0,
+            id_new_leader: idNewLeader,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            return parsePartyEnvelope(envelope);
+        });
+    }
+
     function sendDuelRequest(player, idTarget)
     {
         return postJson(BASE + 'send_duel_request.php', {
@@ -708,6 +875,7 @@ var AnimasterApi = (function ()
         fetchNpcs: fetchNpcs,
         getConversationConsequences: getConversationConsequences,
         startBattle: startBattle,
+        startPartyBattle: startPartyBattle,
         getBattleInfo: getBattleInfo,
         getAbilityList: getAbilityList,
         getInventory: getInventory,
@@ -727,6 +895,13 @@ var AnimasterApi = (function ()
         updateTradeOffer: updateTradeOffer,
         confirmTrade: confirmTrade,
         cancelTrade: cancelTrade,
+        createParty: createParty,
+        sendPartyInvite: sendPartyInvite,
+        pollParty: pollParty,
+        respondPartyInvite: respondPartyInvite,
+        leaveParty: leaveParty,
+        kickPartyMember: kickPartyMember,
+        transferPartyLeader: transferPartyLeader,
         sendDuelRequest: sendDuelRequest,
         pollDuel: pollDuel,
         respondDuelRequest: respondDuelRequest,

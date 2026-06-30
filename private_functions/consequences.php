@@ -18,6 +18,7 @@ class CONSEQUENCES
             '[obtain item]' => [self::class, 'handleObtainItem'],
             'receive_random_animal' => [self::class, 'handleReceiveRandomAnimal'],
             '[set player_class]' => [self::class, 'handleSetPlayerClass'],
+            'grant_team_buff' => [self::class, 'handleGrantTeamBuff'],
         ];
     }
 
@@ -440,6 +441,142 @@ class CONSEQUENCES
         }
 
         return (int) $pool[array_rand($pool)];
+    }
+
+    /**
+     * Params:
+     * - id_buff_definition: int — buff catalog id (defaults to link id_ref)
+     * - buff_code: string — alternative lookup when id is omitted
+     * - duration_seconds: int — wall-clock duration (defaults to link num, else 3600)
+     * - alive_only: bool — when true, skip fainted team animals (animal-target buffs only)
+     *
+     * Link row: ref_table buff_definitions, id_ref = id_buff_definition, num = duration in seconds.
+     *
+     * @param array<string, mixed> $row
+     * @param array<string, mixed> $params
+     */
+    private static function handleGrantTeamBuff($conn, $id_user_ig, $row, $params, $LANG)
+    {
+        if (!class_exists('BUFFS'))
+        {
+            require_once dirname(__FILE__) . '/buffs.php';
+        }
+
+        $id_buff_definition = self::resolveBuffDefinitionId($conn, $params, $row);
+
+        if ($id_buff_definition <= 0)
+        {
+            error_log('[CONSEQUENCES] grant_team_buff missing id_buff_definition');
+            return false;
+        }
+
+        $duration_seconds = (int) ($params['duration_seconds'] ?? 0);
+
+        if ($duration_seconds <= 0)
+        {
+            $duration_seconds = (int) ($params['num'] ?? 0);
+        }
+
+        if ($duration_seconds <= 0)
+        {
+            $duration_seconds = 3600;
+        }
+
+        $alive_only = !empty($params['alive_only']);
+        $source_id = isset($row['id_conversation_consequence'])
+            ? (int) $row['id_conversation_consequence']
+            : (isset($row['id_conversation']) ? (int) $row['id_conversation'] : null);
+
+        $result = BUFFS::grantTeamTimeBuff(
+            $conn,
+            (int) $id_user_ig,
+            $id_buff_definition,
+            $duration_seconds,
+            'conversation',
+            $source_id,
+            $alive_only
+        );
+
+        if (!$result)
+        {
+            error_log('[CONSEQUENCES] grant_team_buff failed for user ' . (int) $id_user_ig);
+            return false;
+        }
+
+        $lang_suffix = self::normalizeLangSuffix($LANG);
+        $buff_name = (string) ($result['buff_name'] ?? 'buff');
+
+        if ($lang_suffix === '_it')
+        {
+            $buff_name = (string) ($result['buff_name_it'] ?? $buff_name);
+        }
+        elseif ($lang_suffix === '_pt')
+        {
+            $buff_name = (string) ($result['buff_name_pt'] ?? $buff_name);
+        }
+
+        $notification = 'Your team received a buff: ' . $buff_name;
+
+        if ($LANG === '_it')
+        {
+            $notification = 'La tua squadra ha ricevuto un buff: ' . $buff_name;
+        }
+        elseif ($LANG === '_pt')
+        {
+            $notification = 'A tua equipa recebeu um buff: ' . $buff_name;
+        }
+
+        FUNZIONI::AddNotification($conn, $id_user_ig, $notification, 'lvl_up');
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @param array<string, mixed> $row
+     */
+    private static function resolveBuffDefinitionId($conn, $params, $row)
+    {
+        if (isset($params['id_buff_definition']))
+        {
+            return (int) $params['id_buff_definition'];
+        }
+
+        $id_ref = (int) ($params['id_ref'] ?? 0);
+
+        if ($id_ref > 0 && (!empty($params['ref_table']) || !empty($row['ref_table'])))
+        {
+            $ref_table = strtolower(trim((string) ($params['ref_table'] ?? $row['ref_table'] ?? '')));
+
+            if ($ref_table === '' || $ref_table === 'buff_definitions')
+            {
+                return $id_ref;
+            }
+        }
+
+        if ($id_ref > 0 && empty($params['ref_table']) && empty($row['ref_table']))
+        {
+            return $id_ref;
+        }
+
+        $buff_code = trim((string) ($params['buff_code'] ?? $row['ref_description'] ?? ''));
+
+        if ($buff_code === '')
+        {
+            return 0;
+        }
+
+        $stmt = $conn->prepare('
+            SELECT id_buff_definition
+            FROM buff_definitions
+            WHERE buff_code = :buff_code
+              AND flg_active = \'S\'
+            LIMIT 1
+        ');
+        $stmt->execute([':buff_code' => $buff_code]);
+        $found = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $found ? (int) $found['id_buff_definition'] : 0;
     }
 
     /**

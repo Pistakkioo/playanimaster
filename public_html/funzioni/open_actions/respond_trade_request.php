@@ -5,6 +5,17 @@ require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/trade.php'
 $id_user_ig = isset($_POST['id_user_ig']) ? (int) $_POST['id_user_ig'] : 0;
 $id_trade_request = isset($_POST['id_trade_request']) ? (int) $_POST['id_trade_request'] : 0;
 $accept = isset($_POST['accept']) ? (string) $_POST['accept'] : 'N';
+$lang = isset($_POST['lang']) ? (string) $_POST['lang'] : '';
+$lang_suffix = '';
+
+if ($lang !== '' && $lang[0] !== '_')
+{
+    $lang_suffix = '_' . $lang;
+}
+elseif ($lang !== '')
+{
+    $lang_suffix = $lang;
+}
 
 if ($id_user_ig <= 0 || $id_trade_request <= 0)
 {
@@ -18,7 +29,7 @@ if ($id_user_ig <= 0 || $id_trade_request <= 0)
 
 try
 {
-    $result = animaster_trade_respond_request($conn, $id_user_ig, $id_trade_request, $accept === 'S');
+    $result = animaster_trade_respond_request($conn, $id_user_ig, $id_trade_request, $accept === 'S', $lang_suffix);
 }
 catch (Throwable $e)
 {

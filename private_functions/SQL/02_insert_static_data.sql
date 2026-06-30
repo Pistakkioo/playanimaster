@@ -402,11 +402,12 @@ INSERT INTO `playanimaster_db`.`requirements` (`id_requirement`, `requirement_ty
 ON DUPLICATE KEY UPDATE
     `requirement_type` = VALUES(`requirement_type`);
 
--- consequences (3 rows)
+-- consequences (4 rows)
 INSERT INTO `playanimaster_db`.`consequences` (`id_consequence`, `consequence_type`) VALUES
 (2, 'receive_random_animal'),
 (1, '[obtain item]'),
-(3, '[set player_class]')
+(3, '[set player_class]'),
+(4, 'grant_team_buff')
 ON DUPLICATE KEY UPDATE
     `consequence_type` = VALUES(`consequence_type`);
 
@@ -710,7 +711,7 @@ INSERT INTO `playanimaster_db`.`language_texts` (`id_language_text`, `dt_c`, `ta
 (67, '2026-06-24 21:23:51', 'dialog.npc_fallback', 'NPC', 'PNG', 'NPC'),
 (68, '2026-06-24 21:23:51', 'dialog.conversation_fallback', 'Conversation {id}', 'Conversazione {id}', 'Conversa {id}'),
 (69, '2026-06-24 21:23:51', 'dialog.option_fallback', 'Option {id}', 'Opzione {id}', 'Opção {id}'),
-(70, '2026-06-24 21:23:51', 'hud.help', 'WASD move · Walk into wilds to battle · Talk to NPCs · P self · I bag · T team', 'WASD muovi · Cammina sui selvatici · NPC · P personaggio · I borsa · T squadra', 'WASD mover · Encontra selvagens · NPCs · P personagem · I mochila · T equipa'),
+(70, '2026-06-24 21:23:51', 'hud.help', 'WASD move · Walk into wilds to battle · Talk to NPCs · P self · I bag · T team · Y party', 'WASD muovi · Cammina sui selvatici · NPC · P personaggio · I borsa · T squadra · Y party', 'WASD mover · Encontra selvagens · NPCs · P personagem · I mochila · T equipa · Y grupo'),
 (71, '2026-06-24 21:23:51', 'hud.team', 'Team', 'Squadra', 'Equipa'),
 (72, '2026-06-24 21:23:51', 'hud.bag', 'Bag', 'Borsa', 'Mochila'),
 (73, '2026-06-24 21:23:51', 'hud.characters', 'Characters', 'Personaggi', 'Personagens'),
@@ -902,7 +903,50 @@ INSERT INTO `playanimaster_db`.`language_texts` (`id_language_text`, `dt_c`, `ta
 (396, '2026-06-29 08:13:48', 'system_log.empty', 'No events yet.', 'Nessun evento.', 'Sem eventos.'),
 (397, '2026-06-29 08:13:48', 'system_log.collapse', 'Collapse', 'Comprimi', 'Recolher'),
 (424, '2026-06-29 08:19:44', 'system_log.timestamps_show', 'Show timestamps', 'Mostra orari', 'Mostrar horas'),
-(425, '2026-06-29 08:19:44', 'system_log.timestamps_hide', 'Hide timestamps', 'Nascondi orari', 'Ocultar horas')
+(425, '2026-06-29 08:19:44', 'system_log.timestamps_hide', 'Hide timestamps', 'Nascondi orari', 'Ocultar horas'),
+(426, '2026-06-29 12:00:00', 'party.title', 'Party', 'Squadra', 'Grupo'),
+(427, '2026-06-29 12:00:00', 'party.create', 'Create party', 'Crea squadra', 'Criar grupo'),
+(428, '2026-06-29 12:00:00', 'party.leave', 'Leave party', 'Lascia squadra', 'Sair do grupo'),
+(429, '2026-06-29 12:00:00', 'party.disband', 'Disband party', 'Sciogli squadra', 'Dissolver grupo'),
+(430, '2026-06-29 12:00:00', 'party.no_party', 'You are not in a party.', 'Non sei in una squadra.', 'Não estás num grupo.'),
+(431, '2026-06-29 12:00:00', 'party.roster_status', '{count} / {max} members', '{count} / {max} membri', '{count} / {max} membros'),
+(432, '2026-06-29 12:00:00', 'party.leader', 'leader', 'capo', 'líder'),
+(433, '2026-06-29 12:00:00', 'party.online', 'online', 'online', 'online'),
+(434, '2026-06-29 12:00:00', 'party.offline', 'offline', 'offline', 'offline'),
+(435, '2026-06-29 12:00:00', 'party.promote', 'Make leader', 'Rendi capo', 'Tornar líder'),
+(436, '2026-06-29 12:00:00', 'party.kick', 'Kick', 'Espelli', 'Expulsar'),
+(437, '2026-06-29 12:00:00', 'party.invite_tooltip', 'Invite to party', 'Invita in squadra', 'Convidar para o grupo'),
+(438, '2026-06-29 12:00:00', 'party.invite_sent', 'Party invite sent.', 'Invito alla squadra inviato.', 'Convite enviado.'),
+(439, '2026-06-29 12:00:00', 'party.incoming_title', '{name} invites you to their party', '{name} ti invita nella squadra', '{name} convida-te para o grupo'),
+(440, '2026-06-29 12:00:00', 'party.accept', 'Accept', 'Accetta', 'Aceitar'),
+(441, '2026-06-29 12:00:00', 'party.decline', 'Decline', 'Rifiuta', 'Recusar'),
+(442, '2026-06-29 12:00:00', 'party.created', 'Party created.', 'Squadra creata.', 'Grupo criado.'),
+(443, '2026-06-29 12:00:00', 'party.joined', 'You joined the party.', 'Sei entrato nella squadra.', 'Entraste no grupo.'),
+(444, '2026-06-29 12:00:00', 'party.left', 'You left the party.', 'Hai lasciato la squadra.', 'Saíste do grupo.'),
+(445, '2026-06-29 12:00:00', 'party.disbanded', 'Party disbanded.', 'Squadra sciolta.', 'Grupo dissolvido.'),
+(446, '2026-06-29 12:00:00', 'party.error_generic', 'Party action failed.', 'Azione squadra fallita.', 'Ação de grupo falhou.'),
+(447, '2026-06-29 12:00:00', 'party.error_not_leader', 'Only the party leader can invite players.', 'Solo il capo può invitare.', 'Só o líder pode convidar.'),
+(448, '2026-06-29 12:00:00', 'party.error_offline', 'Player is not available.', 'Giocatore non disponibile.', 'Jogador indisponível.'),
+(449, '2026-06-29 12:00:00', 'party.error_too_far', 'Player is too far away.', 'Giocatore troppo lontano.', 'Jogador demasiado longe.'),
+(450, '2026-06-29 12:00:00', 'party.error_party_full', 'Party is full.', 'Squadra piena.', 'Grupo cheio.'),
+(451, '2026-06-29 12:00:00', 'party.error_target_in_party', 'Player is already in a party.', 'Il giocatore è già in squadra.', 'O jogador já está num grupo.'),
+(452, '2026-06-29 12:00:00', 'party.error_target_busy', 'Player is busy.', 'Giocatore occupato.', 'Jogador ocupado.'),
+(453, '2026-06-29 12:00:00', 'party.error_busy', 'You are busy.', 'Sei occupato.', 'Estás ocupado.'),
+(454, '2026-06-29 12:00:00', 'party.error_already_in_party', 'You are already in a party.', 'Sei già in una squadra.', 'Já estás num grupo.'),
+(455, '2026-06-29 12:00:00', 'party.error_already_pending', 'An invite is already pending.', 'Invito già in sospeso.', 'Convite já pendente.'),
+(456, '2026-06-29 14:00:00', 'party.expired', 'Party invite expired.', 'Invito alla squadra scaduto.', 'Convite de grupo expirado.'),
+(457, '2026-06-29 16:00:00', 'party.hud_no_animal', 'No lead animal', 'Nessun animale attivo', 'Sem animal líder'),
+(458, '2026-06-29 18:00:00', 'party.far_tooltip', 'Too far away', 'Troppo lontano', 'Demasiado longe'),
+(459, '2026-06-29 20:00:00', 'party_pve.error_not_leader', 'Only the party leader can start battles.', 'Solo il capo può iniziare la lotta.', 'Só o líder pode iniciar batalhas.'),
+(460, '2026-06-29 20:00:00', 'party_pve.error_not_in_party', 'You must be in a party.', 'Devi essere in squadra.', 'Tens de estar num grupo.'),
+(461, '2026-06-29 20:00:00', 'party_pve.error_too_late', 'That wild animal is already in battle.', 'Quell\'animale è già in lotta.', 'Esse animal selvagem já está em combate.'),
+(462, '2026-06-29 20:00:00', 'party_pve.error_no_eligible_members', 'No party members are close enough to fight.', 'Nessun membro abbastanza vicino.', 'Nenhum membro está perto o suficiente.'),
+(463, '2026-06-29 20:00:00', 'party_pve.error_no_team_animal', 'No usable team animal.', 'Nessuna creatura utilizzabile.', 'Nenhuma criatura utilizável.'),
+(464, '2026-06-29 20:00:00', 'party_pve.error_party_already_fighting', 'Your party is already in battle.', 'La squadra è già in lotta.', 'O grupo já está em combate.'),
+(465, '2026-06-29 20:00:00', 'party_pve.error_leader_too_far', 'You are too far from your party.', 'Sei troppo lontano dalla squadra.', 'Estás demasiado longe do grupo.'),
+(466, '2026-06-29 20:00:00', 'party_pve.waiting_turn', 'Waiting for the next turn…', 'In attesa del prossimo turno…', 'À espera do próximo turno…'),
+(467, '2026-06-29 20:00:00', 'party_pve.waiting_wild', 'The wild animal is acting…', 'L\'animale selvatico agisce…', 'O animal selvagem está a agir…'),
+(468, '2026-06-29 20:00:00', 'party_pve.waiting_player', 'Waiting for {name}…', 'In attesa di {name}…', 'À espera de {name}…')
 ON DUPLICATE KEY UPDATE
     `tag` = VALUES(`tag`),
     `text` = VALUES(`text`),

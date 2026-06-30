@@ -264,6 +264,98 @@ class BUFFS
         return $list;
     }
 
+    /**
+     * Grant a time-based buff to the player's team according to buff_definitions.target_entity.
+     * user_ig buffs apply party-wide at battle start; animal buffs are granted to each team slot.
+     *
+     * @return array{granted_count:int,buff_name:string,buff_code:string,target_entity:string}|false
+     */
+    public static function grantTeamTimeBuff($conn, $id_user_ig, $id_buff_definition, $duration_seconds, $source_type = null, $source_id = null, $alive_only = false)
+    {
+        $id_user_ig = (int) $id_user_ig;
+        $id_buff_definition = (int) $id_buff_definition;
+        $duration_seconds = max(1, (int) $duration_seconds);
+
+        if ($id_user_ig <= 0 || $id_buff_definition <= 0)
+        {
+            return false;
+        }
+
+        $stmt = $conn->prepare('
+            SELECT id_buff_definition, target_entity, buff_code, name, name_it, name_pt, flg_active
+            FROM buff_definitions
+            WHERE id_buff_definition = :id_buff_definition
+            LIMIT 1
+        ');
+        $stmt->execute([':id_buff_definition' => $id_buff_definition]);
+        $def = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$def || (string) ($def['flg_active'] ?? '') !== 'S')
+        {
+            return false;
+        }
+
+        $target_entity = strtolower(trim((string) ($def['target_entity'] ?? 'animal')));
+        $granted_count = 0;
+
+        if ($target_entity === 'user_ig')
+        {
+            if (self::grantTimeBuff($conn, $id_buff_definition, 'user_ig', $id_user_ig, $duration_seconds, $source_type, $source_id))
+            {
+                $granted_count = 1;
+            }
+        }
+        else
+        {
+            $sql = '
+                SELECT id_animal
+                FROM animals
+                WHERE id_user_ig = :id_user_ig
+                  AND team_position > 0
+                  AND team_position < 6
+            ';
+
+            if ($alive_only)
+            {
+                $sql .= ' AND current_hp > 0';
+            }
+
+            $sql .= ' ORDER BY team_position ASC';
+
+            $stmt_team = $conn->prepare($sql);
+            $stmt_team->execute([':id_user_ig' => $id_user_ig]);
+
+            while ($animal = $stmt_team->fetch(PDO::FETCH_ASSOC))
+            {
+                $id_animal = (int) ($animal['id_animal'] ?? 0);
+
+                if ($id_animal <= 0)
+                {
+                    continue;
+                }
+
+                if (self::grantTimeBuff($conn, $id_buff_definition, 'animal', $id_animal, $duration_seconds, $source_type, $source_id))
+                {
+                    $granted_count++;
+                }
+            }
+        }
+
+        if ($granted_count <= 0)
+        {
+            return false;
+        }
+
+        return [
+            'granted_count' => $granted_count,
+            'buff_name' => (string) ($def['name'] ?? $def['buff_code']),
+            'buff_name_it' => (string) ($def['name_it'] ?? $def['name'] ?? $def['buff_code']),
+            'buff_name_pt' => (string) ($def['name_pt'] ?? $def['name'] ?? $def['buff_code']),
+            'buff_code' => (string) ($def['buff_code'] ?? ''),
+            'target_entity' => $target_entity,
+        ];
+    }
+
     public static function grantTimeBuff($conn, $id_buff_definition, $entity_type, $id_entity, $duration_seconds, $source_type = null, $source_id = null)
     {
         $id_buff_definition = (int) $id_buff_definition;

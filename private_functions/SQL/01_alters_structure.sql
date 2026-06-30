@@ -318,3 +318,151 @@ ALTER TABLE playanimaster_db.consequences
 ALTER TABLE playanimaster_db.consequences
     ADD UNIQUE KEY uniq_consequences_type (consequence_type);
 
+
+-- Party system (module 002_PARTY_SYSTEM)
+CREATE TABLE IF NOT EXISTS playanimaster_db.parties (
+    id_party INT(11) NOT NULL AUTO_INCREMENT,
+    id_user_ig_leader INT(11) NOT NULL,
+    id_zone INT(11) DEFAULT NULL,
+    max_members TINYINT(3) UNSIGNED NOT NULL DEFAULT 4,
+    dt_created TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_party),
+    KEY idx_parties_leader (id_user_ig_leader)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.party_members (
+    id_party_member INT(11) NOT NULL AUTO_INCREMENT,
+    id_party INT(11) NOT NULL,
+    id_user_ig INT(11) NOT NULL,
+    dt_joined TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_party_member),
+    UNIQUE KEY uniq_party_member_user (id_user_ig),
+    KEY idx_party_members_party (id_party)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.party_invites (
+    id_party_invite INT(11) NOT NULL AUTO_INCREMENT,
+    id_party INT(11) NOT NULL,
+    id_user_ig_sender INT(11) NOT NULL,
+    id_user_ig_target INT(11) NOT NULL,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_expires DATETIME NOT NULL,
+    flg_status CHAR(1) NOT NULL DEFAULT 'P' COMMENT 'P=pending, A=accepted, D=declined, X=expired, C=cancelled',
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_party_invite),
+    KEY idx_party_inv_target_pending (id_user_ig_target, flg_status, dt_expires),
+    KEY idx_party_inv_party_pending (id_party, flg_status, dt_expires),
+    KEY idx_party_inv_sender_pending (id_user_ig_sender, flg_status, dt_expires)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Party PvE (module 002b_PARTY_PVE)
+CREATE TABLE IF NOT EXISTS playanimaster_db.battles_party_pve (
+    id_battle_party_pve INT(11) NOT NULL AUTO_INCREMENT,
+    id_party INT(11) NOT NULL,
+    id_wild_animal INT(11) NOT NULL,
+    id_zone INT(11) DEFAULT NULL,
+    id_user_ig_leader INT(11) NOT NULL,
+    flg_status CHAR(1) NOT NULL DEFAULT 'O' COMMENT 'O=ongoing, F=finished, X=cancelled',
+    current_turn INT(11) NOT NULL DEFAULT 0,
+    turn_queue_json TEXT NULL DEFAULT NULL COMMENT 'Ordered actor slots for speed queue',
+    turn_index INT(11) NOT NULL DEFAULT 0,
+    awaiting_user_ig INT(11) DEFAULT NULL,
+    end_reason VARCHAR(50) DEFAULT NULL,
+    dt_created TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_finished TIMESTAMP NULL DEFAULT NULL,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_party_pve),
+    KEY idx_battles_party_pve_party (id_party, flg_status),
+    KEY idx_battles_party_pve_wild (id_wild_animal, flg_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battles_party_pve_participants (
+    id_battle_party_pve_participant INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle_party_pve INT(11) NOT NULL,
+    id_user_ig INT(11) DEFAULT NULL,
+    id_animal INT(11) DEFAULT NULL,
+    side CHAR(5) NOT NULL DEFAULT 'party' COMMENT 'party, wild',
+    team_position TINYINT(3) UNSIGNED DEFAULT NULL,
+    flg_active CHAR(1) NOT NULL DEFAULT 'S' COMMENT 'S=active fighter, N=benched',
+    flg_fainted CHAR(1) NOT NULL DEFAULT 'N',
+    current_hp INT(11) DEFAULT NULL,
+    max_hp INT(11) DEFAULT NULL,
+    atk INT(11) DEFAULT NULL,
+    def INT(11) DEFAULT NULL,
+    matk INT(11) DEFAULT NULL,
+    mdef INT(11) DEFAULT NULL,
+    acc INT(11) DEFAULT NULL,
+    eva INT(11) DEFAULT NULL,
+    cr INT(11) DEFAULT NULL,
+    spd INT(11) DEFAULT NULL,
+    id_species INT(11) DEFAULT NULL,
+    id_element INT(11) DEFAULT NULL,
+    lvl INT(11) DEFAULT NULL,
+    nickname VARCHAR(100) DEFAULT NULL,
+    species_name VARCHAR(100) DEFAULT NULL,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_party_pve_participant),
+    KEY idx_bpp_participants_battle (id_battle_party_pve, side),
+    KEY idx_bpp_participants_user (id_user_ig, id_battle_party_pve)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battles_party_pve_moves (
+    id_battle_party_pve_move INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle_party_pve INT(11) DEFAULT NULL,
+    id_user_ig_actor INT(11) DEFAULT NULL,
+    dt_creazione TIMESTAMP NULL DEFAULT NULL,
+    dt_modifica TIMESTAMP NULL DEFAULT NULL,
+    turn INT(11) DEFAULT NULL,
+    move_type VARCHAR(100) DEFAULT NULL,
+    move_speed DECIMAL(10,2) DEFAULT NULL,
+    order_in_turn INT(11) DEFAULT NULL,
+    id_rif INT(11) DEFAULT NULL,
+    move_description VARCHAR(200) DEFAULT NULL,
+    move_hit VARCHAR(1) DEFAULT NULL,
+    w_a_res_hp INT(11) DEFAULT NULL,
+    p_a_res_hp INT(11) DEFAULT NULL,
+    w_a_res_atk DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_def DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_matk DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_mdef DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_acc INT(11) DEFAULT NULL,
+    w_a_res_eva INT(11) DEFAULT NULL,
+    w_a_res_cr INT(11) DEFAULT NULL,
+    w_a_res_spd DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_atk DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_def DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_matk DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_mdef DECIMAL(10,2) DEFAULT NULL,
+    p_a_res_acc INT(11) DEFAULT NULL,
+    p_a_res_eva INT(11) DEFAULT NULL,
+    p_a_res_cr INT(11) DEFAULT NULL,
+    p_a_res_spd DECIMAL(10,2) DEFAULT NULL,
+    w_a_res_max_hp INT(11) DEFAULT NULL,
+    p_a_res_max_hp INT(11) DEFAULT NULL,
+    protagonist_type VARCHAR(100) DEFAULT NULL,
+    id_protagonist INT(11) DEFAULT NULL,
+    target_type VARCHAR(100) DEFAULT NULL,
+    id_target INT(11) DEFAULT NULL,
+    w_a_id INT(11) DEFAULT NULL,
+    w_a_id_species INT(11) DEFAULT NULL,
+    w_a_species VARCHAR(100) DEFAULT NULL,
+    w_a_lvl INT(11) DEFAULT NULL,
+    p_a_id INT(11) DEFAULT NULL,
+    p_a_id_species INT(11) DEFAULT NULL,
+    p_a_species VARCHAR(100) DEFAULT NULL,
+    p_a_lvl INT(11) DEFAULT NULL,
+    p_a_nickname VARCHAR(100) DEFAULT NULL,
+    resulting_battle_status VARCHAR(10) DEFAULT NULL,
+    w_a_id_element INT(11) DEFAULT NULL,
+    p_a_id_element INT(11) DEFAULT NULL,
+    p_a_cur_exp INT(11) DEFAULT 0,
+    PRIMARY KEY (id_battle_party_pve_move),
+    KEY idx_bpp_moves_battle_turn (id_battle_party_pve, turn)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

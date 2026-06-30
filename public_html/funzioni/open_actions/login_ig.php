@@ -193,6 +193,24 @@ else
                 $stringone_is_battling = json_encode($riga_battle);
 
             }
+            else
+            {
+                require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/party_pve.php';
+
+                $party_battle = animaster_party_pve_active_for_user($conn, $id_user_ig);
+
+                if ($party_battle)
+                {
+                    $riga_battle = [
+                        'isBattling' => true,
+                        'id_battle' => (int) $party_battle['id_battle'],
+                        'battle_type' => 'party_pve',
+                        'current_battle_turn' => (int) $party_battle['current_battle_turn']
+                    ];
+
+                    $stringone_is_battling = json_encode($riga_battle);
+                }
+            }
 
         }
 

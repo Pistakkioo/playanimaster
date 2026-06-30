@@ -55,6 +55,7 @@ $flat_options = dev_npc_flat_options($tree);
 $flat_quests = dev_npc_flat_quests($tree);
 $item_types = dev_npc_fetch_item_types($conn);
 $player_classes = dev_npc_fetch_player_classes($conn);
+$buff_definitions = dev_npc_fetch_buff_definitions($conn);
 $requirement_ref_tables = dev_npc_requirement_ref_tables();
 $requirement_types = dev_npc_requirement_types();
 $preview_lang = dev_npc_get_preview_lang();
@@ -225,7 +226,8 @@ $consequence_types = dev_npc_consequence_types();
 $cons_ref_field_ctx = [
     'consequence_ref_tables' => $consequence_ref_tables,
     'item_types' => $item_types,
-    'player_classes' => $player_classes
+    'player_classes' => $player_classes,
+    'buff_definitions' => $buff_definitions
 ];
 ?>
 <!DOCTYPE html>
@@ -1196,7 +1198,8 @@ $cons_ref_field_ctx = [
         var map = {
             '[obtain item]': 'item_types',
             'receive_random_animal': '',
-            '[set player_class]': 'PLAYER_CLASS'
+            '[set player_class]': 'PLAYER_CLASS',
+            'grant_team_buff': 'buff_definitions'
         };
 
         if (map[consType] !== undefined)
@@ -1360,7 +1363,8 @@ $cons_ref_field_ctx = [
         var map = {
             '[obtain item]': 'item_types',
             'receive_random_animal': '',
-            '[set player_class]': 'PLAYER_CLASS'
+            '[set player_class]': 'PLAYER_CLASS',
+            'grant_team_buff': 'buff_definitions'
         };
 
         if (map[consType] !== undefined)

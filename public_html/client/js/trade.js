@@ -46,6 +46,7 @@ var AnimasterTrade = (function ()
 
     var incomingRequest = null;
     var outgoingRequest = null;
+    var dismissedRequestIds = {};
     var tradeState = null;
     var bagItems = [];
 
@@ -293,12 +294,44 @@ var AnimasterTrade = (function ()
             return t('trade.error_not_enough_items');
         }
 
+        if (key === 'EXPIRED' || key === 'NOT_FOUND')
+        {
+            return t('trade.expired');
+        }
+
+        if (key === 'RESPOND_FAILED')
+        {
+            return t('trade.error_generic');
+        }
+
         return t('trade.error_generic');
     }
 
-    function poll()
+    function pausePoll()
     {
-        if (!playerRef || busy)
+        if (pollTimer)
+        {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
+    }
+
+    function resumePoll()
+    {
+        if (pollTimer || !playerRef)
+        {
+            return;
+        }
+
+        pollTimer = setInterval(function ()
+        {
+            poll();
+        }, POLL_MS);
+    }
+
+    function poll(force)
+    {
+        if (!playerRef || (busy && !force))
         {
             return;
         }
@@ -323,7 +356,12 @@ var AnimasterTrade = (function ()
 
         if (data.incoming_requests && data.incoming_requests.length)
         {
-            showIncomingRequest(data.incoming_requests[0]);
+            var req = data.incoming_requests[0];
+
+            if (!dismissedRequestIds[req.id_trade_request])
+            {
+                showIncomingRequest(req);
+            }
         }
         else if (incomingRequest)
         {
@@ -400,21 +438,38 @@ var AnimasterTrade = (function ()
         var requestId = incomingRequest.id_trade_request;
 
         busy = true;
-        hideIncomingRequest();
+        pausePoll();
 
         AnimasterApi.respondTradeRequest(
             playerRef,
             requestId,
             accept
-        ).then(function ()
+        ).then(function (result)
         {
-            poll();
+            dismissedRequestIds[requestId] = true;
+            hideIncomingRequest();
+
+            if (accept && result && result.trade)
+            {
+                applyTradeState(result.trade);
+                openTradeOverlay();
+            }
         }).catch(function (err)
         {
-            alert(errorText(err && err.message ? err.message : 'GENERIC'));
+            var code = err && err.message ? err.message : 'GENERIC';
+
+            if (code === 'EXPIRED' || code === 'NOT_FOUND')
+            {
+                dismissedRequestIds[requestId] = true;
+                hideIncomingRequest();
+            }
+
+            alert(errorText(code));
         }).finally(function ()
         {
             busy = false;
+            resumePoll();
+            poll(true);
         });
     }
 

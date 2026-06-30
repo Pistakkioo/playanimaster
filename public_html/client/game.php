@@ -89,6 +89,7 @@ $bootstrap = [
                         </div>
                         <div class="target-actions">
                             <button type="button" id="target-trade-btn" class="target-trade-btn" hidden title="Trade" data-i18n-title="trade.request_tooltip" aria-label="Trade">&#x1F91D;</button>
+                            <button type="button" id="target-party-btn" class="target-party-btn" hidden title="Party" data-i18n-title="party.invite_tooltip" aria-label="Party">&#x1F465;</button>
                             <button type="button" id="target-duel-btn" class="target-duel-btn" hidden title="Duel" data-i18n-title="duel.request_tooltip" aria-label="Duel">&#x2694;</button>
                         </div>
                         <button type="button" id="target-close" class="target-close" title="Close" data-i18n-title="ui.close" aria-label="Close target">&times;</button>
@@ -98,6 +99,10 @@ $bootstrap = [
                     <button type="button" id="npc-talk-btn" data-i18n="dialog.talk_button">Talk [Space]</button>
                 </div>
                 <div id="player-chat-bubbles" class="player-chat-bubbles" aria-hidden="true"></div>
+
+                <div id="party-hud" class="party-hud" hidden aria-hidden="true" aria-label="Party">
+                    <div id="party-hud-list" class="party-hud-list"></div>
+                </div>
 
                 <aside id="inventory-panel" class="inventory-panel side-panel" hidden aria-hidden="true">
                     <header class="inventory-header side-panel-header">
@@ -222,6 +227,21 @@ $bootstrap = [
                     </div>
                     <p id="self-message" class="self-message"></p>
                 </aside>
+
+                <aside id="party-panel" class="party-panel side-panel" hidden aria-hidden="true">
+                    <header class="party-header side-panel-header">
+                        <h2 class="party-title" data-i18n="party.title">Party</h2>
+                        <button type="button" id="party-close" class="party-close" title="Close" data-i18n-title="ui.close">&times;</button>
+                    </header>
+                    <div class="party-body">
+                        <p id="party-status" class="party-status"></p>
+                        <div id="party-member-list" class="party-member-list"></div>
+                        <div class="party-actions">
+                            <button type="button" id="party-create-btn" class="party-create-btn" data-i18n="party.create">Create party</button>
+                            <button type="button" id="party-leave-btn" class="party-leave-btn" hidden data-i18n="party.leave">Leave party</button>
+                        </div>
+                    </div>
+                </aside>
             </div>
         </div>
     </div>
@@ -231,9 +251,10 @@ $bootstrap = [
         <div id="hud" class="hud-overlay" hidden aria-hidden="true">
             <div id="hud-player"></div>
             <div id="hud-status"></div>
-            <div id="hud-help" data-i18n="hud.help">WASD move · Walk into wilds to battle · Talk to NPCs · P self · I bag · T team</div>
+            <div id="hud-help" data-i18n="hud.help">WASD move · Walk into wilds to battle · Talk to NPCs · P self · I bag · T team · Y party</div>
             <button type="button" id="self-toggle" class="hud-self-toggle" aria-expanded="false" data-i18n="self.title">Self</button>
             <button type="button" id="team-toggle" class="hud-team-toggle" aria-expanded="false" data-i18n="hud.team">Team</button>
+            <button type="button" id="party-toggle" class="hud-party-toggle" aria-expanded="false" data-i18n="party.title">Party</button>
             <button type="button" id="inventory-toggle" class="hud-inventory-toggle" aria-expanded="false" data-i18n="hud.bag">Bag</button>
             <a class="hud-logout" id="hud-characters" href="character_select.php?switch=1" data-i18n="hud.characters">Characters</a>
             <a class="hud-logout" href="logout.php" data-i18n="hud.logout">Logout</a>
@@ -299,6 +320,19 @@ $bootstrap = [
         </div>
     </div>
 
+    </div>
+
+    <div id="party-invite-overlay" class="party-invite-overlay" hidden aria-hidden="true">
+        <div class="party-invite-panel" role="dialog" aria-labelledby="party-invite-text">
+            <p id="party-invite-text" class="party-invite-text"></p>
+            <div class="party-invite-timer" aria-hidden="true">
+                <div id="party-invite-timer-fill" class="party-invite-timer-fill"></div>
+            </div>
+            <div class="party-invite-actions">
+                <button type="button" id="party-invite-accept" class="party-invite-accept" data-i18n="party.accept">Accept</button>
+                <button type="button" id="party-invite-decline" class="party-invite-decline" data-i18n="party.decline">Decline</button>
+            </div>
+        </div>
     </div>
 
     <div id="duel-request-overlay" class="duel-request-overlay" hidden aria-hidden="true">
@@ -434,6 +468,7 @@ $bootstrap = [
     <script src="<?php echo animaster_h(animaster_asset_url('js/player_chat_bubbles.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/target.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/trade.js')); ?>"></script>
+    <script src="<?php echo animaster_h(animaster_asset_url('js/party.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/duel.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/chat.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/game.js')); ?>"></script>
