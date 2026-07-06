@@ -429,6 +429,92 @@ var AnimasterParty = (function ()
         return isMemberTooFar(findMemberByUserId(userId));
     }
 
+    function isSelfMember(member)
+    {
+        return !!(member && playerRef && parseInt(member.id_user_ig, 10) === parseInt(playerRef.id_user_ig, 10));
+    }
+
+    function isFarFromAnyPartyMember()
+    {
+        if (!partyState || !partyState.members)
+        {
+            return false;
+        }
+
+        return partyState.members.some(function (member)
+        {
+            return !isSelfMember(member) && isMemberTooFar(member);
+        });
+    }
+
+    function computeBearingDeg(member)
+    {
+        if (!member || !playerRef || isSelfMember(member))
+        {
+            return null;
+        }
+
+        if (parseInt(member.id_zone, 10) !== parseInt(playerRef.id_zone, 10))
+        {
+            return null;
+        }
+
+        var pos = resolveMemberWorldPosition(member);
+
+        if (!pos)
+        {
+            return null;
+        }
+
+        var dx = pos.x - playerRef.x;
+        var dz = pos.z - playerRef.z;
+
+        if (Math.abs(dx) < 0.01 && Math.abs(dz) < 0.01)
+        {
+            return null;
+        }
+
+        return ((Math.atan2(dz, dx) * 180 / Math.PI) + 90 + 360) % 360;
+    }
+
+    /**
+     * Bearings (degrees, 0 = north/up, clockwise) from the local player to each
+     * out-of-range party member, for drawing direction arrows near the player's avatar.
+     * Members in a different zone (no comparable world position) are omitted.
+     */
+    function getFarPartyBearings()
+    {
+        if (!partyState || !partyState.members)
+        {
+            return [];
+        }
+
+        var bearings = [];
+
+        partyState.members.forEach(function (member)
+        {
+            if (isSelfMember(member) || !isMemberTooFar(member))
+            {
+                return;
+            }
+
+            var bearing = computeBearingDeg(member);
+
+            if (bearing === null)
+            {
+                return;
+            }
+
+            bearings.push({
+                id_user_ig: parseInt(member.id_user_ig, 10) || 0,
+                display_name: member.display_name || 'Player',
+                bearingDeg: bearing
+            });
+        });
+
+        return bearings;
+    }
+
     function tickDistanceIndicators()
     {
         if (!hudListEl || !partyState || !partyState.id_party)
@@ -1104,6 +1190,8 @@ var AnimasterParty = (function ()
         requestToPlayer: requestToPlayer,
         poll: poll,
         isPlayerFarFromParty: isPlayerFarFromParty,
-        tickDistanceIndicators: tickDistanceIndicators
+        tickDistanceIndicators: tickDistanceIndicators,
+        isFarFromAnyPartyMember: isFarFromAnyPartyMember,
+        getFarPartyBearings: getFarPartyBearings
     };
 })();

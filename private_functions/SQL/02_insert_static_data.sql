@@ -946,7 +946,21 @@ INSERT INTO `playanimaster_db`.`language_texts` (`id_language_text`, `dt_c`, `ta
 (465, '2026-06-29 20:00:00', 'party_pve.error_leader_too_far', 'You are too far from your party.', 'Sei troppo lontano dalla squadra.', 'Estás demasiado longe do grupo.'),
 (466, '2026-06-29 20:00:00', 'party_pve.waiting_turn', 'Waiting for the next turn…', 'In attesa del prossimo turno…', 'À espera do próximo turno…'),
 (467, '2026-06-29 20:00:00', 'party_pve.waiting_wild', 'The wild animal is acting…', 'L\'animale selvatico agisce…', 'O animal selvagem está a agir…'),
-(468, '2026-06-29 20:00:00', 'party_pve.waiting_player', 'Waiting for {name}…', 'In attesa di {name}…', 'À espera de {name}…')
+(468, '2026-06-29 20:00:00', 'party_pve.waiting_player', 'Waiting for {name}…', 'In attesa di {name}…', 'À espera de {name}…'),
+(469, '2026-07-06 22:30:00', 'combat.settings_title', 'Settings', 'Impostazioni', 'Configurações'),
+(470, '2026-07-06 23:00:00', 'combat.flee_confirm_prompt', 'Are you sure you want to flee?', 'Sei sicuro di voler fuggire?', 'Tens a certeza de que queres fugir?'),
+(471, '2026-07-06 23:00:00', 'combat.flee_confirm_button', 'Yes, flee', 'Sì, fuggi', 'Sim, fugir'),
+(472, '2026-07-06 23:30:00', 'combat.confirm_action', 'Confirm', 'Confermo', 'Confirmo'),
+(473, '2026-07-06 23:30:00', 'combat.unconfirm_action', 'Unconfirm', 'Annulla conferma', 'Cancelar confirmação'),
+(474, '2026-07-06 23:30:00', 'party_pve.you', 'You', 'Tu', 'Tu'),
+(475, '2026-07-06 23:30:00', 'party_pve.status_fainted', 'Fainted', 'Svenuto', 'Desmaiado'),
+(476, '2026-07-06 23:30:00', 'party_pve.status_ready', 'Ready', 'Pronto', 'Pronto'),
+(477, '2026-07-06 23:30:00', 'party_pve.status_choosing', 'Choosing…', 'Sta scegliendo…', 'A escolher…'),
+(478, '2026-07-06 23:30:00', 'party_pve.fainted_waiting', 'Your animal has fainted. Waiting for your team…', 'Il tuo animale è svenuto. In attesa della squadra…', 'O teu animal desmaiou. À espera da tua equipa…'),
+(479, '2026-07-06 23:30:00', 'party_pve.waiting_confirm', 'Waiting for the rest of the team to confirm…', 'In attesa che la squadra confermi…', 'À espera que a equipa confirme…'),
+(480, '2026-07-06 23:30:00', 'party_pve.staging_action', 'Locking in your action…', 'Sto registrando la tua azione…', 'A registar a tua ação…'),
+(481, '2026-07-06 23:30:00', 'party_pve.confirming', 'Confirming…', 'Confermando…', 'A confirmar…'),
+(482, '2026-07-06 23:30:00', 'party_pve.unconfirming', 'Changing your mind…', 'Sto annullando la conferma…', 'A anular a confirmação…')
 ON DUPLICATE KEY UPDATE
     `tag` = VALUES(`tag`),
     `text` = VALUES(`text`),

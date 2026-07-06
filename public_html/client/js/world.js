@@ -645,6 +645,31 @@ var AnimasterWorld = (function ()
         ctx.stroke();
     }
 
+    function drawPartyFarArrow(wx, wz, bearingDeg)
+    {
+        var p = worldToScreen(wx, wz);
+        var bearingRad = bearingDeg * Math.PI / 180;
+        var orbit = 17;
+        var size = 6;
+        var cx = p.x + Math.sin(bearingRad) * orbit;
+        var cy = p.y - Math.cos(bearingRad) * orbit;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(bearingRad);
+        ctx.beginPath();
+        ctx.moveTo(0, -size);
+        ctx.lineTo(-size * 0.65, size * 0.55);
+        ctx.lineTo(size * 0.65, size * 0.55);
+        ctx.closePath();
+        ctx.fillStyle = '#f1c40f';
+        ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+        ctx.lineWidth = 1;
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+    }
+
     function drawLabel(wx, wz, text, subtext, showFarWarning)
     {
         var p = worldToScreen(wx, wz);
@@ -869,7 +894,20 @@ var AnimasterWorld = (function ()
                 ? player.facingAngle
                 : cardinalToAngle(player.direction || 'D')
         );
-        drawLabel(player.x, player.z, player.display_name || t('hud.default_you'));
+
+        var selfFarFromParty = typeof AnimasterParty !== 'undefined'
+            && typeof AnimasterParty.isFarFromAnyPartyMember === 'function'
+            && AnimasterParty.isFarFromAnyPartyMember();
+
+        drawLabel(player.x, player.z, player.display_name || t('hud.default_you'), null, selfFarFromParty);
+
+        if (typeof AnimasterParty !== 'undefined' && typeof AnimasterParty.getFarPartyBearings === 'function')
+        {
+            AnimasterParty.getFarPartyBearings().forEach(function (far)
+            {
+                drawPartyFarArrow(player.x, player.z, far.bearingDeg);
+            });
+        }
 
         try
         {

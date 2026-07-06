@@ -3,7 +3,7 @@
 .chat-panel {
     position: fixed;
     bottom: 12px;
-    z-index: 45;
+    z-index: 110;
     width: min(420px, calc(100vw - 24px));
     max-height: min(280px, 38vh);
     display: flex;
@@ -355,7 +355,7 @@
     position: fixed;
     inset: 0;
     pointer-events: none;
-    z-index: 48;
+    z-index: 110;
 }
 
 .player-chat-bubble {

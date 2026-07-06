@@ -1543,3 +1543,20 @@ CREATE TABLE IF NOT EXISTS playanimaster_db.battles_party_pve_moves (
     PRIMARY KEY (id_battle_party_pve_move),
     KEY idx_bpp_moves_battle_turn (id_battle_party_pve, turn)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battles_party_pve_turn_choices (
+    id_battle_party_pve_turn_choice INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle_party_pve INT(11) NOT NULL,
+    round INT(11) NOT NULL,
+    id_user_ig INT(11) NOT NULL,
+    action_type VARCHAR(20) NOT NULL,
+    action_id INT(11) NOT NULL DEFAULT 0,
+    id_item_type_selected INT(11) NOT NULL DEFAULT 0,
+    flg_confirmed CHAR(1) NOT NULL DEFAULT 'N',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_party_pve_turn_choice),
+    UNIQUE KEY uniq_bpp_turn_choice (id_battle_party_pve, round, id_user_ig),
+    KEY idx_bpp_turn_choice_battle (id_battle_party_pve, round)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

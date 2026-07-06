@@ -297,14 +297,12 @@ $bootstrap = [
         <div class="combat-panel">
             <header class="combat-header">
                 <h2 data-i18n="combat.title">Combat</h2>
-                <button type="button" id="combat-close" title="Only after battle ends" data-i18n-title="ui.combat_close_title">×</button>
-            </header>
-            <div id="combat-units" class="combat-units"></div>
-            <div id="combat-log" class="combat-log"></div>
-            <p id="combat-pvp-status" class="combat-pvp-status" hidden aria-live="polite"></p>
-            <div id="combat-abilities" class="combat-abilities"></div>
-            <div class="combat-actions">
-                <div class="combat-presentation-options">
+                <div class="combat-header-actions">
+                    <button type="button" id="combat-settings-toggle" class="combat-icon-btn" title="Settings"
+                            data-i18n-title="combat.settings_title" aria-haspopup="true" aria-expanded="false">&#9881;</button>
+                    <button type="button" id="combat-close" title="Only after battle ends" data-i18n-title="ui.combat_close_title">×</button>
+                </div>
+                <div id="combat-settings-panel" class="combat-settings-panel" hidden aria-hidden="true">
                     <label class="combat-auto-advance-label">
                         <input type="checkbox" id="combat-auto-advance">
                         <span data-i18n="combat.auto_advance">Auto-advance</span>
@@ -314,9 +312,26 @@ $bootstrap = [
                         <span data-i18n="combat.skip_animations">Skip animations</span>
                     </label>
                 </div>
-                <button type="button" id="combat-flee" data-i18n="combat.flee">Flee</button>
-            </div>
+            </header>
+            <div id="combat-units" class="combat-units"></div>
+            <div id="combat-log" class="combat-log"></div>
+            <p id="combat-pvp-status" class="combat-pvp-status" hidden aria-live="polite"></p>
             <p id="combat-message" class="combat-message"></p>
+            <div id="combat-party-pve-planning" class="combat-party-pve-planning" hidden aria-hidden="true">
+                <div id="combat-party-actions-list" class="combat-party-actions-list"></div>
+                <div class="combat-party-confirm-row">
+                    <div class="combat-party-confirm-bar" aria-hidden="true">
+                        <div id="combat-party-confirm-bar-fill" class="combat-party-confirm-bar-fill"></div>
+                        <span id="combat-party-confirm-bar-text" class="combat-party-confirm-bar-text"></span>
+                    </div>
+                    <button type="button" id="combat-party-confirm-btn" class="combat-party-confirm-btn" data-i18n="combat.confirm_action">Confirm</button>
+                    <button type="button" id="combat-party-unconfirm-btn" class="combat-party-unconfirm-btn" data-i18n="combat.unconfirm_action" hidden>Unconfirm</button>
+                </div>
+            </div>
+            <div class="combat-menu-dock">
+                <div id="combat-abilities" class="combat-abilities"></div>
+                <div id="combat-abilities-secondary" class="combat-abilities-secondary"></div>
+            </div>
         </div>
     </div>
 
