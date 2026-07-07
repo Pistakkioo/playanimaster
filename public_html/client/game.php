@@ -236,6 +236,13 @@ $bootstrap = [
                     <div class="party-body">
                         <p id="party-status" class="party-status"></p>
                         <div id="party-member-list" class="party-member-list"></div>
+                        <div id="party-settings" class="party-settings" hidden>
+                            <label class="party-setting-row" for="party-inactivity-vote-toggle">
+                                <input type="checkbox" id="party-inactivity-vote-toggle" class="party-setting-checkbox">
+                                <span data-i18n="party.setting_inactivity_vote_label">Allow inactivity vote in PvE</span>
+                            </label>
+                            <p class="party-setting-hint" data-i18n="party.setting_inactivity_vote_hint">If a party member doesn't act during their turn, teammates who already acted can vote to make their animal attack randomly.</p>
+                        </div>
                         <div class="party-actions">
                             <button type="button" id="party-create-btn" class="party-create-btn" data-i18n="party.create">Create party</button>
                             <button type="button" id="party-leave-btn" class="party-leave-btn" hidden data-i18n="party.leave">Leave party</button>

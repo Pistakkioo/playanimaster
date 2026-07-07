@@ -53,6 +53,7 @@ After code + SQL: test local → commit → deploy → run new SQL tail on produ
 | **Next** | Party system | [modules/002_PARTY_SYSTEM.md](modules/002_PARTY_SYSTEM.md) | Phase A implemented |
 | Then | Party PvE | [modules/002b_PARTY_PVE.md](modules/002b_PARTY_PVE.md) | Tables ready; combat engine next |
 | Then | Combat engine refactor | [modules/005_COMBAT_ENGINE.md](modules/005_COMBAT_ENGINE.md) (after party PvE proves multi-actor turns) |
+| Then | Combat buff/debuff visibility + live stat layers | [modules/005b_COMBAT_BUFF_VISIBILITY.md](modules/005b_COMBAT_BUFF_VISIBILITY.md) (planned; builds on the unified engine from 005 so buffs are wired once, not three times) |
 
 See [MMORPG_ROADMAP.md](MMORPG_ROADMAP.md) for the full phase list (quests, dungeons, raids, …).
 

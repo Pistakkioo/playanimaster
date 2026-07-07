@@ -1560,3 +1560,18 @@ CREATE TABLE IF NOT EXISTS playanimaster_db.battles_party_pve_turn_choices (
     UNIQUE KEY uniq_bpp_turn_choice (id_battle_party_pve, round, id_user_ig),
     KEY idx_bpp_turn_choice_battle (id_battle_party_pve, round)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battles_party_pve_inactivity_votes (
+    id_battle_party_pve_inactivity_vote INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle_party_pve INT(11) NOT NULL,
+    round INT(11) NOT NULL,
+    id_user_ig_target INT(11) NOT NULL,
+    id_user_ig_voter INT(11) NOT NULL,
+    vote_choice CHAR(1) NOT NULL DEFAULT 'Y' COMMENT 'Y=force random action, N=keep waiting',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_party_pve_inactivity_vote),
+    UNIQUE KEY uniq_bpp_inactivity_vote (id_battle_party_pve, round, id_user_ig_target, id_user_ig_voter),
+    KEY idx_bpp_inactivity_vote_lookup (id_battle_party_pve, round, id_user_ig_target)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

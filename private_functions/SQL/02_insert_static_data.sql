@@ -961,7 +961,13 @@ INSERT INTO `playanimaster_db`.`language_texts` (`id_language_text`, `dt_c`, `ta
 (480, '2026-07-06 23:30:00', 'party_pve.staging_action', 'Locking in your action…', 'Sto registrando la tua azione…', 'A registar a tua ação…'),
 (481, '2026-07-06 23:30:00', 'party_pve.confirming', 'Confirming…', 'Confermando…', 'A confirmar…'),
 (482, '2026-07-06 23:30:00', 'party_pve.unconfirming', 'Changing your mind…', 'Sto annullando la conferma…', 'A anular a confirmação…'),
-(483, '2026-07-07 10:55:00', 'party_pve.reconfirm_needed', 'A teammate changed their action. Please confirm again.', 'Un compagno ha cambiato azione. Conferma di nuovo.', 'Um companheiro mudou de ação. Confirma novamente.')
+(483, '2026-07-07 10:55:00', 'party_pve.reconfirm_needed', 'A teammate changed their action. Please confirm again.', 'Un compagno ha cambiato azione. Conferma di nuovo.', 'Um companheiro mudou de ação. Confirma novamente.'),
+(484, '2026-07-07 23:59:00', 'party.setting_inactivity_vote_label', 'Allow inactivity vote in PvE', 'Consenti voto per inattività in PvE', 'Permitir votação por inatividade no PvE'),
+(485, '2026-07-07 23:59:00', 'party.setting_inactivity_vote_hint', 'If a member doesn''t act during their turn, teammates who already acted can vote to make their animal attack randomly instead of waiting.', 'Se un membro non agisce durante il proprio turno, i compagni che hanno già agito possono votare per far attaccare a caso il suo animale invece di aspettare.', 'Se um membro não agir durante o seu turno, os companheiros que já agiram podem votar para fazer o animal dele atacar aleatoriamente em vez de esperar.'),
+(486, '2026-07-07 23:59:00', 'party_pve.vote_tally', 'Force random attack? {yes} yes · {no} no', 'Forzare un attacco casuale? {yes} sì · {no} no', 'Forçar ataque aleatório? {yes} sim · {no} não'),
+(487, '2026-07-07 23:59:00', 'party_pve.vote_yes', 'Yes', 'Sì', 'Sim'),
+(488, '2026-07-07 23:59:00', 'party_pve.vote_no', 'No', 'No', 'Não'),
+(489, '2026-07-08 00:45:00', 'party_pve.vote_available_in', 'Vote available in {seconds}s', 'Voto disponibile tra {seconds}s', 'Votação disponível em {seconds}s')
 ON DUPLICATE KEY UPDATE
     `tag` = VALUES(`tag`),
     `text` = VALUES(`text`),

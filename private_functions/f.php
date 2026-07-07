@@ -44,7 +44,7 @@ class FUNZIONI
     
     
     
-    public static function AddDropsWildAnimalUser($conn,$id_species,$lvl,$id_user_ig,$LANG)
+    public static function AddDropsWildAnimalUser($conn,$id_species,$lvl,$id_user_ig,$LANG,$reward_multiplier=1.0)
     {
         //error_log("function ADD_DROPS_WILD_ANIMAL_USER");
         // get list of user's active quests ids -- TODO
@@ -69,7 +69,9 @@ class FUNZIONI
             
             if($drop_type=="gold")
             {
-                $chance = intval($row_WA_drops['chance']);
+                // Scaled down for party PvE so a full party splitting one
+                // wild's loot nets the same expected total as a solo kill.
+                $chance = intval($row_WA_drops['chance'])*$reward_multiplier;
                 $check_chance = rand(1,100) <= $chance;
                 
                 if($check_chance)
@@ -98,7 +100,7 @@ class FUNZIONI
             
             if($drop_type=="item")
             {
-                $chance = intval($row_WA_drops['chance']);
+                $chance = intval($row_WA_drops['chance'])*$reward_multiplier;
                 $check_chance = rand(1,100) <= $chance;
                 
                 if($check_chance)
@@ -277,7 +279,7 @@ class FUNZIONI
     }
     
     
-    public static function AddExpFromWildAnimal($conn,$id_user_ig,$p_a_id,$w_a_id_species,$w_a_lvl,$LANG)
+    public static function AddExpFromWildAnimal($conn,$id_user_ig,$p_a_id,$w_a_id_species,$w_a_lvl,$LANG,$reward_multiplier=1.0)
     {
         
         $result_wa_exp_reward = $conn->query("
@@ -286,16 +288,18 @@ class FUNZIONI
             where id_species = \"$w_a_id_species\"
         ");
         $row_wa_exp_reward = $result_wa_exp_reward->fetch();
-        $rew_exp = intval($row_wa_exp_reward['reward_exp'])*intval($w_a_lvl);
-        $reward_atk = intval($row_wa_exp_reward['reward_atk']);
-        $reward_def = intval($row_wa_exp_reward['reward_def']);
-        $reward_matk = intval($row_wa_exp_reward['reward_matk']);
-        $reward_mdef = intval($row_wa_exp_reward['reward_mdef']);
-        $reward_hp = intval($row_wa_exp_reward['reward_hp']);
-        $reward_acc = intval($row_wa_exp_reward['reward_acc']);
-        $reward_eva = intval($row_wa_exp_reward['reward_eva']);
-        $reward_cr = intval($row_wa_exp_reward['reward_cr']);
-        $reward_spd = intval($row_wa_exp_reward['reward_spd']);
+        // $reward_multiplier lets party PvE split a single wild's rewards evenly
+        // across the party (defaults to 1.0, i.e. no change, for solo PvE).
+        $rew_exp = (int) round(intval($row_wa_exp_reward['reward_exp'])*intval($w_a_lvl)*$reward_multiplier);
+        $reward_atk = (int) round(intval($row_wa_exp_reward['reward_atk'])*$reward_multiplier);
+        $reward_def = (int) round(intval($row_wa_exp_reward['reward_def'])*$reward_multiplier);
+        $reward_matk = (int) round(intval($row_wa_exp_reward['reward_matk'])*$reward_multiplier);
+        $reward_mdef = (int) round(intval($row_wa_exp_reward['reward_mdef'])*$reward_multiplier);
+        $reward_hp = (int) round(intval($row_wa_exp_reward['reward_hp'])*$reward_multiplier);
+        $reward_acc = (int) round(intval($row_wa_exp_reward['reward_acc'])*$reward_multiplier);
+        $reward_eva = (int) round(intval($row_wa_exp_reward['reward_eva'])*$reward_multiplier);
+        $reward_cr = (int) round(intval($row_wa_exp_reward['reward_cr'])*$reward_multiplier);
+        $reward_spd = (int) round(intval($row_wa_exp_reward['reward_spd'])*$reward_multiplier);
         
         
         $result_user_exp = $conn->query("

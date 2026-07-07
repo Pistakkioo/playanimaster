@@ -486,3 +486,38 @@ CREATE TABLE IF NOT EXISTS playanimaster_db.battles_party_pve_turn_choices (
     KEY idx_bpp_turn_choice_battle (id_battle_party_pve, round)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+-- Party PvE inactivity-vote (opt-in per party via parties.flg_allow_inactivity_vote):
+-- if a party member hasn't staged any action for the current round after a fixed
+-- delay (costanti.party_pve_inactivity_vote_delay_seconds), other alive+active
+-- members who HAVE already staged their own action this round may vote Y/N on
+-- forcing that player's animal to perform a random valid ability. Majority wins;
+-- on a tie, the party leader's own cast vote (if any) decides. The moment the
+-- target stages a real action, all vote rows against them for the round are
+-- deleted (see animaster_party_pve_save_turn_choice).
+ALTER TABLE playanimaster_db.parties
+    ADD COLUMN flg_allow_inactivity_vote CHAR(1) NOT NULL DEFAULT 'N' AFTER max_members;
+
+ALTER TABLE playanimaster_db.battles_party_pve
+    ADD COLUMN dt_round_started TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP AFTER current_turn;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battles_party_pve_inactivity_votes (
+    id_battle_party_pve_inactivity_vote INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle_party_pve INT(11) NOT NULL,
+    round INT(11) NOT NULL,
+    id_user_ig_target INT(11) NOT NULL,
+    id_user_ig_voter INT(11) NOT NULL,
+    vote_choice CHAR(1) NOT NULL DEFAULT 'Y' COMMENT 'Y=force random action, N=keep waiting',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_party_pve_inactivity_vote),
+    UNIQUE KEY uniq_bpp_inactivity_vote (id_battle_party_pve, round, id_user_ig_target, id_user_ig_voter),
+    KEY idx_bpp_inactivity_vote_lookup (id_battle_party_pve, round, id_user_ig_target)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO costanti (costante, valore)
+SELECT 'party_pve_inactivity_vote_delay_seconds', 45
+WHERE NOT EXISTS (
+    SELECT 1 FROM costanti WHERE costante = 'party_pve_inactivity_vote_delay_seconds'
+);
+

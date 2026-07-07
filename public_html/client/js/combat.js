@@ -29,7 +29,9 @@ var AnimasterCombat = (function ()
     var pvpResolvePending = false;
     var pvpResolvedMoveCount = 0;
     var partyPveMeta = null;
+    var partyPveMetaAnchorMs = 0;
     var partyPvePollTimer = null;
+    var partyPveCountdownTimer = null;
     var partyPlanningEl = null;
     var partyActionsListEl = null;
     var partyConfirmBarFillEl = null;
@@ -978,6 +980,7 @@ var AnimasterCombat = (function ()
         if (battle && battle.type === 'party_pve' && result && result.moves !== undefined)
         {
             partyPveMeta = result.meta || {};
+            partyPveMetaAnchorMs = Date.now();
             syncPartyPveTurnFromMeta();
 
             if (Array.isArray(result.moves) && result.moves.length)
@@ -1019,6 +1022,28 @@ var AnimasterCombat = (function ()
             clearInterval(partyPvePollTimer);
             partyPvePollTimer = null;
         }
+
+        stopPartyPveCountdownTimer();
+    }
+
+    /**
+     * Re-renders just the planning panel every second so the "vote available
+     * in Ns" hint counts down smoothly instead of only updating on the 1.5s
+     * poll cadence. Lives and dies alongside the poll timer.
+     */
+    function stopPartyPveCountdownTimer()
+    {
+        if (partyPveCountdownTimer)
+        {
+            clearInterval(partyPveCountdownTimer);
+            partyPveCountdownTimer = null;
+        }
+    }
+
+    function startPartyPveCountdownTimer()
+    {
+        stopPartyPveCountdownTimer();
+        partyPveCountdownTimer = setInterval(renderPartyPvePlanningPanel, 1000);
     }
 
     function partyPveActionLabel(ally)
@@ -1057,6 +1082,171 @@ var AnimasterCombat = (function ()
     }
 
     /**
+     * Seconds elapsed in the current planning round, extrapolated client-side
+     * from the last poll's `seconds_since_round_start` so the inactivity
+     * countdown can tick smoothly between polls instead of jumping every 1.5s.
+     */
+    function partyPveElapsedRoundSeconds()
+    {
+        if (!partyPveMeta)
+        {
+            return 0;
+        }
+
+        var base = parseFloat(partyPveMeta.seconds_since_round_start) || 0;
+        var driftMs = partyPveMetaAnchorMs ? Math.max(0, Date.now() - partyPveMetaAnchorMs) : 0;
+
+        return base + (driftMs / 1000);
+    }
+
+    /**
+     * Ticking "vote available in Ns" hint shown right next to a still-inactive
+     * ally's name (including the current player's own "You" row, so they can
+     * see exactly how long they have before teammates can vote to force a
+     * random action for them). Replaced by the actual Yes/No vote row once
+     * the delay elapses and the ally becomes votable.
+     */
+    function buildInactivityCountdownLabel()
+    {
+        var delay = parseInt(partyPveMeta.inactivity_vote_delay_seconds, 10) || 0;
+        var elapsed = partyPveElapsedRoundSeconds();
+        var remaining = Math.max(0, Math.ceil(delay - elapsed));
+
+        console.log('[PartyPVE][countdown] compute', {
+            delay: delay,
+            elapsed: elapsed,
+            remaining: remaining
+        });
+
+        if (remaining <= 0)
+        {
+            return null;
+        }
+
+        var label = document.createElement('span');
+        label.className = 'combat-party-action-countdown';
+        label.textContent = t('party_pve.vote_available_in', { seconds: remaining });
+
+        return label;
+    }
+
+    /**
+     * Small "force random action?" vote row shown under an inactive ally
+     * once they've been silent long enough. Anyone who has already staged
+     * their own action this round sees Yes/No buttons and the live tally;
+     * everyone else (once the target is votable) sees the tally only.
+     */
+    function buildInactivityVoteRow(ally)
+    {
+        var voteRow = document.createElement('div');
+        voteRow.className = 'combat-party-vote-row';
+
+        var tallyEl = document.createElement('span');
+        tallyEl.className = 'combat-party-vote-tally';
+        tallyEl.textContent = t('party_pve.vote_tally', {
+            yes: parseInt(ally.vote_yes, 10) || 0,
+            no: parseInt(ally.vote_no, 10) || 0
+        });
+        voteRow.appendChild(tallyEl);
+
+        if (ally.can_vote)
+        {
+            var yesBtn = document.createElement('button');
+            yesBtn.type = 'button';
+            yesBtn.className = 'combat-party-vote-btn combat-party-vote-yes';
+
+            if (ally.my_vote === 'Y')
+            {
+                yesBtn.classList.add('is-voted');
+            }
+
+            yesBtn.textContent = t('party_pve.vote_yes');
+            yesBtn.disabled = busy;
+            yesBtn.addEventListener('click', function ()
+            {
+                submitPartyPveInactivityVote(ally.id_user_ig, 'Y');
+            });
+            voteRow.appendChild(yesBtn);
+
+            var noBtn = document.createElement('button');
+            noBtn.type = 'button';
+            noBtn.className = 'combat-party-vote-btn combat-party-vote-no';
+
+            if (ally.my_vote === 'N')
+            {
+                noBtn.classList.add('is-voted');
+            }
+
+            noBtn.textContent = t('party_pve.vote_no');
+            noBtn.disabled = busy;
+            noBtn.addEventListener('click', function ()
+            {
+                submitPartyPveInactivityVote(ally.id_user_ig, 'N');
+            });
+            voteRow.appendChild(noBtn);
+        }
+
+        return voteRow;
+    }
+
+    /**
+     * Casts (or changes) the local player's Yes/No vote on whether to force
+     * a random ability for an inactive teammate. Reuses the same
+     * "submit and replay any resulting moves" flow as confirm/unconfirm,
+     * since a decisive vote can immediately trigger the forced action and,
+     * in turn, complete and resolve the round.
+     */
+    function submitPartyPveInactivityVote(targetId, choice)
+    {
+        if (!battle || battle.type !== 'party_pve' || battle.status !== 'ongoing' || busy || !partyPveMeta)
+        {
+            return;
+        }
+
+        if (!partyPveMeta.is_eligible || !partyPveMeta.my_action_type)
+        {
+            return;
+        }
+
+        stopPartyPvePoll();
+        busy = true;
+        renderPartyPvePlanningPanel();
+
+        var beforeMove = latestStats();
+        var actionTurn = battle.turn;
+
+        AnimasterApi.getBattleInfo({
+            id_user_ig: player.id_user_ig || 0,
+            id_battle: battle.id,
+            battle_type: battle.type,
+            turn: actionTurn,
+            restarting_old_battle: 'N',
+            type: 'inactivity_vote',
+            id: targetId,
+            vote_choice: choice,
+            lang: AnimasterApi.LANG
+        }).then(function (result)
+        {
+            moves = normalizeBattleResponse(result);
+            applyStateFromMoves({ deferTerminalUi: true });
+
+            if (battle.turn > actionTurn)
+            {
+                presentTurn(beforeMove, false, getPlayableMovesForTurn(moves, actionTurn));
+                return;
+            }
+
+            busy = false;
+            enterPartyPveInputPhase();
+        }).catch(function (err)
+        {
+            busy = false;
+            setMessage(err.message || t('combat.action_failed'));
+            enterPartyPveInputPhase();
+        });
+    }
+
+    /**
      * Renders the "staged actions" panel: one row per party member with
      * their current choice/confirmation status, plus the confirm progress
      * bar and the Confirm/Unconfirm button for the local player.
@@ -1074,6 +1264,13 @@ var AnimasterCombat = (function ()
             || battle.status !== 'ongoing'
             || partyPveMeta.battle_finished)
         {
+            console.log('[PartyPVE][countdown] panel hidden, skipping render', {
+                has_battle: !!battle,
+                battle_type: battle && battle.type,
+                has_meta: !!partyPveMeta,
+                battle_status: battle && battle.status,
+                battle_finished: partyPveMeta && partyPveMeta.battle_finished
+            });
             partyPlanningEl.hidden = true;
             partyPlanningEl.setAttribute('aria-hidden', 'true');
             return;
@@ -1085,6 +1282,14 @@ var AnimasterCombat = (function ()
         if (partyActionsListEl)
         {
             partyActionsListEl.innerHTML = '';
+
+            console.log('[PartyPVE][countdown] render panel', {
+                allow_inactivity_vote: partyPveMeta.allow_inactivity_vote,
+                inactivity_vote_delay_seconds: partyPveMeta.inactivity_vote_delay_seconds,
+                seconds_since_round_start: partyPveMeta.seconds_since_round_start,
+                elapsed_extrapolated: partyPveElapsedRoundSeconds(),
+                party_allies: partyPveMeta.party_allies
+            });
 
             (partyPveMeta.party_allies || []).forEach(function (ally)
             {
@@ -1104,19 +1309,59 @@ var AnimasterCombat = (function ()
                     row.classList.add('is-staged');
                 }
 
+                var nameWrapEl = document.createElement('span');
+                nameWrapEl.className = 'combat-party-action-name-wrap';
+
                 var nameEl = document.createElement('span');
                 nameEl.className = 'combat-party-action-name';
                 nameEl.textContent = ally.is_self
                     ? t('party_pve.you')
                     : (ally.display_name || t('combat.unit_your_animal'));
+                nameWrapEl.appendChild(nameEl);
+
+                var countdownEligible = partyPveMeta.allow_inactivity_vote
+                    && !ally.fainted
+                    && !ally.has_choice
+                    && !ally.is_votable;
+
+                console.log('[PartyPVE][countdown] ally check', {
+                    id_user_ig: ally.id_user_ig,
+                    is_self: ally.is_self,
+                    display_name: ally.display_name,
+                    fainted: ally.fainted,
+                    has_choice: ally.has_choice,
+                    is_votable: ally.is_votable,
+                    countdownEligible: countdownEligible
+                });
+
+                if (countdownEligible)
+                {
+                    var countdownEl = buildInactivityCountdownLabel();
+
+                    console.log('[PartyPVE][countdown] label result', {
+                        id_user_ig: ally.id_user_ig,
+                        created: !!countdownEl,
+                        text: countdownEl ? countdownEl.textContent : null
+                    });
+
+                    if (countdownEl)
+                    {
+                        nameWrapEl.appendChild(countdownEl);
+                    }
+                }
 
                 var statusEl = document.createElement('span');
                 statusEl.className = 'combat-party-action-status';
                 statusEl.textContent = partyPveActionStatusLabel(ally);
 
-                row.appendChild(nameEl);
+                row.appendChild(nameWrapEl);
                 row.appendChild(statusEl);
                 partyActionsListEl.appendChild(row);
+
+                if (ally.is_votable)
+                {
+                    partyActionsListEl.appendChild(buildInactivityVoteRow(ally));
+                }
             });
         }
 
@@ -1270,6 +1515,7 @@ var AnimasterCombat = (function ()
         }
 
         partyPvePollTimer = setInterval(pollPartyPveTurn, 1500);
+        startPartyPveCountdownTimer();
     }
 
     /**

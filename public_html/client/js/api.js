@@ -755,6 +755,19 @@ var AnimasterApi = (function ()
         });
     }
 
+    function setPartySetting(player, setting, value)
+    {
+        return postJson(BASE + 'party_set_settings.php', {
+            id_user_ig: player.id_user_ig || 0,
+            setting: setting,
+            value: value ? 'S' : 'N',
+            lang: LANG
+        }).then(function (envelope)
+        {
+            return parsePartyEnvelope(envelope);
+        });
+    }
+
     function sendDuelRequest(player, idTarget)
     {
         return postJson(BASE + 'send_duel_request.php', {
@@ -902,6 +915,7 @@ var AnimasterApi = (function ()
         leaveParty: leaveParty,
         kickPartyMember: kickPartyMember,
         transferPartyLeader: transferPartyLeader,
+        setPartySetting: setPartySetting,
         sendDuelRequest: sendDuelRequest,
         pollDuel: pollDuel,
         respondDuelRequest: respondDuelRequest,

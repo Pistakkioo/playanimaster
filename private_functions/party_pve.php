@@ -289,8 +289,88 @@ function animaster_party_pve_party_has_active_battle($conn, $id_party)
 }
 
 /**
+ * Call this whenever a user leaves, is kicked from, or is otherwise removed
+ * from their party (party.php: animaster_party_leave / animaster_party_kick
+ * / animaster_party_disband). If they have an in-progress party PvE battle,
+ * mark their participant slot inactive so the round stops waiting on their
+ * confirmation, then immediately re-check whether the round (or the whole
+ * battle, if nobody active is left) can now resolve without them. Without
+ * this, a departed alive member would soft-lock the round forever since
+ * confirm_required is derived from the alive+active party headcount.
+ */
+function animaster_party_pve_handle_member_departed($conn, $id_user_ig)
+{
+    $id_user_ig = (int) $id_user_ig;
+    $active = animaster_party_pve_active_for_user($conn, $id_user_ig);
+
+    if (!$active)
+    {
+        return;
+    }
+
+    $id_battle = (int) $active['id_battle'];
+
+    $stmt = $conn->prepare('
+        UPDATE battles_party_pve_participants
+        SET flg_active = \'N\'
+        WHERE id_battle_party_pve = :id_battle
+          AND id_user_ig = :id_user_ig
+          AND side = \'party\'
+    ');
+    $stmt->execute([
+        ':id_battle' => $id_battle,
+        ':id_user_ig' => $id_user_ig
+    ]);
+
+    $battle = animaster_party_pve_fetch_battle($conn, $id_battle);
+
+    if (!$battle || trim((string) $battle['flg_status']) !== 'O')
+    {
+        return;
+    }
+
+    $participants = animaster_party_pve_fetch_participants($conn, $id_battle);
+    $alive_party = animaster_party_pve_alive_party_participants($participants);
+
+    if (!$alive_party)
+    {
+        // Whole party is gone (left/kicked/fainted): nobody left to resolve
+        // the round, so close the battle out rather than leave it dangling.
+        $wild = animaster_party_pve_get_wild_participant($conn, $id_battle);
+
+        if ($wild)
+        {
+            animaster_party_pve_finish_battle(
+                $conn,
+                $battle,
+                'defeat',
+                (int) $battle['id_wild_animal'],
+                $participants,
+                $wild,
+                ''
+            );
+        }
+
+        return;
+    }
+
+    $round = (int) $battle['current_turn'] + 1;
+    $confirmed_count = animaster_party_pve_count_confirmed_turn_choices($conn, $id_battle, $round);
+
+    if ($confirmed_count >= count($alive_party))
+    {
+        // Everyone still active had already confirmed before this player
+        // left; their departure was the only thing blocking resolution.
+        animaster_party_pve_resolve_round($conn, $battle, $round, '');
+    }
+}
+
+/**
  * Party members eligible to plan/act this round: alive (not fainted, HP > 0)
- * animals on the 'party' side. Wild is handled separately.
+ * animals on the 'party' side, still marked active. flg_active is flipped to
+ * 'N' by animaster_party_pve_handle_member_departed() when the player leaves
+ * or is kicked from the party mid-battle, so the round doesn't wait forever
+ * on someone who can no longer confirm. Wild is handled separately.
  *
  * @param array<int, array<string, mixed>> $participants
  * @return array<int, array<string, mixed>>
@@ -302,6 +382,11 @@ function animaster_party_pve_alive_party_participants(array $participants)
     foreach ($participants as $p)
     {
         if ($p['side'] !== 'party')
+        {
+            continue;
+        }
+
+        if (trim((string) ($p['flg_active'] ?? 'S')) !== 'S')
         {
             continue;
         }
@@ -381,6 +466,14 @@ function animaster_party_pve_save_turn_choice($conn, $id_battle, $round, $id_use
     {
         animaster_party_pve_unconfirm_others($conn, $id_battle, $round, $id_user_ig);
     }
+
+    if (!$previous)
+    {
+        // The player just staged their first action this round: any
+        // in-progress inactivity vote against them is now moot, their real
+        // action proceeds instead of a forced random one.
+        animaster_party_pve_clear_inactivity_votes($conn, $id_battle, $round, $id_user_ig);
+    }
 }
 
 function animaster_party_pve_unconfirm_others($conn, $id_battle, $round, $id_user_ig)
@@ -398,6 +491,232 @@ function animaster_party_pve_unconfirm_others($conn, $id_battle, $round, $id_use
         ':round' => (int) $round,
         ':id_user_ig' => (int) $id_user_ig
     ]);
+}
+
+/**
+ * Inactivity-vote feature (opt-in per party, parties.flg_allow_inactivity_vote):
+ * if a party member hasn't staged any action this round after a fixed delay,
+ * teammates who already staged their own action may vote to force a random
+ * valid ability on the inactive player's animal instead of waiting forever.
+ */
+function animaster_party_pve_inactivity_vote_delay_seconds()
+{
+    if (defined('party_pve_inactivity_vote_delay_seconds'))
+    {
+        return (int) constant('party_pve_inactivity_vote_delay_seconds');
+    }
+
+    return 45;
+}
+
+function animaster_party_pve_party_allows_inactivity_vote($conn, array $battle)
+{
+    $party = animaster_party_fetch_party_row($conn, (int) $battle['id_party']);
+
+    return $party && trim((string) ($party['flg_allow_inactivity_vote'] ?? 'N')) === 'S';
+}
+
+/**
+ * Seconds elapsed since the current round started, computed by MySQL itself
+ * (NOT via PHP's time()/strtotime()) so this is immune to any mismatch
+ * between the web process's PHP timezone and the DB server's timezone.
+ */
+function animaster_party_pve_seconds_since_round_start($conn, array $battle)
+{
+    $stmt = $conn->prepare('SELECT GREATEST(0, TIMESTAMPDIFF(SECOND, :dt, NOW())) AS secs');
+    $stmt->execute([':dt' => (string) ($battle['dt_round_started'] ?? date('Y-m-d H:i:s'))]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $row ? (int) $row['secs'] : 0;
+}
+
+function animaster_party_pve_fetch_inactivity_votes($conn, $id_battle, $round, $id_target = null)
+{
+    $sql = '
+        SELECT *
+        FROM battles_party_pve_inactivity_votes
+        WHERE id_battle_party_pve = :id_battle
+          AND round = :round
+    ';
+    $params = [
+        ':id_battle' => (int) $id_battle,
+        ':round' => (int) $round
+    ];
+
+    if ($id_target !== null)
+    {
+        $sql .= ' AND id_user_ig_target = :id_target';
+        $params[':id_target'] = (int) $id_target;
+    }
+
+    $stmt = $conn->prepare($sql);
+    $stmt->execute($params);
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function animaster_party_pve_cast_inactivity_vote($conn, $id_battle, $round, $id_target, $id_voter, $choice)
+{
+    $choice = $choice === 'N' ? 'N' : 'Y';
+
+    $stmt = $conn->prepare('
+        INSERT INTO battles_party_pve_inactivity_votes (
+            id_battle_party_pve, round, id_user_ig_target, id_user_ig_voter, vote_choice
+        ) VALUES (
+            :id_battle, :round, :id_target, :id_voter, :choice
+        )
+        ON DUPLICATE KEY UPDATE vote_choice = :choice_upd
+    ');
+    $stmt->execute([
+        ':id_battle' => (int) $id_battle,
+        ':round' => (int) $round,
+        ':id_target' => (int) $id_target,
+        ':id_voter' => (int) $id_voter,
+        ':choice' => $choice,
+        ':choice_upd' => $choice
+    ]);
+}
+
+function animaster_party_pve_clear_inactivity_votes($conn, $id_battle, $round, $id_target)
+{
+    $stmt = $conn->prepare('
+        DELETE FROM battles_party_pve_inactivity_votes
+        WHERE id_battle_party_pve = :id_battle
+          AND round = :round
+          AND id_user_ig_target = :id_target
+    ');
+    $stmt->execute([
+        ':id_battle' => (int) $id_battle,
+        ':round' => (int) $round,
+        ':id_target' => (int) $id_target
+    ]);
+}
+
+/**
+ * Eligible voters for a given target: alive+active party members, other than
+ * the target, who have already staged their own action this round.
+ */
+function animaster_party_pve_inactivity_vote_eligible_voters(array $alive_party, $id_target, array $choice_by_user)
+{
+    $eligible = [];
+
+    foreach ($alive_party as $p)
+    {
+        $uid = (int) $p['id_user_ig'];
+
+        if ($uid === (int) $id_target)
+        {
+            continue;
+        }
+
+        if (!isset($choice_by_user[$uid]))
+        {
+            continue;
+        }
+
+        $eligible[] = $uid;
+    }
+
+    return $eligible;
+}
+
+/**
+ * Tallies a target's vote once every currently-eligible voter has cast one.
+ * Majority wins; on a tie the party leader's own vote decides if they are an
+ * eligible voter, otherwise the vote fails (does not force the action).
+ */
+function animaster_party_pve_tally_inactivity_votes($conn, array $battle, $round, $id_target, array $alive_party, array $choice_by_user)
+{
+    $eligible_voters = animaster_party_pve_inactivity_vote_eligible_voters($alive_party, $id_target, $choice_by_user);
+
+    if (!$eligible_voters)
+    {
+        return ['decided' => false];
+    }
+
+    $votes = animaster_party_pve_fetch_inactivity_votes($conn, (int) $battle['id_battle_party_pve'], $round, $id_target);
+    $vote_by_voter = [];
+
+    foreach ($votes as $v)
+    {
+        $vote_by_voter[(int) $v['id_user_ig_voter']] = trim((string) $v['vote_choice']) === 'N' ? 'N' : 'Y';
+    }
+
+    foreach ($eligible_voters as $uid)
+    {
+        if (!isset($vote_by_voter[$uid]))
+        {
+            return ['decided' => false];
+        }
+    }
+
+    $yes = 0;
+    $no = 0;
+
+    foreach ($eligible_voters as $uid)
+    {
+        if ($vote_by_voter[$uid] === 'Y')
+        {
+            $yes++;
+        }
+        else
+        {
+            $no++;
+        }
+    }
+
+    if ($yes > $no)
+    {
+        return ['decided' => true, 'result' => 'Y'];
+    }
+
+    if ($no > $yes)
+    {
+        return ['decided' => true, 'result' => 'N'];
+    }
+
+    $id_leader = (int) $battle['id_user_ig_leader'];
+
+    if (isset($vote_by_voter[$id_leader]))
+    {
+        return ['decided' => true, 'result' => $vote_by_voter[$id_leader]];
+    }
+
+    return ['decided' => true, 'result' => 'N'];
+}
+
+/**
+ * Forces a random valid ability (same pool the wild AI draws from, scoped to
+ * the target's own animal species/level) as the target's action for the
+ * round, auto-confirmed. No-ops if the species has no unlocked ability yet.
+ */
+function animaster_party_pve_apply_forced_inactivity_action($conn, $id_battle, $round, $id_target, array $participants, $lang_suffix)
+{
+    $actor = null;
+
+    foreach ($participants as $p)
+    {
+        if ($p['side'] === 'party' && (int) $p['id_user_ig'] === (int) $id_target)
+        {
+            $actor = $p;
+            break;
+        }
+    }
+
+    if (!$actor)
+    {
+        return;
+    }
+
+    $ability = animaster_party_pve_fetch_random_wild_ability($conn, (int) $actor['id_species'], (int) $actor['lvl'], $lang_suffix);
+
+    if (!$ability)
+    {
+        return;
+    }
+
+    animaster_party_pve_save_turn_choice($conn, $id_battle, $round, $id_target, 'ability', (int) $ability['id_ability']);
+    animaster_party_pve_set_turn_choice_confirmed($conn, $id_battle, $round, $id_target, true);
 }
 
 function animaster_party_pve_set_turn_choice_confirmed($conn, $id_battle, $round, $id_user_ig, $confirmed)
@@ -640,6 +959,11 @@ function animaster_party_pve_party_alive_count(array $participants)
             continue;
         }
 
+        if (trim((string) ($p['flg_active'] ?? 'S')) !== 'S')
+        {
+            continue;
+        }
+
         if (trim((string) $p['flg_fainted']) === 'S')
         {
             continue;
@@ -665,7 +989,9 @@ function animaster_party_pve_check_end($conn, array $battle, array $participants
 
     if ((int) $wild['current_hp'] <= 0)
     {
-        return 'victory';
+        // 'win' (not 'victory') to match the status string solo PvE uses,
+        // since combat.js's shared statusMessage() checks for 'win'.
+        return 'win';
     }
 
     if (animaster_party_pve_party_alive_count($participants) <= 0)
@@ -701,27 +1027,40 @@ function animaster_party_pve_finish_battle($conn, array $battle, $status, $id_wi
     ');
     $stmt->execute([':id_wild' => (int) $id_wild_animal]);
 
-    if ($status === 'victory')
+    if ($status === 'win')
     {
         if (!class_exists('FUNZIONI'))
         {
             require_once __DIR__ . '/f.php';
         }
 
-        foreach ($party_participants as $p)
+        // Reward every party member who started the fight, including those
+        // who fainted along the way, not just whoever is alive/present at
+        // the winning round. Rewards are split evenly across the party so a
+        // full party kill nets the same total EXP/drops as a solo kill.
+        // Members who left/were kicked (flg_active = 'N') are excluded: they
+        // abandoned the fight, so they shouldn't share in the spoils or
+        // dilute the remaining fighters' cut.
+        $reward_recipients = array_values(array_filter($party_participants, function ($p)
         {
-            if ($p['side'] !== 'party' || !$p['id_user_ig'])
-            {
-                continue;
-            }
+            return $p['side'] === 'party'
+                && (int) $p['id_user_ig'] > 0
+                && trim((string) ($p['flg_active'] ?? 'S')) === 'S';
+        }));
 
+        $party_size = max(1, count($reward_recipients));
+        $reward_multiplier = 1.0 / $party_size;
+
+        foreach ($reward_recipients as $p)
+        {
             FUNZIONI::AddExpFromWildAnimal(
                 $conn,
                 (int) $p['id_user_ig'],
                 (int) $p['id_animal'],
                 (int) $wild['id_species'],
                 (int) $wild['lvl'],
-                $lang_suffix
+                $lang_suffix,
+                $reward_multiplier
             );
 
             FUNZIONI::AddDropsWildAnimalUser(
@@ -729,7 +1068,8 @@ function animaster_party_pve_finish_battle($conn, array $battle, $status, $id_wi
                 (int) $wild['id_species'],
                 (int) $wild['lvl'],
                 (int) $p['id_user_ig'],
-                $lang_suffix
+                $lang_suffix,
+                $reward_multiplier
             );
         }
 
@@ -850,6 +1190,11 @@ function animaster_party_pve_pick_wild_target(array $party_participants)
     foreach ($party_participants as $p)
     {
         if ($p['side'] !== 'party')
+        {
+            continue;
+        }
+
+        if (trim((string) ($p['flg_active'] ?? 'S')) !== 'S')
         {
             continue;
         }
@@ -1647,7 +1992,7 @@ function animaster_party_pve_resolve_round($conn, array $battle, $round, $lang_s
                     $battle,
                     'fled',
                     (int) $battle['id_wild_animal'],
-                    array_values($party_by_user),
+                    animaster_party_pve_fetch_participants($conn, $id_battle),
                     $wild,
                     $lang_suffix
                 );
@@ -1656,14 +2001,14 @@ function animaster_party_pve_resolve_round($conn, array $battle, $round, $lang_s
             {
                 $battle_status = animaster_party_pve_check_end($conn, $battle, array_values($party_by_user), $wild);
 
-                if ($battle_status === 'victory')
+                if ($battle_status === 'win')
                 {
                     animaster_party_pve_finish_battle(
                         $conn,
                         $battle,
-                        'victory',
+                        'win',
                         (int) $battle['id_wild_animal'],
-                        array_values($party_by_user),
+                        animaster_party_pve_fetch_participants($conn, $id_battle),
                         $wild,
                         $lang_suffix
                     );
@@ -1713,7 +2058,7 @@ function animaster_party_pve_resolve_round($conn, array $battle, $round, $lang_s
                     $battle,
                     'defeat',
                     (int) $battle['id_wild_animal'],
-                    array_values($party_by_user),
+                    animaster_party_pve_fetch_participants($conn, $id_battle),
                     $wild,
                     $lang_suffix
                 );
@@ -1744,7 +2089,7 @@ function animaster_party_pve_resolve_round($conn, array $battle, $round, $lang_s
 
     $stmt = $conn->prepare('
         UPDATE battles_party_pve
-        SET current_turn = :round, dt_m = NOW()
+        SET current_turn = :round, dt_round_started = NOW(), dt_m = NOW()
         WHERE id_battle_party_pve = :id_battle
     ');
     $stmt->execute([
@@ -1857,12 +2202,41 @@ function animaster_party_pve_build_meta($conn, array $battle, $id_user_ig, $lang
     $my_choice = $choice_by_user[(int) $id_user_ig] ?? null;
     $is_eligible = in_array((int) $id_user_ig, $alive_user_ids, true);
 
+    $allow_inactivity_vote = $battle_open && animaster_party_pve_party_allows_inactivity_vote($conn, $battle);
+    $inactivity_vote_delay_seconds = animaster_party_pve_inactivity_vote_delay_seconds();
+    $seconds_since_round_start = $battle_open ? animaster_party_pve_seconds_since_round_start($conn, $battle) : 0;
+
+    $votes_by_target = [];
+
+    if ($allow_inactivity_vote)
+    {
+        foreach (animaster_party_pve_fetch_inactivity_votes($conn, $id_battle, $round) as $vote_row)
+        {
+            $target_id = (int) $vote_row['id_user_ig_target'];
+
+            if (!isset($votes_by_target[$target_id]))
+            {
+                $votes_by_target[$target_id] = [];
+            }
+
+            $votes_by_target[$target_id][(int) $vote_row['id_user_ig_voter']] = trim((string) $vote_row['vote_choice']) === 'N' ? 'N' : 'Y';
+        }
+    }
+
     $allies = [];
 
     foreach ($participants as $p)
     {
         if ($p['side'] !== 'party')
         {
+            continue;
+        }
+
+        if (trim((string) ($p['flg_active'] ?? 'S')) !== 'S')
+        {
+            // Left/kicked from the party mid-battle: drop them from the
+            // planning roster entirely so they don't linger as a "ghost"
+            // slot in the confirm panel.
             continue;
         }
 
@@ -1874,10 +2248,40 @@ function animaster_party_pve_build_meta($conn, array $battle, $id_user_ig, $lang
             $display_name = $user ? (string) ($user['display_name'] ?: 'Player') : 'Player';
         }
 
-        $ally_choice = $choice_by_user[(int) $p['id_user_ig']] ?? null;
+        $ally_id = (int) $p['id_user_ig'];
+        $ally_choice = $choice_by_user[$ally_id] ?? null;
+        $ally_fainted = trim((string) $p['flg_fainted']) === 'S' || (int) $p['current_hp'] <= 0;
+
+        $is_votable = false;
+        $vote_yes = 0;
+        $vote_no = 0;
+        $my_vote = null;
+        $can_vote = false;
+
+        if ($allow_inactivity_vote && !$ally_fainted && $ally_choice === null && $ally_id !== (int) $id_user_ig)
+        {
+            $is_votable = $seconds_since_round_start >= $inactivity_vote_delay_seconds;
+
+            $target_votes = $votes_by_target[$ally_id] ?? [];
+
+            foreach ($target_votes as $choice_val)
+            {
+                if ($choice_val === 'Y')
+                {
+                    $vote_yes++;
+                }
+                else
+                {
+                    $vote_no++;
+                }
+            }
+
+            $my_vote = $target_votes[(int) $id_user_ig] ?? null;
+            $can_vote = $is_votable && $my_choice !== null;
+        }
 
         $allies[] = [
-            'id_user_ig' => (int) $p['id_user_ig'],
+            'id_user_ig' => $ally_id,
             'display_name' => $display_name,
             'id_animal' => (int) $p['id_animal'],
             'nickname' => (string) $p['nickname'],
@@ -1886,12 +2290,17 @@ function animaster_party_pve_build_meta($conn, array $battle, $id_user_ig, $lang
             'hp' => (int) $p['current_hp'],
             'max_hp' => (int) $p['max_hp'],
             'id_element' => (int) $p['id_element'],
-            'fainted' => trim((string) $p['flg_fainted']) === 'S' || (int) $p['current_hp'] <= 0,
-            'is_self' => (int) $p['id_user_ig'] === (int) $id_user_ig,
+            'fainted' => $ally_fainted,
+            'is_self' => $ally_id === (int) $id_user_ig,
             'has_choice' => $ally_choice !== null,
             'confirmed' => $ally_choice !== null && trim((string) $ally_choice['flg_confirmed']) === 'Y',
             'action_type' => $ally_choice ? (string) $ally_choice['action_type'] : '',
-            'action_label' => $ally_choice ? animaster_party_pve_describe_choice($conn, $ally_choice, $lang_suffix) : ''
+            'action_label' => $ally_choice ? animaster_party_pve_describe_choice($conn, $ally_choice, $lang_suffix) : '',
+            'is_votable' => $is_votable,
+            'vote_yes' => $vote_yes,
+            'vote_no' => $vote_no,
+            'my_vote' => $my_vote,
+            'can_vote' => $can_vote
         ];
     }
 
@@ -1932,7 +2341,10 @@ function animaster_party_pve_build_meta($conn, array $battle, $id_user_ig, $lang
         'wild_hp' => $wild ? (int) $wild['current_hp'] : 0,
         'wild_max_hp' => $wild ? (int) $wild['max_hp'] : 0,
         'battle_finished' => !$battle_open,
-        'is_leader' => (int) $battle['id_user_ig_leader'] === (int) $id_user_ig
+        'is_leader' => (int) $battle['id_user_ig_leader'] === (int) $id_user_ig,
+        'allow_inactivity_vote' => $allow_inactivity_vote,
+        'inactivity_vote_delay_seconds' => $inactivity_vote_delay_seconds,
+        'seconds_since_round_start' => $seconds_since_round_start
     ];
 }
 
@@ -2204,7 +2616,8 @@ function animaster_party_pve_handle_turn_request(
     $type,
     $id_action,
     $lang_suffix,
-    $id_item_type_selected = 0
+    $id_item_type_selected = 0,
+    $vote_choice = 'Y'
 )
 {
     $battle = animaster_party_pve_fetch_battle($conn, (int) $id_battle);
@@ -2253,6 +2666,63 @@ function animaster_party_pve_handle_turn_request(
         else if ($type === 'unconfirm')
         {
             animaster_party_pve_set_turn_choice_confirmed($conn, $id_battle, $round, $id_user_ig, false);
+        }
+        else if ($type === 'inactivity_vote')
+        {
+            if (!animaster_party_pve_party_allows_inactivity_vote($conn, $battle))
+            {
+                return ['error' => 'INACTIVITY_VOTE_DISABLED'];
+            }
+
+            $voter_choice = animaster_party_pve_user_turn_choice($conn, $id_battle, $round, $id_user_ig);
+
+            if (!$voter_choice)
+            {
+                return ['error' => 'MUST_ACT_FIRST'];
+            }
+
+            $id_target = (int) $id_action;
+
+            if ($id_target === (int) $id_user_ig || !in_array($id_target, $alive_user_ids, true))
+            {
+                return ['error' => 'INVALID_VOTE_TARGET'];
+            }
+
+            $target_choice = animaster_party_pve_user_turn_choice($conn, $id_battle, $round, $id_target);
+
+            if ($target_choice)
+            {
+                return ['error' => 'TARGET_ALREADY_ACTED'];
+            }
+
+            $delay = animaster_party_pve_inactivity_vote_delay_seconds();
+
+            if (animaster_party_pve_seconds_since_round_start($conn, $battle) < $delay)
+            {
+                return ['error' => 'TOO_EARLY'];
+            }
+
+            $choices = animaster_party_pve_fetch_turn_choices($conn, $id_battle, $round);
+            $choice_by_user = [];
+
+            foreach ($choices as $choice_row)
+            {
+                $choice_by_user[(int) $choice_row['id_user_ig']] = $choice_row;
+            }
+
+            animaster_party_pve_cast_inactivity_vote($conn, $id_battle, $round, $id_target, $id_user_ig, $vote_choice);
+
+            $tally = animaster_party_pve_tally_inactivity_votes($conn, $battle, $round, $id_target, $alive_party, $choice_by_user);
+
+            if (!empty($tally['decided']))
+            {
+                if ($tally['result'] === 'Y')
+                {
+                    animaster_party_pve_apply_forced_inactivity_action($conn, $id_battle, $round, $id_target, $participants, $lang_suffix);
+                }
+
+                animaster_party_pve_clear_inactivity_votes($conn, $id_battle, $round, $id_target);
+            }
         }
         else if ($type === 'action' && (int) $id_action === 4)
         {

@@ -10,6 +10,7 @@ $restarting_old_battle = isset($_POST['restarting_old_battle']) ? (string) $_POS
 $type = isset($_POST['type']) ? (string) $_POST['type'] : '';
 $id_action = isset($_POST['id']) ? (int) $_POST['id'] : 0;
 $id_item_type_selected = isset($_POST['id_item_type_selected']) ? (int) $_POST['id_item_type_selected'] : 0;
+$vote_choice = isset($_POST['vote_choice']) && (string) $_POST['vote_choice'] === 'N' ? 'N' : 'Y';
 $LANG = isset($_POST['lang']) ? (string) $_POST['lang'] : '_it';
 
 if ($id_user_ig <= 0 || $id_battle <= 0)
@@ -31,7 +32,8 @@ $result = animaster_party_pve_handle_turn_request(
     $type,
     $id_action,
     $LANG,
-    $id_item_type_selected
+    $id_item_type_selected,
+    $vote_choice
 );
 
 if (!empty($result['error']))

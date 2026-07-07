@@ -274,7 +274,23 @@ function animaster_party_disband($conn, $id_party)
     foreach ($member_ids as $member_id)
     {
         animaster_party_set_user_party($conn, (int) $member_id, 0);
+        animaster_party_pve_notify_member_departed($conn, (int) $member_id);
     }
+}
+
+/**
+ * Thin wrapper so party.php doesn't need a hard dependency on party_pve.php:
+ * lazily requires it and marks the departed member's battle slot (if any)
+ * inactive so an in-progress round doesn't wait on them forever.
+ */
+function animaster_party_pve_notify_member_departed($conn, $id_user_ig)
+{
+    if (!function_exists('animaster_party_pve_handle_member_departed'))
+    {
+        require_once __DIR__ . '/party_pve.php';
+    }
+
+    animaster_party_pve_handle_member_departed($conn, (int) $id_user_ig);
 }
 
 function animaster_party_user_busy($conn, $id_user_ig)
@@ -341,7 +357,47 @@ function animaster_party_build_state($conn, $id_user_ig)
         'is_leader' => (int) $party['id_user_ig_leader'] === $id_user_ig,
         'max_members' => (int) $party['max_members'],
         'member_count' => count($members),
-        'members' => $members
+        'members' => $members,
+        'allow_inactivity_vote' => trim((string) ($party['flg_allow_inactivity_vote'] ?? 'N')) === 'S'
+    ];
+}
+
+/**
+ * Leader-only toggle: when enabled, party PvE lets the rest of the party vote
+ * to force a random valid ability for a member who hasn't staged any action
+ * for the round after a fixed delay, instead of waiting on them indefinitely.
+ * Persists on the party so it applies to every future fight until changed.
+ */
+function animaster_party_set_inactivity_vote($conn, $id_leader, $enabled)
+{
+    $id_leader = (int) $id_leader;
+    $id_party = animaster_party_get_party_id($conn, $id_leader);
+
+    if ($id_party <= 0)
+    {
+        return ['error' => 'NOT_IN_PARTY'];
+    }
+
+    if (!animaster_party_is_leader($conn, $id_party, $id_leader))
+    {
+        return ['error' => 'NOT_LEADER'];
+    }
+
+    $stmt = $conn->prepare('
+        UPDATE parties
+        SET flg_allow_inactivity_vote = :flg,
+            dt_m = NOW()
+        WHERE id_party = :id_party
+        LIMIT 1
+    ');
+    $stmt->execute([
+        ':flg' => $enabled ? 'S' : 'N',
+        ':id_party' => $id_party
+    ]);
+
+    return [
+        'ok' => true,
+        'party' => animaster_party_build_state($conn, $id_leader)
     ];
 }
 
@@ -688,6 +744,7 @@ function animaster_party_leave($conn, $id_user_ig)
     ]);
 
     animaster_party_set_user_party($conn, $id_user_ig, 0);
+    animaster_party_pve_notify_member_departed($conn, $id_user_ig);
 
     $solo_disbanded = animaster_party_disband_if_solo_leader($conn, $id_party);
 
@@ -737,6 +794,7 @@ function animaster_party_kick($conn, $id_leader, $id_target)
     ]);
 
     animaster_party_set_user_party($conn, $id_target, 0);
+    animaster_party_pve_notify_member_departed($conn, $id_target);
 
     $solo_disbanded = animaster_party_disband_if_solo_leader($conn, $id_party);
 

@@ -20,6 +20,8 @@ var AnimasterParty = (function ()
     var leaveBtn = null;
     var closeBtn = null;
     var toggleBtn = null;
+    var settingsEl = null;
+    var inactivityVoteToggle = null;
 
     var hudEl = null;
     var hudListEl = null;
@@ -129,6 +131,8 @@ var AnimasterParty = (function ()
         leaveBtn = document.getElementById('party-leave-btn');
         closeBtn = document.getElementById('party-close');
         toggleBtn = document.getElementById('party-toggle');
+        settingsEl = document.getElementById('party-settings');
+        inactivityVoteToggle = document.getElementById('party-inactivity-vote-toggle');
         hudEl = document.getElementById('party-hud');
         hudListEl = document.getElementById('party-hud-list');
 
@@ -138,6 +142,11 @@ var AnimasterParty = (function ()
             {
                 toggle();
             });
+        }
+
+        if (inactivityVoteToggle)
+        {
+            inactivityVoteToggle.addEventListener('change', onToggleInactivityVoteSetting);
         }
 
         if (inviteAcceptBtn)
@@ -1028,6 +1037,46 @@ var AnimasterParty = (function ()
         });
     }
 
+    function onToggleInactivityVoteSetting()
+    {
+        if (!playerRef || !partyState || !inactivityVoteToggle)
+        {
+            return;
+        }
+
+        var desired = inactivityVoteToggle.checked;
+
+        if (!partyState.is_leader)
+        {
+            // Read-only for non-leaders: snap back to the actual party state.
+            inactivityVoteToggle.checked = !!partyState.allow_inactivity_vote;
+
+            return;
+        }
+
+        if (busy)
+        {
+            inactivityVoteToggle.checked = !!partyState.allow_inactivity_vote;
+
+            return;
+        }
+
+        busy = true;
+
+        AnimasterApi.setPartySetting(playerRef, 'allow_inactivity_vote', desired).then(function (result)
+        {
+            partyState = result.party || partyState;
+            renderPanel();
+        }).catch(function (err)
+        {
+            inactivityVoteToggle.checked = !!partyState.allow_inactivity_vote;
+            alert(errorText(err && err.message ? err.message : 'GENERIC'));
+        }).finally(function ()
+        {
+            busy = false;
+        });
+    }
+
     function renderPanel()
     {
         if (!memberListEl)
@@ -1054,6 +1103,11 @@ var AnimasterParty = (function ()
                 leaveBtn.hidden = true;
             }
 
+            if (settingsEl)
+            {
+                settingsEl.hidden = true;
+            }
+
             renderHud();
 
             return;
@@ -1068,6 +1122,18 @@ var AnimasterParty = (function ()
         {
             leaveBtn.hidden = false;
             leaveBtn.textContent = partyState.is_leader ? t('party.disband') : t('party.leave');
+        }
+
+        if (settingsEl)
+        {
+            settingsEl.hidden = false;
+            settingsEl.classList.toggle('is-readonly', !partyState.is_leader);
+        }
+
+        if (inactivityVoteToggle)
+        {
+            inactivityVoteToggle.checked = !!partyState.allow_inactivity_vote;
+            inactivityVoteToggle.disabled = !partyState.is_leader;
         }
 
         if (statusEl)
