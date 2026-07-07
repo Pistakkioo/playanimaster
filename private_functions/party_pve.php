@@ -341,6 +341,16 @@ function animaster_party_pve_alive_party_user_ids(array $alive_party_participant
 
 function animaster_party_pve_save_turn_choice($conn, $id_battle, $round, $id_user_ig, $action_type, $action_id, $id_item_type_selected = 0)
 {
+    $previous = animaster_party_pve_user_turn_choice($conn, $id_battle, $round, $id_user_ig);
+
+    // Only an actual change to an already-staged action invalidates teammates'
+    // confirmations. Staging a first-time choice is not a "change" (teammates
+    // who already confirmed were already aware this player hadn't chosen yet).
+    $changed = $previous
+        && ((string) $previous['action_type'] !== (string) $action_type
+            || (int) $previous['action_id'] !== (int) $action_id
+            || (int) $previous['id_item_type_selected'] !== (int) $id_item_type_selected);
+
     $stmt = $conn->prepare('
         INSERT INTO battles_party_pve_turn_choices (
             id_battle_party_pve, round, id_user_ig, action_type, action_id, id_item_type_selected, flg_confirmed
@@ -363,6 +373,30 @@ function animaster_party_pve_save_turn_choice($conn, $id_battle, $round, $id_use
         ':action_type_upd' => (string) $action_type,
         ':action_id_upd' => (int) $action_id,
         ':id_item_type_selected_upd' => (int) $id_item_type_selected
+    ]);
+
+    // A changed action invalidates the plan every other player already agreed
+    // to: force everyone to look at the new board and re-confirm.
+    if ($changed)
+    {
+        animaster_party_pve_unconfirm_others($conn, $id_battle, $round, $id_user_ig);
+    }
+}
+
+function animaster_party_pve_unconfirm_others($conn, $id_battle, $round, $id_user_ig)
+{
+    $stmt = $conn->prepare('
+        UPDATE battles_party_pve_turn_choices
+        SET flg_confirmed = \'N\'
+        WHERE id_battle_party_pve = :id_battle
+          AND round = :round
+          AND id_user_ig <> :id_user_ig
+          AND flg_confirmed = \'Y\'
+    ');
+    $stmt->execute([
+        ':id_battle' => (int) $id_battle,
+        ':round' => (int) $round,
+        ':id_user_ig' => (int) $id_user_ig
     ]);
 }
 

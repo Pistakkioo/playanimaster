@@ -1206,6 +1206,8 @@ var AnimasterCombat = (function ()
             return;
         }
 
+        var wasConfirmed = !!(partyPveMeta && partyPveMeta.my_confirmed);
+
         AnimasterApi.getBattleInfo({
             id_user_ig: player.id_user_ig || 0,
             id_battle: battle.id,
@@ -1230,6 +1232,19 @@ var AnimasterCombat = (function ()
                 stopPartyPvePoll();
                 applyStateFromMoves({ deferTerminalUi: true });
                 presentTurn(beforeMove, false, getPlayableMovesForTurn(moves, roundBefore));
+                return;
+            }
+
+            var nowConfirmed = !!(partyPveMeta && partyPveMeta.my_confirmed);
+
+            if (wasConfirmed && !nowConfirmed)
+            {
+                // A teammate changed their staged action after we confirmed:
+                // the board changed, so restore our menu and ask us to look again.
+                clearActionMenus();
+                showPartyPveActionMenu();
+                setMessage(t('party_pve.reconfirm_needed'));
+                renderPartyPvePlanningPanel();
                 return;
             }
 

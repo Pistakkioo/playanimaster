@@ -960,7 +960,8 @@ INSERT INTO `playanimaster_db`.`language_texts` (`id_language_text`, `dt_c`, `ta
 (479, '2026-07-06 23:30:00', 'party_pve.waiting_confirm', 'Waiting for the rest of the team to confirm…', 'In attesa che la squadra confermi…', 'À espera que a equipa confirme…'),
 (480, '2026-07-06 23:30:00', 'party_pve.staging_action', 'Locking in your action…', 'Sto registrando la tua azione…', 'A registar a tua ação…'),
 (481, '2026-07-06 23:30:00', 'party_pve.confirming', 'Confirming…', 'Confermando…', 'A confirmar…'),
-(482, '2026-07-06 23:30:00', 'party_pve.unconfirming', 'Changing your mind…', 'Sto annullando la conferma…', 'A anular a confirmação…')
+(482, '2026-07-06 23:30:00', 'party_pve.unconfirming', 'Changing your mind…', 'Sto annullando la conferma…', 'A anular a confirmação…'),
+(483, '2026-07-07 10:55:00', 'party_pve.reconfirm_needed', 'A teammate changed their action. Please confirm again.', 'Un compagno ha cambiato azione. Conferma di nuovo.', 'Um companheiro mudou de ação. Confirma novamente.')
 ON DUPLICATE KEY UPDATE
     `tag` = VALUES(`tag`),
     `text` = VALUES(`text`),

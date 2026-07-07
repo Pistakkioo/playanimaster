@@ -2770,8 +2770,12 @@ body:not(.animaster-chat-icon-only).animaster-chat-right .hud-bottom-dock {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
     flex-shrink: 0;
-    min-height: 92px;
+    min-height: 192px;
     margin-bottom: 12px;
+}
+
+#combat-units {
+    min-height: 192px;
 }
 
 .combat-units.combat-units-party-cols {
@@ -2966,18 +2970,26 @@ body:not(.animaster-chat-icon-only).animaster-chat-right .hud-bottom-dock {
 }
 
 .combat-menu-dock {
-    position: relative;
+    position: absolute;
     flex: 0 0 auto;
     min-height: 210px;
     max-height: min(42vh, 320px);
     margin-top: 10px;
     overflow: hidden;
     box-sizing: border-box;
+    bottom: 0px;
+    width: 100%;
+    /* This wrapper reserves space for the slide-in ability panels, but it
+       sits (via absolute positioning) on top of in-flow siblings like the
+       party PvE planning panel. Disable clicks on the empty wrapper itself
+       and only re-enable them on the actual interactive panels below, so
+       it never silently swallows clicks meant for elements underneath it. */
+    pointer-events: none;
 }
 
 .combat-abilities {
     position: absolute;
-    top: 0;
+    top: 20px;
     right: 0;
     bottom: 0;
     z-index: 2;
@@ -2991,6 +3003,7 @@ body:not(.animaster-chat-icon-only).animaster-chat-right .hud-bottom-dock {
     padding: 4px;
     transform: translateX(115%);
     transition: transform 0.25s ease;
+    pointer-events: auto;
 }
 
 .combat-abilities.is-open {
@@ -3124,6 +3137,7 @@ body:not(.animaster-chat-icon-only).animaster-chat-right .hud-bottom-dock {
     border: 1px solid #2d3a4d;
     border-radius: 8px;
     box-sizing: border-box;
+    width: 50% ;
 }
 
 .combat-party-pve-planning[hidden] {
