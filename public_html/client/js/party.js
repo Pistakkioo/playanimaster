@@ -376,6 +376,15 @@ var AnimasterParty = (function ()
             {
                 if (parseInt(others[i].id_player, 10) === parseInt(member.id_user_ig, 10))
                 {
+                    var livePos = typeof AnimasterWorld.getOtherWorldPos === 'function'
+                        ? AnimasterWorld.getOtherWorldPos(others[i])
+                        : null;
+
+                    if (livePos)
+                    {
+                        return livePos;
+                    }
+
                     var liveX = parseFloat(others[i].serverPositionX);
                     var liveZ = parseFloat(others[i].serverPositionZ);
 

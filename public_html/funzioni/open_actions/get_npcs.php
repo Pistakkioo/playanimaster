@@ -51,7 +51,7 @@ while($row = $result->fetch())
     {
         $dialogues = "";
         $result_conversations = $conn->query("
-            select id_conversation,id_npc,title$LANG as title,flg_register from conversations where id_npc = \"$id_npc\"
+            select id_conversation,id_npc,title$LANG as title,flg_register,flg_repeatable from conversations where id_npc = \"$id_npc\"
         ");
         while($row_conv = $result_conversations->fetch())
         {
@@ -75,7 +75,12 @@ while($row = $result->fetch())
             
             if($requirements_met2)
             {
-                if ($row_conv['flg_register'] === 'S'
+                // flg_register only gates whether a finish is written to user_conversations
+                // (used by 'conversation finished' / 'conversation not finished' requirements).
+                // flg_repeatable independently controls whether it keeps being offered once
+                // finished; conversations that never register are never marked finished, so
+                // they always show regardless of flg_repeatable.
+                if ($row_conv['flg_repeatable'] !== 'S'
                     && PLAYER_CONVERSATIONS::isFinished($conn, $id_user_ig, $id_conversation))
                 {
                     continue;

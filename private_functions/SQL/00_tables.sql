@@ -1575,3 +1575,39 @@ CREATE TABLE IF NOT EXISTS playanimaster_db.battles_party_pve_inactivity_votes (
     UNIQUE KEY uniq_bpp_inactivity_vote (id_battle_party_pve, round, id_user_ig_target, id_user_ig_voter),
     KEY idx_bpp_inactivity_vote_lookup (id_battle_party_pve, round, id_user_ig_target)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Module 04 (Quests): per-phase objectives for a quest. A phase can require
+-- several simultaneous objectives (sort_order for display); the phase only
+-- advances once every objective row for that phase is satisfied.
+CREATE TABLE IF NOT EXISTS playanimaster_db.quest_objectives (
+    id_quest_objective INT(11) NOT NULL AUTO_INCREMENT,
+    id_quest INT(11) NOT NULL,
+    phase INT(11) NOT NULL DEFAULT 1,
+    sort_order INT(11) NOT NULL DEFAULT 0,
+    objective_type VARCHAR(30) NOT NULL COMMENT 'kill_species | collect_item | talk_npc | reach_level',
+    target_ref INT(11) DEFAULT NULL COMMENT 'id_species / id_item_type / id_conversation, depending on objective_type; NULL for reach_level',
+    target_count INT(11) NOT NULL DEFAULT 1 COMMENT 'kill/collect count, or the target level for reach_level',
+    description VARCHAR(200) DEFAULT NULL,
+    description_it VARCHAR(200) DEFAULT NULL,
+    description_pt VARCHAR(200) DEFAULT NULL,
+    PRIMARY KEY (id_quest_objective),
+    KEY idx_quest_objectives_quest_phase (id_quest, phase)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Module 04 (Quests): persisted counter for objective types that track a
+-- transient event (kills). Objectives that can be read live from existing
+-- state (collect_item -> inventory count, talk_npc -> user_conversations,
+-- reach_level -> users_ig.level) do NOT get a row here; QUESTS::getObjectiveProgress
+-- computes those on demand instead.
+CREATE TABLE IF NOT EXISTS playanimaster_db.user_quest_objective_progress (
+    id_user_quest_objective_progress INT(11) NOT NULL AUTO_INCREMENT,
+    id_user_ig INT(11) NOT NULL,
+    id_quest_objective INT(11) NOT NULL,
+    progress_count INT(11) NOT NULL DEFAULT 0,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_user_quest_objective_progress),
+    UNIQUE KEY uniq_user_quest_objective_progress (id_user_ig, id_quest_objective)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

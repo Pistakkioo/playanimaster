@@ -104,6 +104,14 @@ $bootstrap = [
                     <div id="party-hud-list" class="party-hud-list"></div>
                 </div>
 
+                <div id="quest-tracker" class="quest-tracker" hidden aria-hidden="true">
+                    <div id="quest-tracker-header" class="quest-tracker-header">
+                        <span id="quest-tracker-name" class="quest-tracker-name">—</span>
+                        <button type="button" id="quest-tracker-clear" class="quest-tracker-clear" title="Stop tracking" data-i18n-title="quest.stop_tracking" aria-label="Stop tracking">&times;</button>
+                    </div>
+                    <div id="quest-tracker-objectives" class="quest-tracker-objectives"></div>
+                </div>
+
                 <aside id="inventory-panel" class="inventory-panel side-panel" hidden aria-hidden="true">
                     <header class="inventory-header side-panel-header">
                         <h2 class="inventory-title" data-i18n="inventory.title">Inventory</h2>
@@ -249,6 +257,17 @@ $bootstrap = [
                         </div>
                     </div>
                 </aside>
+
+                <aside id="quest-panel" class="quest-panel side-panel" hidden aria-hidden="true">
+                    <header class="quest-header side-panel-header">
+                        <h2 class="quest-title" data-i18n="quest.title">Quest Log</h2>
+                        <button type="button" id="quest-close" class="quest-close" title="Close" data-i18n-title="ui.close">&times;</button>
+                    </header>
+                    <div class="quest-body">
+                        <div id="quest-list" class="quest-list"></div>
+                        <p id="quest-empty" class="quest-empty" data-i18n="quest.none_active">No quests yet. Talk to NPCs to find one!</p>
+                    </div>
+                </aside>
             </div>
         </div>
     </div>
@@ -262,6 +281,7 @@ $bootstrap = [
             <button type="button" id="self-toggle" class="hud-self-toggle" aria-expanded="false" data-i18n="self.title">Self</button>
             <button type="button" id="team-toggle" class="hud-team-toggle" aria-expanded="false" data-i18n="hud.team">Team</button>
             <button type="button" id="party-toggle" class="hud-party-toggle" aria-expanded="false" data-i18n="party.title">Party</button>
+            <button type="button" id="quest-toggle" class="hud-quest-toggle" aria-expanded="false" data-i18n="quest.title">Quest Log</button>
             <button type="button" id="inventory-toggle" class="hud-inventory-toggle" aria-expanded="false" data-i18n="hud.bag">Bag</button>
             <a class="hud-logout" id="hud-characters" href="character_select.php?switch=1" data-i18n="hud.characters">Characters</a>
             <a class="hud-logout" href="logout.php" data-i18n="hud.logout">Logout</a>
@@ -491,6 +511,7 @@ $bootstrap = [
     <script src="<?php echo animaster_h(animaster_asset_url('js/target.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/trade.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/party.js')); ?>"></script>
+    <script src="<?php echo animaster_h(animaster_asset_url('js/quests.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/duel.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/chat.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/game.js')); ?>"></script>

@@ -89,15 +89,24 @@ var AnimasterPlayerChatBubbles = (function ()
                 continue;
             }
 
-            var ox = parseFloat(others[i].serverPositionX);
-            var oz = parseFloat(others[i].serverPositionZ);
+            var pos = typeof AnimasterWorld !== 'undefined' && AnimasterWorld.getOtherWorldPos
+                ? AnimasterWorld.getOtherWorldPos(others[i])
+                : null;
 
-            if (!isFinite(ox) || !isFinite(oz))
+            if (!pos)
             {
-                return null;
+                var ox = parseFloat(others[i].serverPositionX);
+                var oz = parseFloat(others[i].serverPositionZ);
+
+                if (!isFinite(ox) || !isFinite(oz))
+                {
+                    return null;
+                }
+
+                pos = { x: ox, z: oz };
             }
 
-            return { x: ox, z: oz };
+            return pos;
         }
 
         return null;

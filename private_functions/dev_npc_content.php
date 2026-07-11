@@ -31,7 +31,15 @@ function dev_npc_requirement_types()
         'item',
         'conversation finished',
         'conversation not finished',
-        'player class'
+        'conversation requirements not met',
+        'player class',
+        'player class not',
+        'quest not started',
+        'quest started',
+        'quest ready to turn in',
+        'quest completed',
+        'quest phase',
+        'quest phase completed'
     ];
 }
 
@@ -81,6 +89,37 @@ function dev_npc_fetch_buff_definitions(PDO $conn)
 }
 
 /**
+ * Species pickable as a `kill_species` quest objective target.
+ */
+function dev_npc_fetch_species(PDO $conn)
+{
+    $stmt = $conn->query('
+        SELECT id_species, species, species_it, species_pt
+        FROM species
+        WHERE flg_attivo = \'S\'
+        ORDER BY species ASC
+    ');
+
+    return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+}
+
+/**
+ * Module 04 (Quests): objective_type catalog for quest_objectives (see
+ * QUESTS::OBJECTIVE_* constants in private_functions/quests.php).
+ *
+ * @return array<int, array{value: string, label: string}>
+ */
+function dev_npc_objective_types()
+{
+    return [
+        ['value' => 'kill_species', 'label' => 'kill_species (target_ref = id_species)'],
+        ['value' => 'collect_item', 'label' => 'collect_item (target_ref = id_item_type)'],
+        ['value' => 'talk_npc', 'label' => 'talk_npc (target_ref = id_conversation)'],
+        ['value' => 'reach_level', 'label' => 'reach_level (target_ref unused; target_count = level)'],
+    ];
+}
+
+/**
  * ref_table values used by requirements (labels for the dev form).
  *
  * @return array<int, array{value: string, label: string}>
@@ -89,15 +128,94 @@ function dev_npc_requirement_ref_tables()
 {
     return [
         ['value' => '', 'label' => '— none —'],
-        ['value' => 'POTION', 'label' => 'POTION (item type)'],
-        ['value' => 'PLAYER_CLASS', 'label' => 'PLAYER_CLASS (gameplay class)'],
-        ['value' => 'CONVERSATION', 'label' => 'CONVERSATION'],
-        ['value' => 'ZERO', 'label' => 'ZERO (no animals)'],
-        ['value' => 'HAS_ANIMALS', 'label' => 'HAS_ANIMALS'],
-        ['value' => 'LT_2', 'label' => 'LT_2 (fewer than 2 animals)'],
-        ['value' => 'LT_3', 'label' => 'LT_3 (fewer than 3 animals)'],
-        ['value' => 'NOT', 'label' => 'NOT (negate player class match)'],
+        ['value' => 'item_types', 'label' => 'item type'],
+        ['value' => 'player_classes', 'label' => 'player class'],
+        ['value' => 'conversations', 'label' => 'conversation'],
+        ['value' => 'animals', 'label' => 'animals'],
+        ['value' => 'users_ig.level', 'label' => 'character level'],
+        ['value' => 'quests', 'label' => 'QUEST (quest state, id_ref = id_quest)'],
     ];
+}
+
+/**
+ * Legacy ref_table values stored in DB → canonical dev form ref_table.
+ *
+ * @return array<string, string>
+ */
+function dev_npc_requirement_ref_table_legacy_map()
+{
+    return [
+        'QUEST' => 'quests',
+        'PLAYER_CLASS' => 'player_classes',
+        'CONVERSATION' => 'conversations',
+        'POTION' => 'item_types',
+        'ZERO' => 'animals',
+        'HAS_ANIMALS' => 'animals',
+        'LT_2' => 'animals',
+        'LT_3' => 'animals',
+    ];
+}
+
+function dev_npc_normalize_requirement_ref_table($ref_table)
+{
+    $ref_table = (string) $ref_table;
+    $map = dev_npc_requirement_ref_table_legacy_map();
+
+    return isset($map[$ref_table]) ? $map[$ref_table] : $ref_table;
+}
+
+/**
+ * Whether a stored ref_table matches a canonical id_ref option group.
+ */
+function dev_npc_requirement_ref_table_is($stored_ref_table, $canonical_ref_table)
+{
+    $stored_ref_table = (string) $stored_ref_table;
+    $canonical_ref_table = (string) $canonical_ref_table;
+
+    if ($stored_ref_table === $canonical_ref_table)
+    {
+        return true;
+    }
+
+    foreach (dev_npc_requirement_ref_table_legacy_map() as $legacy => $canonical)
+    {
+        if ($canonical === $canonical_ref_table && $stored_ref_table === $legacy)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Comma-separated legacy aliases for data-ref-table-alt on id_ref options.
+ */
+function dev_npc_requirement_ref_table_legacy_alts($canonical_ref_table)
+{
+    $alts = [];
+
+    foreach (dev_npc_requirement_ref_table_legacy_map() as $legacy => $canonical)
+    {
+        if ($canonical === $canonical_ref_table)
+        {
+            $alts[] = $legacy;
+        }
+    }
+
+    return implode(',', $alts);
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function dev_npc_requirement_id_ref_selected(array $row, $canonical_ref_table, $option_id_ref)
+{
+    $ref_table = isset($row['ref_table']) ? (string) $row['ref_table'] : '';
+    $id_ref = isset($row['id_ref']) ? (int) $row['id_ref'] : 0;
+
+    return dev_npc_requirement_ref_table_is($ref_table, $canonical_ref_table)
+        && $id_ref === (int) $option_id_ref;
 }
 
 /**
@@ -113,6 +231,7 @@ function dev_npc_consequence_ref_tables()
         ['value' => 'POTION', 'label' => 'POTION (item type alias)'],
         ['value' => 'PLAYER_CLASS', 'label' => 'PLAYER_CLASS'],
         ['value' => 'buff_definitions', 'label' => 'buff_definitions'],
+        ['value' => 'QUEST', 'label' => 'QUEST (quest lifecycle, id_ref = id_quest)'],
     ];
 }
 
@@ -126,6 +245,8 @@ function dev_npc_consequence_types()
         ['value' => 'receive_random_animal', 'label' => 'receive_random_animal'],
         ['value' => '[set player_class]', 'label' => '[set player_class]'],
         ['value' => 'grant_team_buff', 'label' => 'grant_team_buff'],
+        ['value' => '[start quest]', 'label' => '[start quest]'],
+        ['value' => '[complete quest]', 'label' => '[complete quest]'],
     ];
 }
 
@@ -334,6 +455,9 @@ function dev_npc_requirement_link_tree_item(array $req, $link_kind)
     $note = !empty($req['descrizione']) ? (string) $req['descrizione'] : '';
     $edit_url = dev_admin_url(['tab' => 'req', 'edit' => $edit_type, 'id' => $link_id]);
     $catalog_url = dev_admin_url(['tab' => 'req', 'edit' => 'requirement', 'id' => (int) $req['id_requirement']]);
+    $delete_action = 'delete_' . $edit_type;
+    $confirm = 'Delete requirement link #' . $link_id . '? This removes only the link, not the catalog requirement.';
+    $token = function_exists('dev_admin_token') ? dev_admin_token() : '';
 
     $html = '<li class="dev-req-item">';
     $html .= '<span class="badge badge-req">req</span>';
@@ -348,6 +472,46 @@ function dev_npc_requirement_link_tree_item(array $req, $link_kind)
     $html .= '<span class="dev-req-actions">';
     $html .= '<a class="btn btn-outline-secondary btn-sm dev-btn-mini" href="' . dev_admin_h($edit_url) . '" title="Edit link (min/max, description)">✎</a>';
     $html .= '<a class="btn btn-outline-secondary btn-sm dev-btn-mini ms-1" href="' . dev_admin_h($catalog_url) . '" title="Edit catalog requirement">cat</a>';
+    $html .= '<form method="post" class="dev-req-delete-form ms-1" onsubmit="return confirm(' . json_encode($confirm) . ');">';
+    $html .= '<input type="hidden" name="T" value="' . dev_admin_h($token) . '">';
+    $html .= '<input type="hidden" name="action" value="' . dev_admin_h($delete_action) . '">';
+    $html .= '<input type="hidden" name="' . dev_admin_h($id_field) . '" value="' . $link_id . '">';
+    $html .= '<button type="submit" class="btn btn-outline-danger btn-sm dev-btn-mini" title="Delete link">&#128465;</button>';
+    $html .= '</form>';
+    $html .= '</span>';
+    $html .= '</li>';
+
+    return $html;
+}
+
+/**
+ * Inline tree row for a quest_objectives row (read-only + edit link).
+ */
+function dev_npc_quest_objective_tree_item(array $obj, $preview_lang = 'en')
+{
+    $edit_url = dev_admin_url(['edit' => 'quest_objective', 'id' => (int) $obj['id_quest_objective']]);
+    $desc = dev_npc_localized_field($obj, 'description', $preview_lang);
+    $target_ref = (int) ($obj['target_ref'] ?? 0);
+
+    $catalog = (string) $obj['objective_type'];
+
+    if ($target_ref > 0)
+    {
+        $catalog .= ' · ref=' . $target_ref;
+    }
+
+    $html = '<li class="dev-req-item">';
+    $html .= '<span class="badge badge-req">P' . (int) $obj['phase'] . '.' . (int) $obj['sort_order'] . '</span>';
+    $html .= '<span class="dev-req-catalog">' . dev_admin_h($catalog) . '</span>';
+    $html .= '<span class="dev-req-range" title="target_count">×' . (int) $obj['target_count'] . '</span>';
+
+    if ($desc !== '')
+    {
+        $html .= '<span class="dev-req-note dev-loc-text" ' . dev_npc_loc_data_attrs($obj, 'description') . '>' . dev_admin_h($desc) . '</span>';
+    }
+
+    $html .= '<span class="dev-req-actions">';
+    $html .= '<a class="btn btn-outline-secondary btn-sm dev-btn-mini" href="' . dev_admin_h($edit_url) . '" title="Edit objective">✎</a>';
     $html .= '</span>';
     $html .= '</li>';
 
@@ -546,6 +710,7 @@ function dev_npc_requirement_link_ref_fields(array $ctx)
     $prefix = (string) $ctx['prefix'];
     $row = isset($ctx['row']) && is_array($ctx['row']) ? $ctx['row'] : [];
     $ref_table = isset($row['ref_table']) ? (string) $row['ref_table'] : '';
+    $ref_table_normalized = dev_npc_normalize_requirement_ref_table($ref_table);
     $id_ref = isset($row['id_ref']) ? (int) $row['id_ref'] : 0;
     $ref_description = isset($row['ref_description']) ? (string) $row['ref_description'] : '';
     $ref_table_id = $prefix . '-ref-table';
@@ -558,34 +723,40 @@ function dev_npc_requirement_link_ref_fields(array $ctx)
             <label class="form-label">ref_table</label>
             <select class="form-select form-select-sm dev-req-ref-table" name="ref_table" id="<?php echo dev_admin_h($ref_table_id); ?>">
                 <?php foreach ($ctx['requirement_ref_tables'] as $ref_row): ?>
-                <option value="<?php echo dev_admin_h($ref_row['value']); ?>"<?php echo $ref_table === $ref_row['value'] ? ' selected' : ''; ?>><?php echo dev_admin_h($ref_row['label']); ?></option>
+                <option value="<?php echo dev_admin_h($ref_row['value']); ?>"<?php echo ($ref_table === $ref_row['value'] || $ref_table_normalized === $ref_row['value']) ? ' selected' : ''; ?>><?php echo dev_admin_h($ref_row['label']); ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
         <div class="mb-2">
             <label class="form-label">id_ref</label>
             <select class="form-select form-select-sm dev-req-id-ref" name="id_ref" id="<?php echo dev_admin_h($id_ref_id); ?>">
-                <option value="0" data-ref-table="">0 — not used</option>
+                <option value="0" data-ref-table="" data-ref-table-alt=""<?php echo ($ref_table === '' || $ref_table_normalized === '') && $id_ref === 0 ? ' selected' : ''; ?>>0 — not used</option>
+                <option value="0" data-ref-table="users_ig.level" data-ref-table-alt=""<?php echo dev_npc_requirement_ref_table_is($ref_table, 'users_ig.level') && $id_ref === 0 ? ' selected' : ''; ?>>0 — character level (no id_ref)</option>
                 <?php foreach ($ctx['item_types'] as $item): ?>
-                <option value="<?php echo (int) $item['id_item_type']; ?>" data-ref-table="POTION" data-ref-table-alt="item_types"<?php echo in_array($ref_table, ['POTION', 'item_types'], true) && $id_ref === (int) $item['id_item_type'] ? ' selected' : ''; ?>>
+                <option value="<?php echo (int) $item['id_item_type']; ?>" data-ref-table="item_types" data-ref-table-alt="<?php echo dev_admin_h(dev_npc_requirement_ref_table_legacy_alts('item_types')); ?>"<?php echo dev_npc_requirement_id_ref_selected($row, 'item_types', (int) $item['id_item_type']) ? ' selected' : ''; ?>>
                     #<?php echo (int) $item['id_item_type']; ?> <?php echo dev_admin_h($item['nome'] ?: $item['item_type']); ?>
                 </option>
                 <?php endforeach; ?>
                 <?php foreach ($ctx['flat_conversations'] as $c):
                     $conv_labels = dev_npc_conversation_select_labels($c); ?>
-                <option value="<?php echo (int) $c['id_conversation']; ?>" class="dev-loc-option" data-ref-table="CONVERSATION" <?php echo dev_npc_loc_data_attrs_from_map($conv_labels); ?><?php echo $ref_table === 'CONVERSATION' && $id_ref === (int) $c['id_conversation'] ? ' selected' : ''; ?>>
+                <option value="<?php echo (int) $c['id_conversation']; ?>" class="dev-loc-option" data-ref-table="conversations" data-ref-table-alt="<?php echo dev_admin_h(dev_npc_requirement_ref_table_legacy_alts('conversations')); ?>" <?php echo dev_npc_loc_data_attrs_from_map($conv_labels); ?><?php echo dev_npc_requirement_id_ref_selected($row, 'conversations', (int) $c['id_conversation']) ? ' selected' : ''; ?>>
                     <?php echo dev_admin_h($conv_labels[$ctx['preview_lang']]); ?>
                 </option>
                 <?php endforeach; ?>
                 <?php foreach ($ctx['player_classes'] as $pc): ?>
-                <option value="<?php echo (int) $pc['id_player_class']; ?>" data-ref-table="PLAYER_CLASS" data-ref-description="<?php echo dev_admin_h($pc['code']); ?>"<?php echo $ref_table === 'PLAYER_CLASS' && $id_ref === (int) $pc['id_player_class'] ? ' selected' : ''; ?>>
+                <option value="<?php echo (int) $pc['id_player_class']; ?>" data-ref-table="player_classes" data-ref-table-alt="<?php echo dev_admin_h(dev_npc_requirement_ref_table_legacy_alts('player_classes')); ?>" data-ref-description="<?php echo dev_admin_h($pc['code']); ?>"<?php echo dev_npc_requirement_id_ref_selected($row, 'player_classes', (int) $pc['id_player_class']) ? ' selected' : ''; ?>>
                     #<?php echo (int) $pc['id_player_class']; ?> <?php echo dev_admin_h($pc['code']); ?> — <?php echo dev_admin_h($pc['name']); ?>
                 </option>
                 <?php endforeach; ?>
-                <option value="0" data-ref-table="ZERO"<?php echo $ref_table === 'ZERO' ? ' selected' : ''; ?>>0 — ZERO</option>
-                <option value="0" data-ref-table="HAS_ANIMALS"<?php echo in_array($ref_table, ['HAS_ANIMALS', 'animals'], true) ? ' selected' : ''; ?>>0 — HAS_ANIMALS / animals</option>
-                <option value="0" data-ref-table="LT_2"<?php echo $ref_table === 'LT_2' ? ' selected' : ''; ?>>0 — LT_2</option>
-                <option value="0" data-ref-table="LT_3"<?php echo $ref_table === 'LT_3' ? ' selected' : ''; ?>>0 — LT_3</option>
+                <?php foreach (($ctx['flat_quests'] ?? []) as $q): ?>
+                <option value="<?php echo (int) $q['id_quest']; ?>" data-ref-table="quests" data-ref-table-alt="<?php echo dev_admin_h(dev_npc_requirement_ref_table_legacy_alts('quests')); ?>"<?php echo dev_npc_requirement_id_ref_selected($row, 'quests', (int) $q['id_quest']) ? ' selected' : ''; ?>>
+                    #<?php echo (int) $q['id_quest']; ?> <?php echo dev_admin_h($q['quest']); ?>
+                </option>
+                <?php endforeach; ?>
+                <option value="0" data-ref-table="animals" data-ref-table-alt="ZERO"<?php echo dev_npc_requirement_ref_table_is($ref_table, 'animals') && $ref_table === 'ZERO' ? ' selected' : ''; ?>>0 — ZERO (no animals)</option>
+                <option value="0" data-ref-table="animals" data-ref-table-alt="HAS_ANIMALS,animals"<?php echo dev_npc_requirement_ref_table_is($ref_table, 'animals') && in_array($ref_table, ['HAS_ANIMALS', 'animals'], true) ? ' selected' : ''; ?>>0 — HAS_ANIMALS / animals</option>
+                <option value="0" data-ref-table="animals" data-ref-table-alt="LT_2"<?php echo $ref_table === 'LT_2' ? ' selected' : ''; ?>>0 — LT_2 (fewer than 2)</option>
+                <option value="0" data-ref-table="animals" data-ref-table-alt="LT_3"<?php echo $ref_table === 'LT_3' ? ' selected' : ''; ?>>0 — LT_3 (fewer than 3)</option>
             </select>
         </div>
         <div class="mb-2">
@@ -650,6 +821,11 @@ function dev_npc_consequence_link_ref_fields(array $ctx)
                 <?php foreach (($ctx['buff_definitions'] ?? []) as $buff): ?>
                 <option value="<?php echo (int) $buff['id_buff_definition']; ?>" data-ref-table="buff_definitions" data-ref-description="<?php echo dev_admin_h($buff['buff_code']); ?>"<?php echo $ref_table === 'buff_definitions' && $id_ref === (int) $buff['id_buff_definition'] ? ' selected' : ''; ?>>
                     #<?php echo (int) $buff['id_buff_definition']; ?> <?php echo dev_admin_h($buff['buff_code']); ?> — <?php echo dev_admin_h($buff['name']); ?> (<?php echo dev_admin_h($buff['target_entity']); ?>)
+                </option>
+                <?php endforeach; ?>
+                <?php foreach (($ctx['flat_quests'] ?? []) as $q): ?>
+                <option value="<?php echo (int) $q['id_quest']; ?>" data-ref-table="QUEST"<?php echo $ref_table === 'QUEST' && $id_ref === (int) $q['id_quest'] ? ' selected' : ''; ?>>
+                    #<?php echo (int) $q['id_quest']; ?> <?php echo dev_admin_h($q['quest']); ?>
                 </option>
                 <?php endforeach; ?>
             </select>
@@ -845,7 +1021,30 @@ function dev_npc_fetch_tree(PDO $conn)
             if (isset($tree[$id_npc]))
             {
                 $quest['requirements'] = [];
+                $quest['objectives'] = [];
                 $tree[$id_npc]['quests'][(int) $quest['id_quest']] = $quest;
+            }
+        }
+    }
+
+    $stmt_qo = $conn->query('
+        SELECT * FROM quest_objectives
+        ORDER BY id_quest ASC, phase ASC, sort_order ASC, id_quest_objective ASC
+    ');
+
+    if ($stmt_qo)
+    {
+        while ($row = $stmt_qo->fetch(PDO::FETCH_ASSOC))
+        {
+            $id_quest = (int) $row['id_quest'];
+
+            foreach ($tree as $id_npc => $npc_data)
+            {
+                if (isset($npc_data['quests'][$id_quest]))
+                {
+                    $tree[$id_npc]['quests'][$id_quest]['objectives'][] = $row;
+                    break;
+                }
             }
         }
     }
@@ -1090,8 +1289,8 @@ function dev_npc_handle_post(PDO $conn, array $post)
 
             case 'add_conversation':
                 $stmt = $conn->prepare('
-                    INSERT INTO conversations (id_npc, visible, title, title_it, title_pt, flg_register)
-                    VALUES (:id_npc, :visible, :title, :title_it, :title_pt, :flg_register)
+                    INSERT INTO conversations (id_npc, visible, title, title_it, title_pt, flg_register, flg_repeatable)
+                    VALUES (:id_npc, :visible, :title, :title_it, :title_pt, :flg_register, :flg_repeatable)
                 ');
                 $stmt->execute([
                     ':id_npc' => dev_npc_post_int($post, 'id_npc'),
@@ -1099,7 +1298,8 @@ function dev_npc_handle_post(PDO $conn, array $post)
                     ':title' => dev_npc_post_str($post, 'title', 200),
                     ':title_it' => dev_npc_post_str($post, 'title_it', 200),
                     ':title_pt' => dev_npc_post_str($post, 'title_pt', 200),
-                    ':flg_register' => dev_npc_post_yn($post, 'flg_register', 'N')
+                    ':flg_register' => dev_npc_post_yn($post, 'flg_register', 'N'),
+                    ':flg_repeatable' => dev_npc_post_yn($post, 'flg_repeatable', 'N')
                 ]);
 
                 return ['ok' => true, 'message' => 'Conversation created (id ' . $conn->lastInsertId() . ').'];
@@ -1112,7 +1312,8 @@ function dev_npc_handle_post(PDO $conn, array $post)
                         title = :title,
                         title_it = :title_it,
                         title_pt = :title_pt,
-                        flg_register = :flg_register
+                        flg_register = :flg_register,
+                        flg_repeatable = :flg_repeatable
                     WHERE id_conversation = :id_conversation
                     LIMIT 1
                 ');
@@ -1123,7 +1324,8 @@ function dev_npc_handle_post(PDO $conn, array $post)
                     ':title' => dev_npc_post_str($post, 'title', 200),
                     ':title_it' => dev_npc_post_str($post, 'title_it', 200),
                     ':title_pt' => dev_npc_post_str($post, 'title_pt', 200),
-                    ':flg_register' => dev_npc_post_yn($post, 'flg_register', 'N')
+                    ':flg_register' => dev_npc_post_yn($post, 'flg_register', 'N'),
+                    ':flg_repeatable' => dev_npc_post_yn($post, 'flg_repeatable', 'N')
                 ]);
 
                 return ['ok' => true, 'message' => 'Conversation updated (id ' . dev_npc_post_int($post, 'id_conversation') . ').'];
@@ -1213,12 +1415,25 @@ function dev_npc_handle_post(PDO $conn, array $post)
 
             case 'add_quest':
                 $stmt = $conn->prepare('
-                    INSERT INTO quests (id_starter_npc, quest, repeatable, quest_type, lvl_min, lvl_max, ids_quests_required)
-                    VALUES (:id_starter_npc, :quest, :repeatable, :quest_type, :lvl_min, :lvl_max, :ids_quests_required)
+                    INSERT INTO quests (
+                        id_starter_npc, quest, quest_it, quest_pt,
+                        description, description_it, description_pt,
+                        repeatable, quest_type, lvl_min, lvl_max, ids_quests_required
+                    )
+                    VALUES (
+                        :id_starter_npc, :quest, :quest_it, :quest_pt,
+                        :description, :description_it, :description_pt,
+                        :repeatable, :quest_type, :lvl_min, :lvl_max, :ids_quests_required
+                    )
                 ');
                 $stmt->execute([
                     ':id_starter_npc' => dev_npc_post_int($post, 'id_starter_npc'),
                     ':quest' => dev_npc_post_str($post, 'quest', 200),
+                    ':quest_it' => dev_npc_post_str($post, 'quest_it', 200) ?: null,
+                    ':quest_pt' => dev_npc_post_str($post, 'quest_pt', 200) ?: null,
+                    ':description' => dev_npc_post_str($post, 'description', 1000) ?: null,
+                    ':description_it' => dev_npc_post_str($post, 'description_it', 1000) ?: null,
+                    ':description_pt' => dev_npc_post_str($post, 'description_pt', 1000) ?: null,
                     ':repeatable' => dev_npc_post_yn($post, 'repeatable', 'N'),
                     ':quest_type' => dev_npc_post_str($post, 'quest_type', 100),
                     ':lvl_min' => dev_npc_post_int($post, 'lvl_min'),
@@ -1233,6 +1448,11 @@ function dev_npc_handle_post(PDO $conn, array $post)
                     UPDATE quests
                     SET id_starter_npc = :id_starter_npc,
                         quest = :quest,
+                        quest_it = :quest_it,
+                        quest_pt = :quest_pt,
+                        description = :description,
+                        description_it = :description_it,
+                        description_pt = :description_pt,
                         repeatable = :repeatable,
                         quest_type = :quest_type,
                         lvl_min = :lvl_min,
@@ -1245,6 +1465,11 @@ function dev_npc_handle_post(PDO $conn, array $post)
                     ':id_quest' => dev_npc_post_int($post, 'id_quest'),
                     ':id_starter_npc' => dev_npc_post_int($post, 'id_starter_npc'),
                     ':quest' => dev_npc_post_str($post, 'quest', 200),
+                    ':quest_it' => dev_npc_post_str($post, 'quest_it', 200) ?: null,
+                    ':quest_pt' => dev_npc_post_str($post, 'quest_pt', 200) ?: null,
+                    ':description' => dev_npc_post_str($post, 'description', 1000) ?: null,
+                    ':description_it' => dev_npc_post_str($post, 'description_it', 1000) ?: null,
+                    ':description_pt' => dev_npc_post_str($post, 'description_pt', 1000) ?: null,
                     ':repeatable' => dev_npc_post_yn($post, 'repeatable', 'N'),
                     ':quest_type' => dev_npc_post_str($post, 'quest_type', 100),
                     ':lvl_min' => dev_npc_post_int($post, 'lvl_min'),
@@ -1253,6 +1478,66 @@ function dev_npc_handle_post(PDO $conn, array $post)
                 ]);
 
                 return ['ok' => true, 'message' => 'Quest updated (id ' . dev_npc_post_int($post, 'id_quest') . ').'];
+
+            case 'add_quest_objective':
+                $stmt = $conn->prepare('
+                    INSERT INTO quest_objectives (
+                        id_quest, phase, sort_order, objective_type, target_ref, target_count,
+                        description, description_it, description_pt
+                    )
+                    VALUES (
+                        :id_quest, :phase, :sort_order, :objective_type, :target_ref, :target_count,
+                        :description, :description_it, :description_pt
+                    )
+                ');
+                $stmt->execute([
+                    ':id_quest' => dev_npc_post_int($post, 'id_quest'),
+                    ':phase' => dev_npc_post_int($post, 'phase', 1),
+                    ':sort_order' => dev_npc_post_int($post, 'sort_order'),
+                    ':objective_type' => dev_npc_post_str($post, 'objective_type', 30),
+                    ':target_ref' => dev_npc_post_int($post, 'target_ref') ?: null,
+                    ':target_count' => dev_npc_post_int($post, 'target_count', 1) ?: 1,
+                    ':description' => dev_npc_post_str($post, 'description', 200) ?: null,
+                    ':description_it' => dev_npc_post_str($post, 'description_it', 200) ?: null,
+                    ':description_pt' => dev_npc_post_str($post, 'description_pt', 200) ?: null
+                ]);
+
+                return ['ok' => true, 'message' => 'Quest objective created (id ' . $conn->lastInsertId() . ').'];
+
+            case 'update_quest_objective':
+                $stmt = $conn->prepare('
+                    UPDATE quest_objectives
+                    SET id_quest = :id_quest,
+                        phase = :phase,
+                        sort_order = :sort_order,
+                        objective_type = :objective_type,
+                        target_ref = :target_ref,
+                        target_count = :target_count,
+                        description = :description,
+                        description_it = :description_it,
+                        description_pt = :description_pt
+                    WHERE id_quest_objective = :id_quest_objective
+                    LIMIT 1
+                ');
+                $stmt->execute([
+                    ':id_quest_objective' => dev_npc_post_int($post, 'id_quest_objective'),
+                    ':id_quest' => dev_npc_post_int($post, 'id_quest'),
+                    ':phase' => dev_npc_post_int($post, 'phase', 1),
+                    ':sort_order' => dev_npc_post_int($post, 'sort_order'),
+                    ':objective_type' => dev_npc_post_str($post, 'objective_type', 30),
+                    ':target_ref' => dev_npc_post_int($post, 'target_ref') ?: null,
+                    ':target_count' => dev_npc_post_int($post, 'target_count', 1) ?: 1,
+                    ':description' => dev_npc_post_str($post, 'description', 200) ?: null,
+                    ':description_it' => dev_npc_post_str($post, 'description_it', 200) ?: null,
+                    ':description_pt' => dev_npc_post_str($post, 'description_pt', 200) ?: null
+                ]);
+
+                return [
+                    'ok' => true,
+                    'message' => 'Quest objective updated (id ' . dev_npc_post_int($post, 'id_quest_objective') . ').',
+                    'redirect_edit' => 'quest_objective',
+                    'redirect_id' => dev_npc_post_int($post, 'id_quest_objective')
+                ];
 
             case 'add_requirement':
                 $created = dev_npc_create_requirement_from_post($conn, $post);
@@ -1513,6 +1798,72 @@ function dev_npc_handle_post(PDO $conn, array $post)
                     'redirect_edit' => 'quest_requirement',
                     'redirect_id' => dev_npc_post_int($post, 'id_quest_requirement')
                 ];
+
+            case 'delete_npc_requirement':
+                $id_npc_requirement = dev_npc_post_int($post, 'id_npc_requirement');
+
+                if ($id_npc_requirement <= 0)
+                {
+                    return ['ok' => false, 'message' => 'Invalid NPC requirement link id.'];
+                }
+
+                $stmt = $conn->prepare('
+                    DELETE FROM npc_requirements
+                    WHERE id_npc_requirement = :id_npc_requirement
+                    LIMIT 1
+                ');
+                $stmt->execute([':id_npc_requirement' => $id_npc_requirement]);
+
+                if ($stmt->rowCount() === 0)
+                {
+                    return ['ok' => false, 'message' => 'NPC requirement link #' . $id_npc_requirement . ' not found.'];
+                }
+
+                return ['ok' => true, 'message' => 'NPC requirement link #' . $id_npc_requirement . ' deleted.'];
+
+            case 'delete_conversation_requirement':
+                $id_conversation_requirement = dev_npc_post_int($post, 'id_conversation_requirement');
+
+                if ($id_conversation_requirement <= 0)
+                {
+                    return ['ok' => false, 'message' => 'Invalid conversation requirement link id.'];
+                }
+
+                $stmt = $conn->prepare('
+                    DELETE FROM conversation_requirements
+                    WHERE id_conversation_requirement = :id_conversation_requirement
+                    LIMIT 1
+                ');
+                $stmt->execute([':id_conversation_requirement' => $id_conversation_requirement]);
+
+                if ($stmt->rowCount() === 0)
+                {
+                    return ['ok' => false, 'message' => 'Conversation requirement link #' . $id_conversation_requirement . ' not found.'];
+                }
+
+                return ['ok' => true, 'message' => 'Conversation requirement link #' . $id_conversation_requirement . ' deleted.'];
+
+            case 'delete_quest_requirement':
+                $id_quest_requirement = dev_npc_post_int($post, 'id_quest_requirement');
+
+                if ($id_quest_requirement <= 0)
+                {
+                    return ['ok' => false, 'message' => 'Invalid quest requirement link id.'];
+                }
+
+                $stmt = $conn->prepare('
+                    DELETE FROM quest_requirements
+                    WHERE id_quest_requirement = :id_quest_requirement
+                    LIMIT 1
+                ');
+                $stmt->execute([':id_quest_requirement' => $id_quest_requirement]);
+
+                if ($stmt->rowCount() === 0)
+                {
+                    return ['ok' => false, 'message' => 'Quest requirement link #' . $id_quest_requirement . ' not found.'];
+                }
+
+                return ['ok' => true, 'message' => 'Quest requirement link #' . $id_quest_requirement . ' deleted.'];
 
             case 'add_consequence':
                 $created = dev_npc_create_consequence_from_post($conn, $post);

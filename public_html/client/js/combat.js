@@ -30,6 +30,7 @@ var AnimasterCombat = (function ()
     var pvpResolvedMoveCount = 0;
     var partyPveMeta = null;
     var partyPveMetaAnchorMs = 0;
+    var partyPvePlaybackHpFinal = null;
     var partyPvePollTimer = null;
     var partyPveCountdownTimer = null;
     var partyPlanningEl = null;
@@ -822,6 +823,121 @@ var AnimasterCombat = (function ()
         }
     }
 
+    function snapshotPartyPveHp(meta)
+    {
+        if (!meta)
+        {
+            return null;
+        }
+
+        return {
+            party: (meta.party_allies || []).map(function (ally)
+            {
+                return {
+                    id_animal: parseInt(ally.id_animal, 10) || 0,
+                    hp: parseInt(ally.hp, 10) || 0,
+                    max_hp: parseInt(ally.max_hp, 10) || 1,
+                    fainted: !!ally.fainted
+                };
+            }),
+            wild: (meta.wild_combatants || []).map(function (wild)
+            {
+                return {
+                    id_animal: parseInt(wild.id_animal, 10) || 0,
+                    hp: parseInt(wild.hp, 10) || 0,
+                    max_hp: parseInt(wild.max_hp, 10) || 1,
+                    fainted: !!wild.fainted
+                };
+            })
+        };
+    }
+
+    function applyPartyPveHpSnapshot(meta, snapshot)
+    {
+        if (!meta || !snapshot)
+        {
+            return;
+        }
+
+        var partyMap = {};
+        var wildMap = {};
+        var i;
+        var entry;
+
+        for (i = 0; i < snapshot.party.length; i++)
+        {
+            partyMap[snapshot.party[i].id_animal] = snapshot.party[i];
+        }
+
+        for (i = 0; i < snapshot.wild.length; i++)
+        {
+            wildMap[snapshot.wild[i].id_animal] = snapshot.wild[i];
+        }
+
+        (meta.party_allies || []).forEach(function (ally)
+        {
+            entry = partyMap[parseInt(ally.id_animal, 10) || 0];
+
+            if (!entry)
+            {
+                return;
+            }
+
+            ally.hp = entry.hp;
+            ally.max_hp = entry.max_hp;
+            ally.fainted = entry.fainted;
+        });
+
+        (meta.wild_combatants || []).forEach(function (wild)
+        {
+            entry = wildMap[parseInt(wild.id_animal, 10) || 0];
+
+            if (!entry)
+            {
+                return;
+            }
+
+            wild.hp = entry.hp;
+            wild.max_hp = entry.max_hp;
+            wild.fainted = entry.fainted;
+        });
+    }
+
+    /**
+     * Applies a freshly resolved round to battle state. When animations are
+     * enabled, restores pre-round HP on partyPveMeta so unit cards do not
+     * flash the final outcome before move playback begins.
+     */
+    function beginPartyPveRoundPresentation(beforeMove, result, actionTurn)
+    {
+        var hpBaseline = snapshotPartyPveHp(partyPveMeta);
+        var instant = isSoloPveFastPresentation();
+
+        moves = normalizeBattleResponse(result);
+        applyStateFromMoves({ deferTerminalUi: true });
+
+        if (battle.turn <= actionTurn)
+        {
+            return false;
+        }
+
+        stopPartyPvePoll();
+
+        if (!instant)
+        {
+            partyPvePlaybackHpFinal = snapshotPartyPveHp(partyPveMeta);
+            applyPartyPveHpSnapshot(partyPveMeta, hpBaseline);
+        }
+
+        presentTurn(
+            beforeMove,
+            instant,
+            getPlayableMovesForTurn(moves, actionTurn)
+        );
+
+        return true;
+    }
+
     /**
      * Whether the local player can currently stage/edit their round action:
      * they must be an alive party member, the battle must be ongoing, and
@@ -834,12 +950,29 @@ var AnimasterCombat = (function ()
             return false;
         }
 
+        if (playbackRunning)
+        {
+            return false;
+        }
+
         if (partyPveMeta.battle_finished)
         {
             return false;
         }
 
         return !!partyPveMeta.is_eligible && !partyPveMeta.my_confirmed;
+    }
+
+    /**
+     * Whether the round only needs this player's confirmation (party of one,
+     * or every other member currently offline/too far/departed/fainted so
+     * the server never counted them into confirm_required). In that case the
+     * "party" battle plays like a solo one, so we skip the explicit Confirm
+     * button and submit the round as soon as an action is staged.
+     */
+    function partyPveIsEffectivelySolo()
+    {
+        return !!partyPveMeta && (parseInt(partyPveMeta.confirm_required, 10) || 0) <= 1;
     }
 
     function partyPveCanFleeNow()
@@ -1227,12 +1360,8 @@ var AnimasterCombat = (function ()
             lang: AnimasterApi.LANG
         }).then(function (result)
         {
-            moves = normalizeBattleResponse(result);
-            applyStateFromMoves({ deferTerminalUi: true });
-
-            if (battle.turn > actionTurn)
+            if (beginPartyPveRoundPresentation(beforeMove, result, actionTurn))
             {
-                presentTurn(beforeMove, false, getPlayableMovesForTurn(moves, actionTurn));
                 return;
             }
 
@@ -1300,7 +1429,7 @@ var AnimasterCombat = (function ()
                 {
                     row.classList.add('is-fainted');
                 }
-                else if (ally.confirmed)
+                else if (playbackRunning || ally.confirmed)
                 {
                     row.classList.add('is-confirmed');
                 }
@@ -1319,7 +1448,8 @@ var AnimasterCombat = (function ()
                     : (ally.display_name || t('combat.unit_your_animal'));
                 nameWrapEl.appendChild(nameEl);
 
-                var countdownEligible = partyPveMeta.allow_inactivity_vote
+                var countdownEligible = !playbackRunning
+                    && partyPveMeta.allow_inactivity_vote
                     && !ally.fainted
                     && !ally.has_choice
                     && !ally.is_votable;
@@ -1352,13 +1482,23 @@ var AnimasterCombat = (function ()
 
                 var statusEl = document.createElement('span');
                 statusEl.className = 'combat-party-action-status';
-                statusEl.textContent = partyPveActionStatusLabel(ally);
+
+                if (playbackRunning)
+                {
+                    statusEl.textContent = ally.fainted
+                        ? t('party_pve.status_fainted')
+                        : t('party_pve.status_ready');
+                }
+                else
+                {
+                    statusEl.textContent = partyPveActionStatusLabel(ally);
+                }
 
                 row.appendChild(nameWrapEl);
                 row.appendChild(statusEl);
                 partyActionsListEl.appendChild(row);
 
-                if (ally.is_votable)
+                if (!playbackRunning && ally.is_votable)
                 {
                     partyActionsListEl.appendChild(buildInactivityVoteRow(ally));
                 }
@@ -1367,6 +1507,18 @@ var AnimasterCombat = (function ()
 
         var required = parseInt(partyPveMeta.confirm_required, 10) || 0;
         var done = parseInt(partyPveMeta.confirm_done, 10) || 0;
+
+        if (playbackRunning)
+        {
+            var activeAllies = (partyPveMeta.party_allies || []).filter(function (ally)
+            {
+                return !ally.fainted;
+            }).length;
+
+            required = Math.max(required, activeAllies, done);
+            done = required;
+        }
+
         var pct = required > 0 ? Math.min(100, Math.round((done / required) * 100)) : 0;
 
         if (partyConfirmBarFillEl)
@@ -1381,7 +1533,12 @@ var AnimasterCombat = (function ()
 
         if (partyConfirmBtn && partyUnconfirmBtn)
         {
-            if (!partyPveMeta.is_eligible)
+            if (playbackRunning)
+            {
+                partyConfirmBtn.hidden = true;
+                partyUnconfirmBtn.hidden = true;
+            }
+            else if (!partyPveMeta.is_eligible)
             {
                 partyConfirmBtn.hidden = true;
                 partyUnconfirmBtn.hidden = true;
@@ -1470,13 +1627,8 @@ var AnimasterCombat = (function ()
             var roundBefore = battle.turn;
             var beforeMove = latestStats();
 
-            moves = normalizeBattleResponse(result);
-
-            if (battle.turn > roundBefore)
+            if (beginPartyPveRoundPresentation(beforeMove, result, roundBefore))
             {
-                stopPartyPvePoll();
-                applyStateFromMoves({ deferTerminalUi: true });
-                presentTurn(beforeMove, false, getPlayableMovesForTurn(moves, roundBefore));
                 return;
             }
 
@@ -1561,12 +1713,8 @@ var AnimasterCombat = (function ()
             lang: AnimasterApi.LANG
         }).then(function (result)
         {
-            moves = normalizeBattleResponse(result);
-            applyStateFromMoves({ deferTerminalUi: true });
-
-            if (battle.turn > actionTurn)
+            if (beginPartyPveRoundPresentation(beforeMove, result, actionTurn))
             {
-                presentTurn(beforeMove, false, getPlayableMovesForTurn(moves, actionTurn));
                 return;
             }
 
@@ -1623,6 +1771,7 @@ var AnimasterCombat = (function ()
         pvpPhase = 'idle';
         pvpMeta = null;
         partyPveMeta = null;
+        partyPvePlaybackHpFinal = null;
         pvpLockedTurn = 0;
         pvpResolvePending = false;
         pvpResolvedMoveCount = 0;
@@ -2655,6 +2804,14 @@ var AnimasterCombat = (function ()
             if (isPartyPve)
             {
                 busy = false;
+
+                if (partyPveMeta && partyPveMeta.my_action_type && !partyPveMeta.my_confirmed
+                    && partyPveIsEffectivelySolo())
+                {
+                    submitPartyPveConfirm(true);
+                    return;
+                }
+
                 enterPartyPveInputPhase();
                 return;
             }
@@ -2898,46 +3055,41 @@ var AnimasterCombat = (function ()
         });
     }
 
-    function appendHpResultLines(lines, move, prevMove)
+    function combatResultLabel(move)
     {
-        if (!prevMove || move.move_hit === 'N')
+        if (!move || move.move_type !== 'ability')
         {
-            return;
+            return '';
         }
 
-        var prevWildHp = parseInt(prevMove.w_a_res_hp, 10) || 0;
-        var nextWildHp = parseInt(move.w_a_res_hp, 10) || 0;
-
-        if (prevWildHp !== nextWildHp && move.move_hit !== 'I')
+        if (move.move_hit === 'N')
         {
-            lines.push(move.move_hit === 'C' ? t('combat.critical_hit') : t('combat.hit'));
+            return t('combat.missed');
         }
 
-        var prevPlayerHp = parseInt(prevMove.p_a_res_hp, 10) || 0;
-        var nextPlayerHp = parseInt(move.p_a_res_hp, 10) || 0;
-
-        if (prevPlayerHp !== nextPlayerHp)
+        if (move.move_hit === 'C')
         {
-            if (move.move_hit === 'I')
-            {
-                return;
-            }
-
-            lines.push(move.move_hit === 'C' ? t('combat.critical_hit') : t('combat.hit'));
+            return t('combat.critical_hit');
         }
+
+        if (move.move_hit === 'S')
+        {
+            return t('combat.hit');
+        }
+
+        return '';
     }
 
     function buildMoveNarration(move, prevMove)
     {
         var lines = [formatLogLine(move)];
+        var resultLabel = combatResultLabel(move);
 
-        if (move.move_hit === 'N')
+        if (resultLabel)
         {
-            lines.push(t('combat.missed'));
-            return lines;
+            lines[0] = lines[0] + '. . . ' + resultLabel;
         }
 
-        appendHpResultLines(lines, move, prevMove);
         appendStatChangeLines(lines, move, prevMove, 'wild');
         appendStatChangeLines(lines, move, prevMove, 'player');
 
@@ -3339,6 +3491,22 @@ var AnimasterCombat = (function ()
             return Promise.resolve();
         }
 
+        if (battle && battle.type === 'party_pve' && partyPveMeta)
+        {
+            return delay(40).then(function ()
+            {
+                if (token !== playbackToken)
+                {
+                    return;
+                }
+
+                syncPartyPveHpFromMove(toStats);
+                setUnitHpByAnimalId(parseInt(toStats.p_a_id, 10) || 0, toStats.p_hp, toStats.p_max_hp, true);
+                setUnitHpByAnimalId(parseInt(toStats.w_a_id, 10) || 0, toStats.w_hp, toStats.w_max_hp, true);
+                return delay(COMBAT_PRESENTATION.hpAnimDurationMs);
+            });
+        }
+
         renderUnitsFromStats(fromStats);
 
         return delay(40).then(function ()
@@ -3346,14 +3514,6 @@ var AnimasterCombat = (function ()
             if (token !== playbackToken)
             {
                 return;
-            }
-
-            if (battle && battle.type === 'party_pve' && partyPveMeta)
-            {
-                syncPartyPveHpFromMove(toStats);
-                setUnitHpByAnimalId(parseInt(toStats.p_a_id, 10) || 0, toStats.p_hp, toStats.p_max_hp, true);
-                setUnitHpByAnimalId(parseInt(toStats.w_a_id, 10) || 0, toStats.w_hp, toStats.w_max_hp, true);
-                return delay(COMBAT_PRESENTATION.hpAnimDurationMs);
             }
 
             setUnitHp('player', toStats.p_hp, toStats.p_max_hp, true);
@@ -3387,6 +3547,12 @@ var AnimasterCombat = (function ()
     {
         playbackRunning = false;
         advanceResolver = null;
+
+        if (battle && battle.type === 'party_pve' && partyPvePlaybackHpFinal)
+        {
+            applyPartyPveHpSnapshot(partyPveMeta, partyPvePlaybackHpFinal);
+            partyPvePlaybackHpFinal = null;
+        }
 
         var stats = latestStats();
 
@@ -3511,6 +3677,11 @@ var AnimasterCombat = (function ()
         if (battle.type === 'pvp')
         {
             pvpPhase = 'animating';
+        }
+        else if (battle.type === 'party_pve')
+        {
+            setMessage(t('combat.resolving_turn'));
+            renderPartyPvePlanningPanel();
         }
 
         var initialStats = beforeMove ? statsFromMove(beforeMove) : statsFromMove(moves[0]);

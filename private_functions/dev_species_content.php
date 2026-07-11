@@ -144,6 +144,11 @@ function dev_species_wild_drop_label(array $row, array $item_types_by_id = [])
         $parts[] = 'quest #' . (int) $row['id_quest_required'];
     }
 
+    if ((int) $row['id_element'] > 0)
+    {
+        $parts[] = 'elem #' . (int) $row['id_element'];
+    }
+
     return implode(' · ', $parts);
 }
 
@@ -484,17 +489,20 @@ function dev_species_handle_post(PDO $conn, array $post)
                 $id_species = dev_npc_post_int($post, 'id_species');
                 $id_quest_required = dev_npc_post_int($post, 'id_quest_required');
                 $id_quest_required = $id_quest_required > 0 ? $id_quest_required : null;
+                $id_element = dev_npc_post_int($post, 'id_element');
+                $id_element = $id_element > 0 ? $id_element : null;
 
                 $stmt = $conn->prepare('
                     INSERT INTO wild_animal_drop_types
-                    (dt_c, drop_type, id_item_type, id_species, lvl_min, lvl_max, qt_min, qt_max, chance, id_quest_required)
+                    (dt_c, drop_type, id_item_type, id_species, id_element, lvl_min, lvl_max, qt_min, qt_max, chance, id_quest_required)
                     VALUES
-                    (NOW(), :drop_type, :id_item_type, :id_species, :lvl_min, :lvl_max, :qt_min, :qt_max, :chance, :id_quest_required)
+                    (NOW(), :drop_type, :id_item_type, :id_species, :id_element, :lvl_min, :lvl_max, :qt_min, :qt_max, :chance, :id_quest_required)
                 ');
                 $stmt->execute([
                     ':drop_type' => dev_npc_post_str($post, 'drop_type', 100) ?: 'item',
                     ':id_item_type' => dev_npc_post_int($post, 'id_item_type'),
                     ':id_species' => $id_species,
+                    ':id_element' => $id_element,
                     ':lvl_min' => dev_npc_post_int($post, 'lvl_min', 1),
                     ':lvl_max' => dev_npc_post_int($post, 'lvl_max', 100),
                     ':qt_min' => dev_npc_post_int($post, 'qt_min', 1),
@@ -517,6 +525,8 @@ function dev_species_handle_post(PDO $conn, array $post)
                 $id_species = dev_npc_post_int($post, 'id_species');
                 $id_quest_required = dev_npc_post_int($post, 'id_quest_required');
                 $id_quest_required = $id_quest_required > 0 ? $id_quest_required : null;
+                $id_element = dev_npc_post_int($post, 'id_element');
+                $id_element = $id_element > 0 ? $id_element : null;
 
                 $stmt = $conn->prepare('
                     UPDATE wild_animal_drop_types
@@ -524,6 +534,7 @@ function dev_species_handle_post(PDO $conn, array $post)
                         drop_type = :drop_type,
                         id_item_type = :id_item_type,
                         id_species = :id_species,
+                        id_element = :id_element,
                         lvl_min = :lvl_min,
                         lvl_max = :lvl_max,
                         qt_min = :qt_min,
@@ -538,6 +549,7 @@ function dev_species_handle_post(PDO $conn, array $post)
                     ':drop_type' => dev_npc_post_str($post, 'drop_type', 100) ?: 'item',
                     ':id_item_type' => dev_npc_post_int($post, 'id_item_type'),
                     ':id_species' => $id_species,
+                    ':id_element' => $id_element,
                     ':lvl_min' => dev_npc_post_int($post, 'lvl_min', 1),
                     ':lvl_max' => dev_npc_post_int($post, 'lvl_max', 100),
                     ':qt_min' => dev_npc_post_int($post, 'qt_min', 1),

@@ -56,6 +56,8 @@ $flat_quests = dev_npc_flat_quests($tree);
 $item_types = dev_npc_fetch_item_types($conn);
 $player_classes = dev_npc_fetch_player_classes($conn);
 $buff_definitions = dev_npc_fetch_buff_definitions($conn);
+$species_list = dev_npc_fetch_species($conn);
+$objective_types = dev_npc_objective_types();
 $requirement_ref_tables = dev_npc_requirement_ref_tables();
 $requirement_types = dev_npc_requirement_types();
 $preview_lang = dev_npc_get_preview_lang();
@@ -63,6 +65,7 @@ $req_ref_field_ctx = [
     'requirement_ref_tables' => $requirement_ref_tables,
     'item_types' => $item_types,
     'flat_conversations' => $flat_conversations,
+    'flat_quests' => $flat_quests,
     'player_classes' => $player_classes,
     'preview_lang' => $preview_lang
 ];
@@ -180,6 +183,23 @@ if ($edit_type !== '' && $edit_id > 0)
             $edit_item = $edit_link_context['link'];
         }
     }
+    elseif ($edit_type === 'quest_objective')
+    {
+        foreach ($tree as $npc_data)
+        {
+            foreach ($npc_data['quests'] as $quest)
+            {
+                foreach ($quest['objectives'] as $obj)
+                {
+                    if ((int) $obj['id_quest_objective'] === $edit_id)
+                    {
+                        $edit_item = $obj;
+                        break 3;
+                    }
+                }
+            }
+        }
+    }
     elseif ($edit_type === 'consequence')
     {
         foreach ($consequences as $cons)
@@ -210,11 +230,14 @@ if ($edit_type !== '' && $edit_id > 0)
 
 $attach_prefill = dev_npc_parse_attach_prefill($_GET);
 $attach_tab_active = (isset($_GET['tab']) && $_GET['tab'] === 'attach') || $attach_prefill['attach'] !== '';
+$qobj_quest_prefill = isset($_GET['qobj_quest']) ? (int) $_GET['qobj_quest'] : 0;
+$is_edit_qobj = ($edit_type === 'quest_objective' && is_array($edit_item));
+$quest_tab_active = $qobj_quest_prefill > 0 || $is_edit_qobj || ($edit_type === 'quest' && is_array($edit_item));
 $req_tab_active = (isset($_GET['tab']) && $_GET['tab'] === 'req')
     || in_array($edit_type, ['requirement', 'npc_requirement', 'conversation_requirement', 'quest_requirement'], true);
 $cons_tab_active = (isset($_GET['tab']) && $_GET['tab'] === 'cons')
     || in_array($edit_type, ['consequence', 'conversation_consequence'], true);
-$default_form_tab_active = !$attach_tab_active && !$req_tab_active && !$cons_tab_active;
+$default_form_tab_active = !$attach_tab_active && !$req_tab_active && !$cons_tab_active && !$quest_tab_active;
 $is_edit_req_link = in_array($edit_type, ['npc_requirement', 'conversation_requirement', 'quest_requirement'], true)
     && is_array($edit_item)
     && is_array($edit_link_context);
@@ -227,7 +250,8 @@ $cons_ref_field_ctx = [
     'consequence_ref_tables' => $consequence_ref_tables,
     'item_types' => $item_types,
     'player_classes' => $player_classes,
-    'buff_definitions' => $buff_definitions
+    'buff_definitions' => $buff_definitions,
+    'flat_quests' => $flat_quests
 ];
 ?>
 <!DOCTYPE html>
@@ -276,6 +300,7 @@ $cons_ref_field_ctx = [
         }
         .dev-req-note { color: #adb5bd; font-style: italic; flex: 1 1 8rem; }
         .dev-req-actions { margin-left: auto; white-space: nowrap; }
+        .dev-req-delete-form { display: inline; margin: 0; padding: 0; vertical-align: middle; }
 
         .dev-lang-switch {
             display: inline-flex;
@@ -329,6 +354,8 @@ $cons_ref_field_ctx = [
                 <?php endforeach; ?>
             </div>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_species.php')); ?>">Species / abilities</a>
+            <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_npc.php')); ?>">NPC interactions</a>
+            <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_quest.php')); ?>">Quest flow</a>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_static_data.php')); ?>">Static data</a>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_url()); ?>">Refresh</a>
         </div>
@@ -345,10 +372,13 @@ $cons_ref_field_ctx = [
                 <div class="card-body schema-box">
                     <code>npcs</code> → <code>npc_requirements</code> → <code>requirements</code><br>
                     <code>npcs</code> → <code>conversations</code> → <code>conversation_requirements</code><br>
+                    <code>conversations.flg_register</code> (write finish to <code>user_conversations</code>, for requirements) and <code>flg_repeatable</code> (keep offering after finish) are independent flags<br>
                     <code>conversations</code> → <code>dialogues</code> (order) → <code>dialogues_options</code><br>
                     <code>conversation_consequences</code> links <code>id_conversation</code> + <code>id_option</code> → <code>consequences</code> (refs, num, params on the link)<br>
-                    <code>npcs</code> → <code>quests</code> (id_starter_npc) → <code>quest_requirements</code><br>
-                    <code>user_conversations</code> / <code>user_quests</code> track player progress (read-only here).
+                    <code>npcs</code> → <code>quests</code> (id_starter_npc) → <code>quest_requirements</code> (accept/turn-in gating uses <code>conversation_requirements</code> instead, see below) → <code>quest_objectives</code> (N per phase; a phase advances once every objective row is met)<br>
+                    Accept a quest via a dialog option's <code>[start quest]</code> consequence, turn it in via <code>[complete quest]</code> (both <code>ref_table = QUEST</code>, <code>id_ref = id_quest</code>); gate those options with requirement types <code>quest not started</code> / <code>quest started</code> / <code>quest ready to turn in</code> / <code>quest completed</code>, or phase-aware <code>quest phase</code> / <code>quest phase completed</code> (<code>ref_table = QUEST</code>, <code>id_ref = id_quest</code>, <code>min = phase number</code>).<br>
+                    Fallback conversations: requirement <code>conversation requirements not met</code> (<code>ref_table = conversations</code>, <code>id_ref</code> = primary conv) passes when any requirement on that primary conv fails; AND it with audience gates (class, quest state). Pair with specific fallbacks (low level, wrong class) that use positive requirements only.<br>
+                    <code>user_conversations</code> / <code>user_quests</code> / <code>user_quest_objective_progress</code> track player progress (read-only here).
                 </div>
             </div>
 
@@ -367,6 +397,7 @@ $cons_ref_field_ctx = [
                             <strong>#<?php echo (int) $id_npc; ?> <?php echo dev_admin_h($npc['npc']); ?></strong>
                             <span class="meta"> — zone <?php echo (int) $npc['id_zone']; ?>, pos (<?php echo dev_admin_h($npc['posx']); ?>, <?php echo dev_admin_h($npc['posz']); ?>), <?php echo dev_admin_h($npc['type']); ?></span>
                             <a class="btn btn-outline-secondary btn-sm ms-2" href="<?php echo dev_admin_h(dev_admin_url(['edit' => 'npc', 'id' => (int) $id_npc])); ?>" title="Edit NPC">✎</a>
+                            <a class="btn btn-outline-primary btn-sm ms-1" href="<?php echo dev_admin_h(dev_admin_page_url('dev_npc.php', ['id_npc' => (int) $id_npc])); ?>" title="NPC interaction tree">interactions</a>
                             <a class="btn btn-outline-info btn-sm dev-btn-mini ms-1" href="<?php echo dev_admin_h(dev_admin_url(['tab' => 'attach', 'attach' => 'req', 'target' => 'npc', 'id_npc' => (int) $id_npc])); ?>" title="Add requirement to NPC">+req</a>
                         </summary>
 
@@ -385,16 +416,34 @@ $cons_ref_field_ctx = [
                             <span class="badge bg-info text-dark">Quests</span>
                             <?php foreach ($npc['quests'] as $id_quest => $quest): ?>
                             <div class="ms-2 mt-1">
-                                <strong>#<?php echo (int) $id_quest; ?> <?php echo dev_admin_h($quest['quest']); ?></strong>
-                                <span class="meta"> (<?php echo dev_admin_h($quest['quest_type']); ?>, lvl <?php echo (int) $quest['lvl_min']; ?>–<?php echo (int) $quest['lvl_max']; ?>)</span>
+                                <strong>#<?php echo (int) $id_quest; ?>
+                                    <span class="dev-loc-text" <?php echo dev_npc_loc_data_attrs($quest, 'quest'); ?>>
+                                        <?php echo dev_admin_h(dev_npc_localized_field($quest, 'quest', $preview_lang)); ?>
+                                    </span>
+                                </strong>
+                                <span class="meta"> (<?php echo dev_admin_h($quest['quest_type']); ?>, lvl <?php echo (int) $quest['lvl_min']; ?>–<?php echo (int) $quest['lvl_max']; ?>, repeatable=<?php echo dev_admin_h($quest['repeatable']); ?>)</span>
                                 <a class="btn btn-outline-secondary btn-sm ms-2" href="<?php echo dev_admin_h(dev_admin_url(['edit' => 'quest', 'id' => (int) $id_quest])); ?>" title="Edit quest">✎</a>
+                                <a class="btn btn-outline-primary btn-sm ms-1" href="<?php echo dev_admin_h(dev_admin_page_url('dev_quest.php', ['id_quest' => (int) $id_quest])); ?>" title="Quest flow diagram">flow</a>
                                 <a class="btn btn-outline-info btn-sm dev-btn-mini ms-1" href="<?php echo dev_admin_h(dev_admin_url(['tab' => 'attach', 'attach' => 'req', 'target' => 'quest', 'id_npc' => (int) $id_npc, 'id_quest' => (int) $id_quest])); ?>" title="Add requirement to quest">+req</a>
+                                <a class="btn btn-outline-warning btn-sm dev-btn-mini ms-1" href="<?php echo dev_admin_h(dev_admin_url(['qobj_quest' => (int) $id_quest])); ?>#tab-quest" title="Add objective to quest">+obj</a>
+                                <?php if (!empty($quest['description'])): ?>
+                                <div class="meta small dev-loc-text" <?php echo dev_npc_loc_data_attrs($quest, 'description'); ?>><?php echo dev_admin_h(dev_npc_localized_field($quest, 'description', $preview_lang)); ?></div>
+                                <?php endif; ?>
                                 <?php if (!empty($quest['requirements'])): ?>
                                 <ul class="dev-req-list small mb-0 ms-2">
                                     <?php foreach ($quest['requirements'] as $req): ?>
                                     <?php echo dev_npc_requirement_link_tree_item($req, 'quest'); ?>
                                     <?php endforeach; ?>
                                 </ul>
+                                <?php endif; ?>
+                                <?php if (!empty($quest['objectives'])): ?>
+                                <ul class="dev-req-list small mb-0 ms-2">
+                                    <?php foreach ($quest['objectives'] as $obj): ?>
+                                    <?php echo dev_npc_quest_objective_tree_item($obj, $preview_lang); ?>
+                                    <?php endforeach; ?>
+                                </ul>
+                                <?php else: ?>
+                                <p class="meta small ms-2 mb-0">No objectives yet.</p>
                                 <?php endif; ?>
                             </div>
                             <?php endforeach; ?>
@@ -413,7 +462,7 @@ $cons_ref_field_ctx = [
                                         <?php echo dev_admin_h(dev_npc_localized_field($conv, 'title', $preview_lang)); ?>
                                     </span>
                                 </strong>
-                                <span class="meta"> — visible <?php echo dev_admin_h($conv['visible']); ?>, register <?php echo dev_admin_h($conv['flg_register']); ?></span>
+                                <span class="meta"> — visible <?php echo dev_admin_h($conv['visible']); ?>, register <?php echo dev_admin_h($conv['flg_register']); ?>, repeatable <?php echo dev_admin_h(isset($conv['flg_repeatable']) ? $conv['flg_repeatable'] : 'N'); ?></span>
                                 <a class="btn btn-outline-secondary btn-sm ms-2" href="<?php echo dev_admin_h(dev_admin_url(['edit' => 'conversation', 'id' => (int) $id_conv])); ?>" title="Edit conversation">✎</a>
                                 <a class="btn btn-outline-info btn-sm dev-btn-mini ms-1" href="<?php echo dev_admin_h(dev_admin_url(['tab' => 'attach', 'attach' => 'req', 'target' => 'conversation', 'id_npc' => (int) $id_npc, 'id_conversation' => (int) $id_conv])); ?>" title="Add requirement to conversation">+req</a>
                             </summary>
@@ -482,7 +531,7 @@ $cons_ref_field_ctx = [
                         <li class="nav-item" role="presentation"><button class="nav-link<?php echo $req_tab_active ? ' active' : ''; ?>" data-bs-toggle="pill" data-bs-target="#tab-req" type="button">Requirements</button></li>
                         <li class="nav-item" role="presentation"><button class="nav-link<?php echo $cons_tab_active ? ' active' : ''; ?>" data-bs-toggle="pill" data-bs-target="#tab-cons" type="button">Consequences</button></li>
                         <li class="nav-item" role="presentation"><button class="nav-link<?php echo $attach_tab_active ? ' active' : ''; ?>" data-bs-toggle="pill" data-bs-target="#tab-attach" type="button">Attach</button></li>
-                        <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-quest" type="button">Quest</button></li>
+                        <li class="nav-item" role="presentation"><button class="nav-link<?php echo $quest_tab_active ? ' active' : ''; ?>" data-bs-toggle="pill" data-bs-target="#tab-quest" type="button">Quest</button></li>
                     </ul>
 
                     <div class="tab-content">
@@ -540,9 +589,11 @@ $cons_ref_field_ctx = [
                                 <div class="mb-2"><label class="form-label">Title IT</label><input class="form-control form-control-sm" name="title_it" maxlength="200" value="<?php echo $is_edit_conv ? dev_admin_h(isset($edit_item['title_it']) ? $edit_item['title_it'] : '') : ''; ?>"></div>
                                 <div class="mb-2"><label class="form-label">Title PT</label><input class="form-control form-control-sm" name="title_pt" maxlength="200" value="<?php echo $is_edit_conv ? dev_admin_h(isset($edit_item['title_pt']) ? $edit_item['title_pt'] : '') : ''; ?>"></div>
                                 <div class="row g-2">
-                                    <div class="col-6"><label class="form-label">Visible</label><select class="form-select form-select-sm" name="visible"><option value="S"<?php echo $is_edit_conv && $edit_item['visible'] === 'S' ? ' selected' : ''; ?>>S</option><option value="N"<?php echo $is_edit_conv && $edit_item['visible'] === 'N' ? ' selected' : ''; ?>>N</option></select></div>
-                                    <div class="col-6"><label class="form-label">Register on finish</label><select class="form-select form-select-sm" name="flg_register"><option value="N"<?php echo $is_edit_conv && $edit_item['flg_register'] === 'N' ? ' selected' : ''; ?>>N</option><option value="S"<?php echo $is_edit_conv && $edit_item['flg_register'] === 'S' ? ' selected' : ''; ?>>S</option></select></div>
+                                    <div class="col-4"><label class="form-label">Visible</label><select class="form-select form-select-sm" name="visible"><option value="S"<?php echo $is_edit_conv && $edit_item['visible'] === 'S' ? ' selected' : ''; ?>>S</option><option value="N"<?php echo $is_edit_conv && $edit_item['visible'] === 'N' ? ' selected' : ''; ?>>N</option></select></div>
+                                    <div class="col-4"><label class="form-label">Register on finish</label><select class="form-select form-select-sm" name="flg_register"><option value="N"<?php echo $is_edit_conv && $edit_item['flg_register'] === 'N' ? ' selected' : ''; ?>>N</option><option value="S"<?php echo $is_edit_conv && $edit_item['flg_register'] === 'S' ? ' selected' : ''; ?>>S</option></select></div>
+                                    <div class="col-4"><label class="form-label">Repeatable</label><select class="form-select form-select-sm" name="flg_repeatable"><option value="N"<?php echo $is_edit_conv && (!isset($edit_item['flg_repeatable']) || $edit_item['flg_repeatable'] === 'N') ? ' selected' : ''; ?>>N</option><option value="S"<?php echo $is_edit_conv && isset($edit_item['flg_repeatable']) && $edit_item['flg_repeatable'] === 'S' ? ' selected' : ''; ?>>S</option></select></div>
                                 </div>
+                                <p class="meta small mt-1 mb-0">Register on finish = write to <code>user_conversations</code> so <code>conversation finished</code> / <code>not finished</code> requirements can see it. Repeatable = keep offering this conversation after it's finished (otherwise it disappears from the NPC once done, independent of register).</p>
                                 <button class="btn btn-primary btn-sm mt-3" type="submit"><?php echo $is_edit_conv ? 'Update conversation' : 'Create conversation'; ?></button>
                                 <?php if ($is_edit_conv): ?>
                                 <a class="btn btn-outline-secondary btn-sm mt-3" href="<?php echo dev_admin_h(dev_admin_url()); ?>">Cancel edit</a>
@@ -931,7 +982,7 @@ $cons_ref_field_ctx = [
                         </div>
 
                         <!-- Quest -->
-                        <div class="tab-pane fade" id="tab-quest">
+                        <div class="tab-pane fade<?php echo $quest_tab_active ? ' show active' : ''; ?>" id="tab-quest">
                             <form method="post" action="<?php echo dev_admin_h(dev_admin_url()); ?>">
                                 <input type="hidden" name="T" value="<?php echo dev_admin_h($token); ?>">
                                 <?php $is_edit_quest = ($edit_type === 'quest' && is_array($edit_item)); ?>
@@ -940,7 +991,14 @@ $cons_ref_field_ctx = [
                                 <input type="hidden" name="id_quest" value="<?php echo (int) $edit_item['id_quest']; ?>">
                                 <?php endif; ?>
                                 <div class="mb-2"><label class="form-label">Starter NPC</label><select class="form-select form-select-sm" name="id_starter_npc"><?php foreach ($tree as $id_npc => $npc): ?><option value="<?php echo (int) $id_npc; ?>"<?php echo $is_edit_quest && (int) $edit_item['id_starter_npc'] === (int) $id_npc ? ' selected' : ''; ?>>#<?php echo (int) $id_npc; ?> <?php echo dev_admin_h($npc['npc']); ?></option><?php endforeach; ?></select></div>
-                                <div class="mb-2"><label class="form-label">Quest title</label><input class="form-control form-control-sm" name="quest" required maxlength="200" value="<?php echo $is_edit_quest ? dev_admin_h($edit_item['quest']) : ''; ?>"></div>
+                                <div class="mb-2"><label class="form-label">Quest title EN</label><input class="form-control form-control-sm" name="quest" required maxlength="200" value="<?php echo $is_edit_quest ? dev_admin_h($edit_item['quest']) : ''; ?>"></div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6"><label class="form-label">Quest title IT</label><input class="form-control form-control-sm" name="quest_it" maxlength="200" value="<?php echo $is_edit_quest ? dev_admin_h((string) ($edit_item['quest_it'] ?? '')) : ''; ?>"></div>
+                                    <div class="col-6"><label class="form-label">Quest title PT</label><input class="form-control form-control-sm" name="quest_pt" maxlength="200" value="<?php echo $is_edit_quest ? dev_admin_h((string) ($edit_item['quest_pt'] ?? '')) : ''; ?>"></div>
+                                </div>
+                                <div class="mb-2"><label class="form-label">Description EN</label><textarea class="form-control form-control-sm" name="description" rows="2" maxlength="1000"><?php echo $is_edit_quest ? dev_admin_h((string) ($edit_item['description'] ?? '')) : ''; ?></textarea></div>
+                                <div class="mb-2"><label class="form-label">Description IT</label><textarea class="form-control form-control-sm" name="description_it" rows="2" maxlength="1000"><?php echo $is_edit_quest ? dev_admin_h((string) ($edit_item['description_it'] ?? '')) : ''; ?></textarea></div>
+                                <div class="mb-2"><label class="form-label">Description PT</label><textarea class="form-control form-control-sm" name="description_pt" rows="2" maxlength="1000"><?php echo $is_edit_quest ? dev_admin_h((string) ($edit_item['description_pt'] ?? '')) : ''; ?></textarea></div>
                                 <div class="row g-2 mb-2">
                                     <div class="col-6"><label class="form-label">Type</label><input class="form-control form-control-sm" name="quest_type" maxlength="100" value="<?php echo $is_edit_quest ? dev_admin_h($edit_item['quest_type']) : ''; ?>"></div>
                                     <div class="col-6"><label class="form-label">Repeatable</label><select class="form-select form-select-sm" name="repeatable"><option value="N"<?php echo $is_edit_quest && $edit_item['repeatable'] === 'N' ? ' selected' : ''; ?>>N</option><option value="S"<?php echo $is_edit_quest && $edit_item['repeatable'] === 'S' ? ' selected' : ''; ?>>S</option></select></div>
@@ -955,7 +1013,71 @@ $cons_ref_field_ctx = [
                                 <a class="btn btn-outline-secondary btn-sm mt-2" href="<?php echo dev_admin_h(dev_admin_url()); ?>">Cancel edit</a>
                                 <?php endif; ?>
                             </form>
-                            <p class="meta small mt-3 mb-0">Quest runtime is not fully wired in the web client yet; this page lets you seed DB content.</p>
+                            <p class="meta small mt-3 mb-0">Gate accept/turn-in dialog options with requirement types <code>quest not started</code> / <code>quest started</code> / <code>quest ready to turn in</code> / <code>quest completed</code>, or phase-aware <code>quest phase</code> / <code>quest phase completed</code> (ref_table <code>QUEST</code>, id_ref = this quest, min = phase number), and fire <code>[start quest]</code> / <code>[complete quest]</code> consequences on the chosen option (same ref_table/id_ref) via the <strong>Requirements</strong> / <strong>Consequences</strong> tabs.</p>
+
+                            <hr>
+                            <h6>Quest objectives</h6>
+                            <p class="meta small">One row per phase objective; a phase advances only once every objective row for it is satisfied (see <code>QUESTS::refreshProgress</code>).</p>
+                            <form method="post" action="<?php echo dev_admin_h(dev_admin_url()); ?>">
+                                <input type="hidden" name="T" value="<?php echo dev_admin_h($token); ?>">
+                                <input type="hidden" name="action" value="<?php echo $is_edit_qobj ? 'update_quest_objective' : 'add_quest_objective'; ?>">
+                                <?php if ($is_edit_qobj): ?>
+                                <input type="hidden" name="id_quest_objective" value="<?php echo (int) $edit_item['id_quest_objective']; ?>">
+                                <?php endif; ?>
+                                <?php $qobj_default_id_quest = $is_edit_qobj ? (int) $edit_item['id_quest'] : ($qobj_quest_prefill ?: ($is_edit_quest ? (int) $edit_item['id_quest'] : 0)); ?>
+                                <div class="mb-2">
+                                    <label class="form-label">Quest</label>
+                                    <select class="form-select form-select-sm" name="id_quest">
+                                        <?php foreach ($flat_quests as $q): ?>
+                                        <option value="<?php echo (int) $q['id_quest']; ?>"<?php echo $qobj_default_id_quest === (int) $q['id_quest'] ? ' selected' : ''; ?>>#<?php echo (int) $q['id_quest']; ?> <?php echo dev_admin_h($q['quest']); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6"><label class="form-label">Phase</label><input class="form-control form-control-sm" name="phase" type="number" min="1" value="<?php echo $is_edit_qobj ? (int) $edit_item['phase'] : 1; ?>"></div>
+                                    <div class="col-6"><label class="form-label">Sort order</label><input class="form-control form-control-sm" name="sort_order" type="number" min="0" value="<?php echo $is_edit_qobj ? (int) $edit_item['sort_order'] : 0; ?>"></div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Objective type</label>
+                                    <select class="form-select form-select-sm" name="objective_type" id="qobj-objective-type">
+                                        <?php foreach ($objective_types as $ot): ?>
+                                        <option value="<?php echo dev_admin_h($ot['value']); ?>"<?php echo $is_edit_qobj && $edit_item['objective_type'] === $ot['value'] ? ' selected' : ''; ?>><?php echo dev_admin_h($ot['label']); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label">Target (species / item / conversation, per type above)</label>
+                                    <select class="form-select form-select-sm" name="target_ref" id="qobj-target-ref">
+                                        <option value="0" data-objective-type="reach_level"<?php echo $is_edit_qobj && $edit_item['objective_type'] === 'reach_level' ? ' selected' : ''; ?>>— none (reach_level uses target_count as level) —</option>
+                                        <?php foreach ($species_list as $sp): ?>
+                                        <option value="<?php echo (int) $sp['id_species']; ?>" data-objective-type="kill_species"<?php echo $is_edit_qobj && $edit_item['objective_type'] === 'kill_species' && (int) $edit_item['target_ref'] === (int) $sp['id_species'] ? ' selected' : ''; ?>>
+                                            #<?php echo (int) $sp['id_species']; ?> <?php echo dev_admin_h($sp['species']); ?>
+                                        </option>
+                                        <?php endforeach; ?>
+                                        <?php foreach ($item_types as $item): ?>
+                                        <option value="<?php echo (int) $item['id_item_type']; ?>" data-objective-type="collect_item"<?php echo $is_edit_qobj && $edit_item['objective_type'] === 'collect_item' && (int) $edit_item['target_ref'] === (int) $item['id_item_type'] ? ' selected' : ''; ?>>
+                                            #<?php echo (int) $item['id_item_type']; ?> <?php echo dev_admin_h($item['nome'] ?: $item['item_type']); ?>
+                                        </option>
+                                        <?php endforeach; ?>
+                                        <?php foreach ($flat_conversations as $c):
+                                            $conv_labels = dev_npc_conversation_select_labels($c); ?>
+                                        <option value="<?php echo (int) $c['id_conversation']; ?>" data-objective-type="talk_npc" class="dev-loc-option" <?php echo dev_npc_loc_data_attrs_from_map($conv_labels); ?><?php echo $is_edit_qobj && $edit_item['objective_type'] === 'talk_npc' && (int) $edit_item['target_ref'] === (int) $c['id_conversation'] ? ' selected' : ''; ?>>
+                                            <?php echo dev_admin_h($conv_labels[$preview_lang]); ?>
+                                        </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="mb-2"><label class="form-label">Target count <span class="text-muted">(kill/collect count, or the level for reach_level)</span></label><input class="form-control form-control-sm" name="target_count" type="number" min="1" value="<?php echo $is_edit_qobj ? (int) $edit_item['target_count'] : 1; ?>"></div>
+                                <div class="mb-2"><label class="form-label">Description EN</label><input class="form-control form-control-sm" name="description" maxlength="200" value="<?php echo $is_edit_qobj ? dev_admin_h((string) ($edit_item['description'] ?? '')) : ''; ?>" placeholder="e.g. Defeat 3 Snakes"></div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6"><label class="form-label">Description IT</label><input class="form-control form-control-sm" name="description_it" maxlength="200" value="<?php echo $is_edit_qobj ? dev_admin_h((string) ($edit_item['description_it'] ?? '')) : ''; ?>"></div>
+                                    <div class="col-6"><label class="form-label">Description PT</label><input class="form-control form-control-sm" name="description_pt" maxlength="200" value="<?php echo $is_edit_qobj ? dev_admin_h((string) ($edit_item['description_pt'] ?? '')) : ''; ?>"></div>
+                                </div>
+                                <button class="btn btn-primary btn-sm mt-2" type="submit"><?php echo $is_edit_qobj ? 'Update objective' : 'Create objective'; ?></button>
+                                <?php if ($is_edit_qobj): ?>
+                                <a class="btn btn-outline-secondary btn-sm mt-2" href="<?php echo dev_admin_h(dev_admin_url()); ?>">Cancel edit</a>
+                                <?php endif; ?>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -979,6 +1101,7 @@ $cons_ref_field_ctx = [
 {
     var editType = <?php echo json_encode($edit_type); ?>;
     var attachTabActive = <?php echo $attach_tab_active ? 'true' : 'false'; ?>;
+    var questTabActive = <?php echo $quest_tab_active ? 'true' : 'false'; ?>;
     var tabByEditType = {
         npc: '#tab-npc',
         conversation: '#tab-conv',
@@ -990,7 +1113,8 @@ $cons_ref_field_ctx = [
         quest_requirement: '#tab-req',
         consequence: '#tab-cons',
         conversation_consequence: '#tab-cons',
-        quest: '#tab-quest'
+        quest: '#tab-quest',
+        quest_objective: '#tab-quest'
     };
     var tabPane = tabByEditType[editType];
 
@@ -1013,6 +1137,18 @@ $cons_ref_field_ctx = [
         if (attachTrigger)
         {
             bootstrap.Tab.getOrCreateInstance(attachTrigger).show();
+        }
+
+        return;
+    }
+
+    if (questTabActive)
+    {
+        var questTrigger = document.querySelector('[data-bs-target="#tab-quest"]');
+
+        if (questTrigger)
+        {
+            bootstrap.Tab.getOrCreateInstance(questTrigger).show();
         }
     }
 })();
@@ -1063,24 +1199,24 @@ $cons_ref_field_ctx = [
 
 (function ()
 {
-    var typeRefMap = {
-        'user lvl': '',
-        'number of animals': 'ZERO',
-        'item': 'item_types',
-        'conversation finished': 'CONVERSATION',
-        'conversation not finished': 'CONVERSATION',
-        'player class': 'PLAYER_CLASS'
-    };
+    var typeEl = document.getElementById('qobj-objective-type');
+    var targetEl = document.getElementById('qobj-target-ref');
 
-    function filterIdRefOptions(refTableEl, idRefEl)
+    if (!typeEl || !targetEl)
     {
-        var refTable = refTableEl.value;
-        var firstMatch = null;
+        return;
+    }
 
-        idRefEl.querySelectorAll('option').forEach(function (opt)
+    function filterQuestObjectiveTarget()
+    {
+        var type = typeEl.value;
+        var currentVal = targetEl.value;
+        var firstMatch = null;
+        var currentStillValid = false;
+
+        targetEl.querySelectorAll('option').forEach(function (opt)
         {
-            var match = opt.getAttribute('data-ref-table') === refTable
-                || opt.getAttribute('data-ref-table-alt') === refTable;
+            var match = opt.getAttribute('data-objective-type') === type;
             opt.hidden = !match;
             opt.disabled = !match;
 
@@ -1088,9 +1224,108 @@ $cons_ref_field_ctx = [
             {
                 firstMatch = opt;
             }
+
+            if (match && opt.value === currentVal)
+            {
+                currentStillValid = true;
+            }
         });
 
-        if (firstMatch)
+        if (!currentStillValid && firstMatch)
+        {
+            targetEl.value = firstMatch.value;
+        }
+    }
+
+    typeEl.addEventListener('change', filterQuestObjectiveTarget);
+    filterQuestObjectiveTarget();
+})();
+
+(function ()
+{
+    var typeRefMap = {
+        'user lvl': 'users_ig.level',
+        'number of animals': 'animals',
+        'item': 'item_types',
+        'conversation finished': 'conversations',
+        'conversation not finished': 'conversations',
+        'conversation requirements not met': 'conversations',
+        'player class': 'player_classes',
+        'player class not': 'player_classes',
+        'quest not started': 'quests',
+        'quest started': 'quests',
+        'quest ready to turn in': 'quests',
+        'quest completed': 'quests',
+        'quest phase': 'quests',
+        'quest phase completed': 'quests'
+    };  
+
+    var refTableLegacyToCanonical = {
+        'QUEST': 'quests',
+        'PLAYER_CLASS': 'player_classes',
+        'CONVERSATION': 'conversations',
+        'POTION': 'item_types',
+        'ZERO': 'animals',
+        'HAS_ANIMALS': 'animals',
+        'LT_2': 'animals',
+        'LT_3': 'animals'
+    };
+
+    function optionMatchesRefTable(opt, refTable)
+    {
+        var primary = opt.getAttribute('data-ref-table') || '';
+
+        if (primary === refTable)
+        {
+            return true;
+        }
+
+        var alt = opt.getAttribute('data-ref-table-alt') || '';
+
+        if (alt === '')
+        {
+            return false;
+        }
+
+        return alt.split(',').some(function (part)
+        {
+            return part.trim() === refTable;
+        });
+    }
+
+    function filterIdRefOptions(refTableEl, idRefEl)
+    {
+        var refTable = refTableEl.value;
+
+        if (refTableLegacyToCanonical[refTable])
+        {
+            refTable = refTableLegacyToCanonical[refTable];
+        }
+
+        var firstMatch = null;
+        var selectedStillVisible = false;
+
+        idRefEl.querySelectorAll('option').forEach(function (opt)
+        {
+            var match = optionMatchesRefTable(opt, refTable);
+            opt.hidden = !match;
+            opt.disabled = !match;
+
+            if (match)
+            {
+                if (firstMatch === null)
+                {
+                    firstMatch = opt;
+                }
+
+                if (opt.value === idRefEl.value)
+                {
+                    selectedStillVisible = true;
+                }
+            }
+        });
+
+        if (!selectedStillVisible && firstMatch)
         {
             idRefEl.value = firstMatch.value;
         }
@@ -1199,7 +1434,9 @@ $cons_ref_field_ctx = [
             '[obtain item]': 'item_types',
             'receive_random_animal': '',
             '[set player_class]': 'PLAYER_CLASS',
-            'grant_team_buff': 'buff_definitions'
+            'grant_team_buff': 'buff_definitions',
+            '[start quest]': 'QUEST',
+            '[complete quest]': 'QUEST'
         };
 
         if (map[consType] !== undefined)
@@ -1364,7 +1601,9 @@ $cons_ref_field_ctx = [
             '[obtain item]': 'item_types',
             'receive_random_animal': '',
             '[set player_class]': 'PLAYER_CLASS',
-            'grant_team_buff': 'buff_definitions'
+            'grant_team_buff': 'buff_definitions',
+            '[start quest]': 'QUEST',
+            '[complete quest]': 'QUEST'
         };
 
         if (map[consType] !== undefined)

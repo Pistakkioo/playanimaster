@@ -44,11 +44,22 @@ class FUNZIONI
     
     
     
-    public static function AddDropsWildAnimalUser($conn,$id_species,$lvl,$id_user_ig,$LANG,$reward_multiplier=1.0)
+    public static function AddDropsWildAnimalUser($conn,$id_species,$lvl,$id_user_ig,$LANG,$reward_multiplier=1.0,$id_element=0)
     {
         //error_log("function ADD_DROPS_WILD_ANIMAL_USER");
-        // get list of user's active quests ids -- TODO
-        $user_active_quest_ids = "-1,-2,0";
+        // Quest-gated drop rows (wild_animal_drop_types.id_quest_required) only
+        // drop while the referenced quest is active (not started, not completed).
+        $result_active_quests = $conn->query("
+            select id_quest from user_quests where id_user_ig = \"$id_user_ig\" and flg_completed = 'N'
+        ");
+        $active_quest_ids = [];
+        while ($row_active_quest = $result_active_quests->fetch())
+        {
+            $active_quest_ids[] = (int) $row_active_quest['id_quest'];
+        }
+        $user_active_quest_ids = count($active_quest_ids) > 0 ? implode(',', $active_quest_ids) : "-1";
+        $got_item_drop = false;
+        $id_element = (int) $id_element;
         
         //
         $result_WA_drops = $conn->query("
@@ -61,7 +72,8 @@ class FUNZIONI
             where D.id_species = $id_species 
             AND D.lvl_min <=$lvl
             AND D.lvl_max >=$lvl
-            AND (D.id_quest_required is null OR D.id_quest_required = 0 OR D.id_quest_required in ($user_active_quest_ids) ) 
+            AND (D.id_quest_required is null OR D.id_quest_required = 0 OR D.id_quest_required in ($user_active_quest_ids) )
+            AND (D.id_element is null OR D.id_element = 0 OR D.id_element = $id_element)
         "); 
         while($row_WA_drops = $result_WA_drops->fetch())
         {
@@ -133,8 +145,19 @@ class FUNZIONI
                         VALUES
                         (\"$id_user_ig\",'$notification','item',\"$id_item_type\",'N',now())
                     ");
+
+                    $got_item_drop = true;
                 }
             }
+        }
+
+        if ($got_item_drop)
+        {
+            if (!class_exists('QUESTS'))
+            {
+                require_once __DIR__ . '/quests.php';
+            }
+            QUESTS::onInventoryChanged($conn, $id_user_ig, $LANG);
         }
     }
     
@@ -198,6 +221,16 @@ class FUNZIONI
         $result_u = $conn->query("
             update users_ig set exp_total = \"$exp\", level=\"$p_lvl\" where id_user_ig = \"$id_user_ig\" 
         ");
+
+        if ($p_lvl != $lvl)
+        {
+            if (!class_exists('QUESTS'))
+            {
+                require_once __DIR__ . '/quests.php';
+            }
+            QUESTS::onLevelChanged($conn, $id_user_ig, $LANG);
+        }
+
         return $p_lvl;
     }
     
@@ -425,7 +458,91 @@ class FUNZIONI
             return $row_req['requirement_type'] === 'conversation finished' ? $finished : !$finished;
         }
 
-        if ($row_req['requirement_type'] === 'player class')
+        if ($row_req['requirement_type'] === 'conversation requirements not met')
+        {
+            $id_conversation = (int) $id_ref;
+
+            if ($id_conversation <= 0)
+            {
+                return false;
+            }
+
+            $stmt_primary_reqs = $conn->prepare('
+                SELECT R.requirement_type, CR.id_requirement, CR.id_ref, CR.ref_table, CR.ref_description,
+                       CR.min, CR.max, CR.descrizione
+                FROM conversation_requirements CR
+                JOIN requirements R ON R.id_requirement = CR.id_requirement
+                WHERE CR.id_conversation = :id_conversation
+            ');
+            $stmt_primary_reqs->execute([':id_conversation' => $id_conversation]);
+            $primary_reqs = $stmt_primary_reqs->fetchAll(PDO::FETCH_ASSOC);
+
+            if (count($primary_reqs) === 0)
+            {
+                return false;
+            }
+
+            foreach ($primary_reqs as $primary_req)
+            {
+                if (($primary_req['requirement_type'] ?? '') === 'conversation requirements not met')
+                {
+                    continue;
+                }
+
+                if (!self::CheckRequirement($conn, $id_user_ig, $primary_req))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if ($row_req['requirement_type'] === 'quest not started'
+            || $row_req['requirement_type'] === 'quest started'
+            || $row_req['requirement_type'] === 'quest ready to turn in'
+            || $row_req['requirement_type'] === 'quest completed'
+            || $row_req['requirement_type'] === 'quest phase'
+            || $row_req['requirement_type'] === 'quest phase completed')
+        {
+            if (!class_exists('QUESTS'))
+            {
+                require_once __DIR__ . '/quests.php';
+            }
+
+            $id_quest = (int) $id_ref;
+            $quest_phase = (int) $min;
+
+            if ($row_req['requirement_type'] === 'quest not started')
+            {
+                return QUESTS::isNotStarted($conn, $id_user_ig, $id_quest);
+            }
+
+            if ($row_req['requirement_type'] === 'quest started')
+            {
+                return QUESTS::isStarted($conn, $id_user_ig, $id_quest);
+            }
+
+            if ($row_req['requirement_type'] === 'quest ready to turn in')
+            {
+                return QUESTS::isReadyToTurnIn($conn, $id_user_ig, $id_quest);
+            }
+
+            if ($row_req['requirement_type'] === 'quest phase')
+            {
+                return QUESTS::isOnPhase($conn, $id_user_ig, $id_quest, $quest_phase);
+            }
+
+            if ($row_req['requirement_type'] === 'quest phase completed')
+            {
+                return QUESTS::isPhaseCompleted($conn, $id_user_ig, $id_quest, $quest_phase);
+            }
+
+            return QUESTS::isCompleted($conn, $id_user_ig, $id_quest);
+        }
+
+        if ($row_req['requirement_type'] === 'player class'
+            || $row_req['requirement_type'] === 'player class not')
         {
             $result_user = $conn->query("
                 SELECT id_player_class FROM users_ig WHERE id_user_ig = \"$id_user_ig\"
@@ -433,19 +550,20 @@ class FUNZIONI
             $row_user = $result_user ? $result_user->fetch(PDO::FETCH_ASSOC) : null;
             $user_class_id = $row_user ? (int) $row_user['id_player_class'] : 0;
             $target_class_id = (int) $id_ref;
-            $ref_table = isset($row_req['ref_table']) ? (string) $row_req['ref_table'] : '';
-
-            if ($ref_table === 'NOT')
-            {
-                return $user_class_id !== $target_class_id;
-            }
 
             if ($target_class_id <= 0)
             {
                 return false;
             }
 
-            return $user_class_id === $target_class_id;
+            $matches = $user_class_id === $target_class_id;
+
+            if ($row_req['requirement_type'] === 'player class not')
+            {
+                return !$matches;
+            }
+
+            return $matches;
         }
 
         return false;

@@ -158,6 +158,8 @@ $active_pane_id = isset($tab_ids[$active_tab]) ? $tab_ids[$active_tab] : 'tab-sp
         </div>
         <div class="d-flex gap-2">
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_npcs.php')); ?>">NPC content</a>
+            <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_npc.php')); ?>">NPC interactions</a>
+            <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_quest.php')); ?>">Quest flow</a>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_static_data.php')); ?>">Static data</a>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_species.php')); ?>">Refresh</a>
         </div>
@@ -176,7 +178,7 @@ $active_pane_id = isset($tab_ids[$active_tab]) ? $tab_ids[$active_tab] : 'tab-sp
                     <p class="mb-2"><strong>power</strong> / <strong>m_power</strong>: physical / magical base damage. Use 0 for non-damaging moves. If either &gt; 0, battle adds a flat +3 after scaling.</p>
                     <p class="mb-2"><strong>effect</strong>: stat modifier token <code>direction_target_stat_amount_unit</code> (e.g. <code>lower_target_atk_10_%</code>). Use <code>none</code> when no stat change.</p>
                     <p class="mb-0"><strong>effect_chance</strong> (0–100): roll on hit; effect applies when rand(1,100) &lt; effect_chance. Set 0 with <code>none</code>.</p>
-                    <p class="mb-0"><strong>wild_animal_drop_types</strong>: per-species loot table — <code>drop_type</code> item/gold, level band, quantity range, chance %, optional quest gate.</p>
+                    <p class="mb-0"><strong>wild_animal_drop_types</strong>: per-species loot table — <code>drop_type</code> item/gold, level band, quantity range, chance %, optional element filter, optional quest gate.</p>
                 </div>
             </div>
 
@@ -493,6 +495,17 @@ $active_pane_id = isset($tab_ids[$active_tab]) ? $tab_ids[$active_tab] : 'tab-sp
                                     <div class="col-6"><label class="form-label">qt_max</label><input class="form-control form-control-sm" name="qt_max" type="number" min="0" value="<?php echo $is_edit_drop ? (int) $edit_item['qt_max'] : 1; ?>"></div>
                                 </div>
                                 <div class="mb-2"><label class="form-label">chance (%)</label><input class="form-control form-control-sm" name="chance" type="number" min="0" max="100" value="<?php echo $is_edit_drop ? (int) $edit_item['chance'] : 10; ?>"></div>
+                                <div class="mb-2"><label class="form-label">id_element filter</label>
+                                    <select class="form-select form-select-sm" name="id_element">
+                                        <option value="0">0 — any element</option>
+                                        <?php foreach ($elements as $el): ?>
+                                        <?php if ((int) $el['id_element'] === 8): continue; endif; ?>
+                                        <option value="<?php echo (int) $el['id_element']; ?>"<?php echo $is_edit_drop && (int) $edit_item['id_element'] === (int) $el['id_element'] ? ' selected' : ''; ?>>
+                                            #<?php echo (int) $el['id_element']; ?> <?php echo dev_admin_h($el['element']); ?>
+                                        </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
                                 <div class="mb-2"><label class="form-label">id_quest_required</label>
                                     <select class="form-select form-select-sm" name="id_quest_required">
                                         <option value="0">0 — no quest gate</option>

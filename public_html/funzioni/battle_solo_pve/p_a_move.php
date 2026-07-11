@@ -116,7 +116,13 @@ if($p_a_res_hp>0)
             $p_a_lvl = $row_animal['lvl'];
             
             // INSERT REWARDS 
-            FUNZIONI::AddDropsWildAnimalUser($conn,$w_a_id_species,$w_a_lvl,$id_user_ig,$LANG);
+            FUNZIONI::AddDropsWildAnimalUser($conn,$w_a_id_species,$w_a_lvl,$id_user_ig,$LANG,1.0,$w_a_id_element);
+            
+            if (!class_exists('QUESTS'))
+            {
+                require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/quests.php';
+            }
+            QUESTS::onWildDefeated($conn, $id_user_ig, $w_a_id_species, $LANG);
             
         }                
         // END IF WILD ANIMAL FAINTS!!!

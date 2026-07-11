@@ -1144,6 +1144,14 @@ button:disabled {
     min-height: 420px;
 }
 
+.quest-panel {
+    top: 12px;
+    left: 12px;
+    width: min(360px, calc(100% - 24px));
+    height: min(480px, calc(100% - 24px));
+    min-height: 280px;
+}
+
 .side-panel-header {
     cursor: grab;
 }
@@ -2429,6 +2437,17 @@ button:disabled {
 }
 
 .hud-team-toggle:disabled {
+    opacity: 0.45;
+}
+
+.hud-quest-toggle {
+    background: #f1c40f;
+    color: #0f1419;
+    font-size: 0.82rem;
+    padding: 6px 12px;
+}
+
+.hud-quest-toggle:disabled {
     opacity: 0.45;
 }
 
@@ -3808,5 +3827,209 @@ body.character-screen-page {
 
     .character-create-form {
         grid-template-columns: 1fr;
+    }
+}
+
+/* --- Quest log panel + tracker widget --- */
+
+.quest-panel[hidden] {
+    display: none !important;
+}
+
+.quest-body {
+    padding: 10px 12px 14px;
+    overflow-y: auto;
+}
+
+.quest-empty {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+
+.quest-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.quest-card {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(45, 58, 77, 0.55);
+    border: 1px solid rgba(58, 77, 99, 0.6);
+}
+
+.quest-card.is-ready {
+    border-color: #f1c40f;
+}
+
+.quest-card.is-completed {
+    opacity: 0.65;
+}
+
+.quest-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.quest-card-name {
+    font-weight: 600;
+    color: #e8eef5;
+    font-size: 0.95rem;
+}
+
+.quest-track-btn {
+    flex: 0 0 auto;
+    padding: 4px 10px;
+    border: 1px solid #3a4d63;
+    border-radius: 6px;
+    background: transparent;
+    color: #b8c7d6;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.quest-track-btn.is-active {
+    background: #f1c40f;
+    color: #0f1419;
+    border-color: #f1c40f;
+}
+
+.quest-card-desc {
+    margin-top: 4px;
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
+.quest-card-status {
+    margin-top: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #94a3b8;
+}
+
+.quest-card-status.is-ready {
+    color: #f1c40f;
+}
+
+.quest-card-phase {
+    margin-top: 8px;
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.quest-card-objectives {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.quest-objective {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: #e8eef4;
+}
+
+.quest-objective.is-complete {
+    color: #69db7c;
+    text-decoration: line-through;
+}
+
+.quest-objective-progress {
+    flex: 0 0 auto;
+    color: #94a3b8;
+    font-variant-numeric: tabular-nums;
+}
+
+.quest-objective.is-complete .quest-objective-progress {
+    color: #69db7c;
+}
+
+.quest-tracker {
+    position: absolute;
+    top: 12px;
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    z-index: 30;
+    width: min(280px, calc(100% - 24px));
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(15, 20, 25, 0.82);
+    border: 1px solid rgba(58, 77, 99, 0.9);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+    pointer-events: auto;
+    user-select: none;
+}
+
+.quest-tracker[hidden] {
+    display: none !important;
+}
+
+.quest-tracker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: grab;
+}
+
+.quest-tracker-header:active {
+    cursor: grabbing;
+}
+
+.quest-tracker-name {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #f1c40f;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.quest-tracker-clear {
+    flex: 0 0 auto;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+}
+
+.quest-tracker-clear:hover {
+    color: #e8eef4;
+}
+
+.quest-tracker-objectives {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 6px;
+}
+
+.quest-tracker-ready {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #f1c40f;
+    margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+    .quest-panel {
+        width: calc(100% - 16px);
+        height: min(70vh, 640px);
+        min-height: 320px;
+        left: 8px !important;
+        right: 8px !important;
     }
 }

@@ -8,6 +8,7 @@ var AnimasterWorld = (function ()
     var INTERACT_RADIUS = 10;
     var NPC_TALK_RADIUS = 8;
     var SHOW_SPAWN_DEBUG = true;
+    var OTHER_SNAP_DIST = 60;
 
     var canvas = null;
     var ctx = null;
@@ -74,7 +75,141 @@ var AnimasterWorld = (function ()
 
     function setOthers(list)
     {
-        others = list || [];
+        list = list || [];
+        var existingById = {};
+        var merged = [];
+        var i;
+        var incoming;
+        var id;
+        var existing;
+        var serverX;
+        var serverZ;
+
+        for (i = 0; i < others.length; i++)
+        {
+            existingById[others[i].id_player] = others[i];
+        }
+
+        for (i = 0; i < list.length; i++)
+        {
+            incoming = list[i];
+            id = incoming.id_player;
+            existing = existingById[id];
+            serverX = parseFloat(incoming.serverPositionX);
+            serverZ = parseFloat(incoming.serverPositionZ);
+
+            if (existing)
+            {
+                existing.serverPositionX = incoming.serverPositionX;
+                existing.serverPositionY = incoming.serverPositionY;
+                existing.serverPositionZ = incoming.serverPositionZ;
+                existing.displayName = incoming.displayName;
+                existing.gender = incoming.gender;
+                existing.character_type = incoming.character_type;
+                existing.move_speed = incoming.move_speed;
+                existing.objectName = incoming.objectName;
+
+                if (!isFinite(parseFloat(existing.x)) || !isFinite(parseFloat(existing.z)))
+                {
+                    existing.x = serverX;
+                    existing.z = serverZ;
+                }
+
+                merged.push(existing);
+            }
+            else
+            {
+                incoming.x = isFinite(serverX) ? serverX : 0;
+                incoming.z = isFinite(serverZ) ? serverZ : 0;
+                merged.push(incoming);
+            }
+        }
+
+        others = merged;
+    }
+
+    function otherWorldPos(other)
+    {
+        if (!other)
+        {
+            return null;
+        }
+
+        var x = parseFloat(other.x);
+        var z = parseFloat(other.z);
+
+        if (!isFinite(x) || !isFinite(z))
+        {
+            x = parseFloat(other.serverPositionX);
+            z = parseFloat(other.serverPositionZ);
+        }
+
+        if (!isFinite(x) || !isFinite(z))
+        {
+            return null;
+        }
+
+        return { x: x, z: z };
+    }
+
+    function otherMoveStep(other, dt)
+    {
+        var targetX = parseFloat(other.serverPositionX);
+        var targetZ = parseFloat(other.serverPositionZ);
+        var x = parseFloat(other.x);
+        var z = parseFloat(other.z);
+
+        if (!isFinite(targetX) || !isFinite(targetZ))
+        {
+            return;
+        }
+
+        if (!isFinite(x) || !isFinite(z))
+        {
+            other.x = targetX;
+            other.z = targetZ;
+            return;
+        }
+
+        var toX = targetX - x;
+        var toZ = targetZ - z;
+        var dist = Math.sqrt((toX * toX) + (toZ * toZ));
+
+        if (dist < 0.05)
+        {
+            other.x = targetX;
+            other.z = targetZ;
+            return;
+        }
+
+        if (dist > OTHER_SNAP_DIST)
+        {
+            other.x = targetX;
+            other.z = targetZ;
+            return;
+        }
+
+        var step = (parseFloat(other.move_speed) || 5) * dt * 0.35;
+
+        if (step >= dist)
+        {
+            other.x = targetX;
+            other.z = targetZ;
+            other.facingAngle = Math.atan2(toZ, toX);
+            return;
+        }
+
+        other.x += (toX / dist) * step;
+        other.z += (toZ / dist) * step;
+        other.facingAngle = Math.atan2(toZ, toX);
+    }
+
+    function updateOthersMovement(dt)
+    {
+        others.forEach(function (other)
+        {
+            otherMoveStep(other, dt);
+        });
     }
 
     function setWilds(list)
@@ -279,13 +414,15 @@ var AnimasterWorld = (function ()
         for (i = 0; i < others.length; i++)
         {
             other = others[i];
-            ox = parseFloat(other.serverPositionX);
-            oz = parseFloat(other.serverPositionZ);
+            var opos = otherWorldPos(other);
 
-            if (!isFinite(ox) || !isFinite(oz))
+            if (!opos)
             {
                 continue;
             }
+
+            ox = opos.x;
+            oz = opos.z;
 
             if (entityHitAt(screenX, screenY, ox, oz))
             {
@@ -869,15 +1006,22 @@ var AnimasterWorld = (function ()
 
         others.forEach(function (other)
         {
-            var ox = parseFloat(other.serverPositionX);
-            var oz = parseFloat(other.serverPositionZ);
+            var opos = otherWorldPos(other);
 
-            if (!isFinite(ox) || !isFinite(oz))
+            if (!opos)
             {
                 return;
             }
 
+            var ox = opos.x;
+            var oz = opos.z;
+
             drawCircle(ox, oz, 8, '#4488ff', '#2266cc');
+
+            if (typeof other.facingAngle === 'number')
+            {
+                drawDirectionArrow(ox, oz, other.facingAngle);
+            }
 
             var otherName = other.displayName || t('world.other_player_fallback');
             var showFarWarning = typeof AnimasterParty !== 'undefined'
@@ -1025,6 +1169,7 @@ var AnimasterWorld = (function ()
         setPlayer: setPlayer,
         getPlayer: getPlayer,
         getOthers: getOthers,
+        getOtherWorldPos: otherWorldPos,
         setOthers: setOthers,
         setWilds: setWilds,
         setNpcs: setNpcs,
@@ -1034,6 +1179,7 @@ var AnimasterWorld = (function ()
         resetWildEncounter: resetWildEncounter,
         getNpcScreenPosition: getNpcScreenPosition,
         updateMovement: updateMovement,
+        updateOthersMovement: updateOthersMovement,
         render: render,
         getHudText: getHudText,
         distance: distance

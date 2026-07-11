@@ -20,6 +20,11 @@ function dev_static_runtime_excludes()
         'pvp_duel_requests',
         'trade_requests',
         'trades',
+        'battles_party_pve',
+        'battles_party_pve_inactivity_votes',
+        'battles_party_pve_moves',
+        'parties',
+        'party_invites',
     ];
 }
 

@@ -1069,8 +1069,16 @@ function animaster_party_pve_finish_battle($conn, array $battle, $status, $id_wi
                 (int) $wild['lvl'],
                 (int) $p['id_user_ig'],
                 $lang_suffix,
-                $reward_multiplier
+                $reward_multiplier,
+                (int) $wild['id_element']
             );
+
+            if (!class_exists('QUESTS'))
+            {
+                require_once __DIR__ . '/quests.php';
+            }
+
+            QUESTS::onWildDefeated($conn, (int) $p['id_user_ig'], (int) $wild['id_species'], $lang_suffix);
         }
 
         $stmt = $conn->prepare('DELETE FROM wild_animals WHERE id_wild_animal = :id_wild');
@@ -1435,31 +1443,6 @@ function animaster_party_pve_fetch_random_wild_ability($conn, $id_species, $lvl,
     return $rows[array_rand($rows)];
 }
 
-function animaster_party_pve_wild_no_ability_move(array $wild, $lang_suffix)
-{
-    $name = (string) ($wild['nickname'] ?: $wild['species_name'] ?: 'Wild');
-
-    if ($lang_suffix === '_it')
-    {
-        $description = $name . ' sembra concentrarsi.';
-    }
-    else if ($lang_suffix === '_pt')
-    {
-        $description = $name . ' parece concentrar-se.';
-    }
-    else
-    {
-        $description = $name . ' seems to focus.';
-    }
-
-    return [
-        'defender' => $wild,
-        'move_hit' => 'N',
-        'move_description' => $description,
-        'id_ability' => 0
-    ];
-}
-
 /**
  * Validate (without applying) a party member's staged ability choice.
  * Returns the ability row, or an error.
@@ -1794,8 +1777,10 @@ function animaster_party_pve_apply_item_choice($conn, array $actor, $id_user_ig,
 }
 
 /**
- * Apply the wild's single action within a round (it gets one per alive party
- * member). Picks a random alive party participant as target.
+ * Apply the wild's single action within a round (one slot per alive party
+ * member). Picks a random alive party participant as target. Returns null
+ * when the wild species has no unlocked ability at this level (the slot is
+ * skipped; no placeholder move is recorded).
  */
 function animaster_party_pve_apply_wild_action($conn, array $wild, array $target, $lang_suffix)
 {
@@ -1808,14 +1793,10 @@ function animaster_party_pve_apply_wild_action($conn, array $wild, array $target
 
     if (!$ability)
     {
-        $result = animaster_party_pve_wild_no_ability_move($wild, $lang_suffix);
-        $result['attacker'] = $wild;
-        $result['defender'] = $target;
+        return null;
     }
-    else
-    {
-        $result = animaster_party_pve_apply_ability_damage($conn, $ability, $wild, $target, true, $lang_suffix);
-    }
+
+    $result = animaster_party_pve_apply_ability_damage($conn, $ability, $wild, $target, true, $lang_suffix);
 
     animaster_party_pve_save_participant($conn, $result['attacker']);
     animaster_party_pve_save_participant($conn, $result['defender']);
@@ -2044,6 +2025,12 @@ function animaster_party_pve_resolve_round($conn, array $battle, $round, $lang_s
             }
 
             $result = animaster_party_pve_apply_wild_action($conn, $wild, $target, $lang_suffix);
+
+            if (!$result)
+            {
+                continue;
+            }
+
             $wild = $result['wild'];
             $party_by_user[(int) $result['target']['id_user_ig']] = $result['target'];
 

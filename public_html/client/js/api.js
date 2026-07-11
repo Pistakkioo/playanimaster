@@ -501,6 +501,20 @@ var AnimasterApi = (function ()
         });
     }
 
+    function getQuests(player)
+    {
+        return postJson(BASE + 'get_quests.php', {
+            id_user_ig: player.id_user_ig || 0,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            unwrap(envelope);
+            var result = parseHashResponse(envelope.response);
+            apiLog('getQuests', '[AnimasterApi] getQuests', result);
+            return result;
+        });
+    }
+
     function useItem(player, idItemType, idAnimal)
     {
         return postJson(BASE + 'use_item.php', {
@@ -894,6 +908,7 @@ var AnimasterApi = (function ()
         getInventory: getInventory,
         getSelfInfo: getSelfInfo,
         getTeamInfo: getTeamInfo,
+        getQuests: getQuests,
         getTeamAnimals: getTeamAnimals,
         useItem: useItem,
         recoverTeamHp: recoverTeamHp,

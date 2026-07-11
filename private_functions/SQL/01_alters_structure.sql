@@ -521,3 +521,73 @@ WHERE NOT EXISTS (
     SELECT 1 FROM costanti WHERE costante = 'party_pve_inactivity_vote_delay_seconds'
 );
 
+
+-- Module 04 (Quests): runtime engine on top of the existing quests/user_quests/
+-- quest_requirements schema. See docs/modules/004_QUESTS.md.
+
+-- Localized name/description for quests (baseline `quest` column stays English-only).
+ALTER TABLE playanimaster_db.quests
+    ADD COLUMN quest_it VARCHAR(200) DEFAULT NULL AFTER quest,
+    ADD COLUMN quest_pt VARCHAR(200) DEFAULT NULL AFTER quest_it,
+    ADD COLUMN description VARCHAR(1000) DEFAULT NULL AFTER quest_pt,
+    ADD COLUMN description_it VARCHAR(1000) DEFAULT NULL AFTER description,
+    ADD COLUMN description_pt VARCHAR(1000) DEFAULT NULL AFTER description_it;
+
+-- Completion flag; `phase` already exists and now also carries a synthetic
+-- "awaiting turn-in" value of MAX(quest_objectives.phase) + 1 once every
+-- objective of the final phase is met. One row per (user, quest): repeatable
+-- quests reset phase/flg_completed on restart instead of inserting a new row.
+ALTER TABLE playanimaster_db.user_quests
+    ADD COLUMN flg_completed CHAR(1) NOT NULL DEFAULT 'N' AFTER phase,
+    ADD COLUMN dt_completed TIMESTAMP NULL DEFAULT NULL AFTER flg_completed,
+    ADD UNIQUE KEY uniq_user_quests_user_quest (id_user_ig, id_quest);
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.quest_objectives (
+    id_quest_objective INT(11) NOT NULL AUTO_INCREMENT,
+    id_quest INT(11) NOT NULL,
+    phase INT(11) NOT NULL DEFAULT 1,
+    sort_order INT(11) NOT NULL DEFAULT 0,
+    objective_type VARCHAR(30) NOT NULL COMMENT 'kill_species | collect_item | talk_npc | reach_level',
+    target_ref INT(11) DEFAULT NULL COMMENT 'id_species / id_item_type / id_conversation, depending on objective_type; NULL for reach_level',
+    target_count INT(11) NOT NULL DEFAULT 1 COMMENT 'kill/collect count, or the target level for reach_level',
+    description VARCHAR(200) DEFAULT NULL,
+    description_it VARCHAR(200) DEFAULT NULL,
+    description_pt VARCHAR(200) DEFAULT NULL,
+    PRIMARY KEY (id_quest_objective),
+    KEY idx_quest_objectives_quest_phase (id_quest, phase)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.user_quest_objective_progress (
+    id_user_quest_objective_progress INT(11) NOT NULL AUTO_INCREMENT,
+    id_user_ig INT(11) NOT NULL,
+    id_quest_objective INT(11) NOT NULL,
+    progress_count INT(11) NOT NULL DEFAULT 0,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_user_quest_objective_progress),
+    UNIQUE KEY uniq_user_quest_objective_progress (id_user_ig, id_quest_objective)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- `conversations.flg_register` used to double as "hide this conversation once
+-- finished". Split that out: flg_register keeps gating whether a finish gets
+-- written to user_conversations (and can thus satisfy `conversation finished`
+-- / `conversation not finished` requirements); flg_repeatable independently
+-- controls whether the conversation keeps being offered by the NPC after the
+-- player has finished it. Default 'N' preserves current behaviour for every
+-- existing row (registered conversations still hide once finished until an
+-- admin opts a specific conversation into flg_repeatable = 'S').
+ALTER TABLE playanimaster_db.conversations
+    ADD COLUMN flg_repeatable VARCHAR(1) NOT NULL DEFAULT 'N' AFTER flg_register;
+
+-- Optional element filter on wild loot rows: NULL/0 = any element; otherwise
+-- the drop only rolls when the defeated wild's id_element matches.
+ALTER TABLE playanimaster_db.wild_animal_drop_types
+    ADD COLUMN id_element INT(11) DEFAULT NULL AFTER id_species;
+
+
+
+-- LAUNCHED ON PRODUCTION UP TO HERE 
+-- ... 
+
+

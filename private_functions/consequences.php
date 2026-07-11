@@ -19,6 +19,8 @@ class CONSEQUENCES
             'receive_random_animal' => [self::class, 'handleReceiveRandomAnimal'],
             '[set player_class]' => [self::class, 'handleSetPlayerClass'],
             'grant_team_buff' => [self::class, 'handleGrantTeamBuff'],
+            '[start quest]' => [self::class, 'handleStartQuest'],
+            '[complete quest]' => [self::class, 'handleCompleteQuest'],
         ];
     }
 
@@ -165,6 +167,13 @@ class CONSEQUENCES
             ':description' => $notification,
             ':id_item_type' => $id_item_type,
         ]);
+
+        if (!class_exists('QUESTS'))
+        {
+            require_once dirname(__FILE__) . '/quests.php';
+        }
+
+        QUESTS::onInventoryChanged($conn, $id_user_ig, $LANG);
 
         return true;
     }
@@ -629,6 +638,56 @@ class CONSEQUENCES
         }
 
         return PLAYER_CLASS::promoteTo($conn, $id_user_ig, $target_id, $LANG, $params);
+    }
+
+    /**
+     * Params: id_quest (defaults to link id_ref).
+     *
+     * @param array<string, mixed> $row
+     * @param array<string, mixed> $params
+     */
+    private static function handleStartQuest($conn, $id_user_ig, $row, $params, $LANG)
+    {
+        if (!class_exists('QUESTS'))
+        {
+            require_once dirname(__FILE__) . '/quests.php';
+        }
+
+        $id_quest = (int) ($params['id_quest'] ?? $params['id_ref'] ?? 0);
+
+        if ($id_quest <= 0)
+        {
+            error_log('[CONSEQUENCES] [start quest] missing id_quest');
+            return false;
+        }
+
+        return QUESTS::startQuest($conn, $id_user_ig, $id_quest, $LANG);
+    }
+
+    /**
+     * Params: id_quest (defaults to link id_ref). Reward consequences
+     * (obtain item, grant buff, ...) are separate rows on the same dialog
+     * option, applied via the normal FUNZIONI::ApplyConsequence loop.
+     *
+     * @param array<string, mixed> $row
+     * @param array<string, mixed> $params
+     */
+    private static function handleCompleteQuest($conn, $id_user_ig, $row, $params, $LANG)
+    {
+        if (!class_exists('QUESTS'))
+        {
+            require_once dirname(__FILE__) . '/quests.php';
+        }
+
+        $id_quest = (int) ($params['id_quest'] ?? $params['id_ref'] ?? 0);
+
+        if ($id_quest <= 0)
+        {
+            error_log('[CONSEQUENCES] [complete quest] missing id_quest');
+            return false;
+        }
+
+        return QUESTS::completeQuest($conn, $id_user_ig, $id_quest, $LANG);
     }
 
     private static function normalizeLangSuffix($LANG)

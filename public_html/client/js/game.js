@@ -41,9 +41,11 @@
             AnimasterInventory.setToggleEnabled(true);
             AnimasterTeam.setToggleEnabled(true);
             AnimasterSelf.setToggleEnabled(true);
+            AnimasterQuests.setToggleEnabled(true);
             AnimasterWorld.resetWildEncounter();
             syncWorldEntities(true);
             AnimasterNotifications.fetch();
+            AnimasterQuests.refreshTracker();
 
             if (typeof AnimasterDuel !== 'undefined')
             {
@@ -82,6 +84,7 @@
     AnimasterTarget.init();
     AnimasterTrade.init();
     AnimasterParty.init();
+    AnimasterQuests.init();
     AnimasterDuel.init({
         onBattleStart: function (battleInfo)
         {
@@ -95,9 +98,11 @@
             AnimasterInventory.close();
             AnimasterTeam.close();
             AnimasterSelf.close();
+            AnimasterQuests.close();
             AnimasterInventory.setToggleEnabled(false);
             AnimasterTeam.setToggleEnabled(false);
             AnimasterSelf.setToggleEnabled(false);
+            AnimasterQuests.setToggleEnabled(false);
             AnimasterCombat.start(player, battleInfo);
         }
     });
@@ -313,6 +318,13 @@
                 AnimasterSelf.refresh();
             }
 
+            AnimasterQuests.refreshTracker();
+
+            if (AnimasterQuests.isOpen())
+            {
+                AnimasterQuests.refresh();
+            }
+
             AnimasterNotifications.fetch();
         });
     }
@@ -389,9 +401,11 @@
             AnimasterInventory.close();
             AnimasterTeam.close();
             AnimasterSelf.close();
+            AnimasterQuests.close();
             AnimasterInventory.setToggleEnabled(false);
             AnimasterTeam.setToggleEnabled(false);
             AnimasterSelf.setToggleEnabled(false);
+            AnimasterQuests.setToggleEnabled(false);
             AnimasterCombat.resume(player, battleResume);
         }
 
@@ -416,6 +430,7 @@
         AnimasterChat.setPlayer(player);
         AnimasterTrade.setPlayer(player);
         AnimasterParty.setPlayer(player);
+        AnimasterQuests.setPlayer(player);
         AnimasterDuel.setPlayer(player);
 
         if (typeof AnimasterParty.setOnPartyBattleJoin === 'function')
@@ -452,9 +467,11 @@
         AnimasterInventory.close();
         AnimasterTeam.close();
         AnimasterSelf.close();
+        AnimasterQuests.close();
         AnimasterInventory.setToggleEnabled(false);
         AnimasterTeam.setToggleEnabled(false);
         AnimasterSelf.setToggleEnabled(false);
+        AnimasterQuests.setToggleEnabled(false);
         AnimasterTarget.clear();
 
         var info = {
@@ -599,9 +616,11 @@
         AnimasterInventory.close();
         AnimasterTeam.close();
         AnimasterSelf.close();
+        AnimasterQuests.close();
         AnimasterInventory.setToggleEnabled(false);
         AnimasterTeam.setToggleEnabled(false);
         AnimasterSelf.setToggleEnabled(false);
+        AnimasterQuests.setToggleEnabled(false);
 
         var inParty = typeof AnimasterParty !== 'undefined' && AnimasterParty.isInParty();
 
@@ -731,6 +750,8 @@
             {
                 AnimasterWorld.updateMovement(dt);
             }
+
+            AnimasterWorld.updateOthersMovement(dt);
 
             if (!AnimasterDialog.isActive()
                 && !AnimasterDialog.isTalkBubbleVisible()

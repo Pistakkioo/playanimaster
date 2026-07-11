@@ -291,12 +291,18 @@ Uses existing systems: `quests`, `conversation_requirements`, `requirements` (it
 
 ### Class-exclusive conversations
 
-Filter with new requirement type: `player class` (`id_ref` = class id, min/max = exact tier).
+Filter with requirement types `player class` or `player class not` (`ref_table = PLAYER_CLASS`, `id_ref` = class id). min/max are ignored for both.
 
 ```
 requirement_type: 'player class'
+ref_table: PLAYER_CLASS
 id_ref: id_player_class_scientist
-min: 1, max: 1
+```
+
+```
+requirement_type: 'player class not'
+ref_table: PLAYER_CLASS
+id_ref: id_player_class_stud
 ```
 
 Only scientists see Pharmacist vs Veterinarian mentor NPCs.

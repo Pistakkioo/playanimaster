@@ -63,6 +63,13 @@ if (!$already_finished)
     if (PLAYER_CONVERSATIONS::shouldRegisterOnFinish($conn, $id_conversation, $id_option))
     {
         PLAYER_CONVERSATIONS::registerFinished($conn, $id_user_ig, $id_conversation, $id_option);
+
+        if (!class_exists('QUESTS'))
+        {
+            require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/quests.php';
+        }
+
+        QUESTS::onConversationFinished($conn, $id_user_ig, $id_conversation, $LANG);
     }
 }
 else
