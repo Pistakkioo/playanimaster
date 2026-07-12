@@ -94,10 +94,7 @@ $p_a_res_max_hp = (int) $buff_stats['max_hp'];
 
 if ($hp_was_empty)
 {
-    $result_hp = $conn->query("
-        update animals set current_hp = \"$p_a_res_hp\", max_hp = \"$p_a_res_max_hp\"
-        where id_animal = \"$id\"
-    ");
+    BUFFS::persistAnimalHpAfterBattle($conn, (int) $id, (int) $p_a_res_hp);
 }
     
                 $b_status = "ongoing";

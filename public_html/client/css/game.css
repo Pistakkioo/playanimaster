@@ -539,13 +539,34 @@ button:disabled {
     margin-left: 0.35rem;
 }
 
-.party-hud {
+.status-hud-column {
     position: absolute;
     top: 10px;
     left: 10px;
     z-index: 36;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 168px;
+    max-width: min(220px, calc(100vw - 24px));
     pointer-events: none;
     user-select: none;
+}
+
+.status-hud-column .combat-buff-icon {
+    pointer-events: auto;
+}
+
+.self-hud {
+    pointer-events: none;
+}
+
+.self-hud[hidden] {
+    display: none !important;
+}
+
+.party-hud {
+    pointer-events: none;
 }
 
 .party-hud[hidden] {
@@ -697,6 +718,22 @@ button:disabled {
 
 .party-hud-pet-hp {
     width: 100%;
+}
+
+.party-hud-pet-buffs {
+    margin: 2px 0 0;
+    pointer-events: auto;
+}
+
+.party-hud-pet-buffs .combat-buff-icon {
+    pointer-events: auto;
+}
+
+.party-hud-pet-buffs .combat-buff-stack {
+    min-width: 12px;
+    height: 12px;
+    font-size: 8px;
+    line-height: 12px;
 }
 
 .party-hud-pet-empty {
@@ -1864,6 +1901,18 @@ button:disabled {
     text-align: right;
 }
 
+.team-current-stats-hint {
+    margin: 0 0 6px;
+    font-size: 0.72rem;
+    color: #64748b;
+    line-height: 1.35;
+}
+
+.team-current-stats .combat-stat-row {
+    font-size: 0.82rem;
+    padding: 4px 0;
+}
+
 .team-abilities-list {
     list-style: none;
     margin: 0;
@@ -2467,7 +2516,6 @@ button:disabled {
         flex-direction: column;
     }
 
-    .side-panel,
     .inventory-panel,
     .team-panel,
     .self-panel {
@@ -2742,6 +2790,7 @@ body:not(.animaster-chat-icon-only).animaster-chat-right .hud-bottom-dock {
     align-items: center;
     justify-content: center;
     z-index: 100;
+    overflow: visible;
 }
 
 .combat-panel {
@@ -2947,6 +2996,252 @@ body:not(.animaster-chat-icon-only).animaster-chat-right .hud-bottom-dock {
 .unit-name-row .unit-name {
     margin-bottom: 0;
     min-width: 0;
+    flex: 1 1 auto;
+}
+
+.unit-stat-info-btn {
+    flex: 0 0 auto;
+    margin-left: auto;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid #5a9fd4;
+    background: #1a2a3a;
+    color: #9ec5e8;
+    font-size: 12px;
+    font-weight: 700;
+    font-style: italic;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.unit-stat-info-btn:hover,
+.unit-stat-info-btn:focus-visible {
+    background: #243447;
+    color: #cfe8ff;
+    outline: none;
+}
+
+.combat-stat-panel.side-panel {
+    min-height: 0;
+    height: auto;
+    pointer-events: auto;
+}
+
+.combat-stat-panel {
+    top: 56px;
+    right: 12px;
+    width: min(300px, calc(100% - 24px));
+    height: auto;
+    min-height: 0;
+    max-height: min(440px, calc(100vh - 72px));
+}
+
+.combat-stat-panel[hidden] {
+    display: none !important;
+}
+
+@media (max-width: 900px) {
+    .combat-stat-panel.side-panel {
+        width: min(300px, calc(100vw - 24px));
+    }
+}
+
+.combat-stat-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #3a4d63;
+    background: #243041;
+}
+
+.combat-stat-panel-title {
+    font-weight: 600;
+    font-size: 14px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.combat-stat-panel-close {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #c8d4e0;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.combat-stat-panel-close:hover,
+.combat-stat-panel-close:focus-visible {
+    background: rgba(255, 255, 255, 0.08);
+    outline: none;
+}
+
+.combat-stat-panel-body {
+    overflow-y: auto;
+    padding: 8px 12px 12px;
+}
+
+.combat-stat-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 13px;
+}
+
+.combat-stat-row:last-child {
+    border-bottom: none;
+}
+
+.combat-stat-label {
+    color: #a8b8c8;
+}
+
+.combat-stat-value {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.combat-stat-base {
+    color: #7a8794;
+}
+
+.combat-stat-effective {
+    font-weight: 700;
+    color: #e8f0f8;
+}
+
+.combat-stat-row-modified .combat-stat-value {
+    color: #d6e4f0;
+}
+
+.combat-stat-row-buffs {
+    display: inline-flex;
+    gap: 4px;
+    flex-shrink: 0;
+    overflow: visible;
+}
+
+.combat-buff-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 4px 0 6px;
+    min-height: 0;
+    overflow: visible;
+}
+
+.combat-buff-strip[hidden] {
+    display: none !important;
+}
+
+.combat-buff-icon {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    padding: 2px 3px 0;
+    border-radius: 4px;
+    border: 1px solid #4caf7a;
+    background: rgba(76, 175, 122, 0.15);
+    color: #b8f0cc;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    box-sizing: border-box;
+    overflow: visible;
+}
+
+.combat-buff-glyph {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    line-height: 1;
+}
+
+.combat-buff-tier-stars {
+    flex: 0 0 auto;
+    display: block;
+    width: 100%;
+    margin-top: 1px;
+    padding-top: 1px;
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+    font-size: 6px;
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: -0.5px;
+    text-align: center;
+    color: #f0c040;
+    white-space: nowrap;
+    overflow: visible;
+}
+
+.combat-buff-icon.is-debuff .combat-buff-tier-stars {
+    border-top-color: rgba(255, 255, 255, 0.18);
+    color: #f5d060;
+}
+
+.combat-buff-icon.is-debuff {
+    border-color: #e57373;
+    background: rgba(229, 115, 115, 0.15);
+    color: #ffc9c9;
+}
+
+.combat-buff-icon.has-custom-icon {
+    width: 30px;
+    min-width: 30px;
+    font-size: 18px;
+    font-weight: 400;
+    line-height: 1;
+}
+
+.combat-buff-icon.has-custom-icon .combat-buff-glyph {
+    font-size: 18px;
+    font-weight: 400;
+}
+
+.team-buff-icon {
+    flex: 0 0 auto;
+    margin-right: 6px;
+}
+
+.combat-buff-stack {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: #243041;
+    border: 1px solid #5a9fd4;
+    color: #e8f0f8;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 14px;
+    text-align: center;
 }
 
 .unit-element-slot {
@@ -3132,6 +3427,12 @@ body:not(.animaster-chat-icon-only).animaster-chat-right .hud-bottom-dock {
     transform: translateY(-50%);
     font-size: 0.7rem;
     color: #f1c40f;
+}
+
+.combat-abilities button.is-menu-selected,
+.combat-abilities-secondary button.is-menu-selected {
+    box-shadow: inset 0 0 0 2px #f1c40f, 0 0 0 2px #74c0fc;
+    filter: brightness(1.08);
 }
 
 .combat-abilities-secondary button.combat-menu-back {

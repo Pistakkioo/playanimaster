@@ -26,7 +26,8 @@ function animaster_trade_fetch_user($conn, $id_user_ig)
     }
 
     $stmt = $conn->prepare('
-        SELECT id_user_ig, display_name, gold, id_zone, flg_online
+        SELECT id_user_ig, display_name, gold, id_zone, flg_online,
+               position_x, position_z
         FROM users_ig
         WHERE id_user_ig = :id_user_ig
         LIMIT 1
@@ -230,6 +231,23 @@ function animaster_trade_send_request($conn, $id_sender, $id_target)
     if ((int) $sender['id_zone'] !== (int) $target['id_zone'])
     {
         return ['error' => 'OFFLINE'];
+    }
+
+    if (!function_exists('animaster_distance_xz'))
+    {
+        require_once __DIR__ . '/f.php';
+    }
+
+    $distance = animaster_distance_xz(
+        $sender['position_x'],
+        $sender['position_z'],
+        $target['position_x'],
+        $target['position_z']
+    );
+
+    if ($distance > animaster_request_distance('trade'))
+    {
+        return ['error' => 'OUT_OF_RANGE'];
     }
 
     if (animaster_trade_get_open_trade_id($conn, $id_sender) > 0

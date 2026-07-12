@@ -225,6 +225,23 @@ var AnimasterParty = (function ()
         poll();
     }
 
+    function displayMaxHp(animal)
+    {
+        if (!animal)
+        {
+            return 1;
+        }
+
+        var effective = parseInt(animal.effective_max_hp, 10) || 0;
+
+        if (effective > 0)
+        {
+            return effective;
+        }
+
+        return parseInt(animal.max_hp, 10) || 1;
+    }
+
     function hpRatio(animal)
     {
         if (!animal)
@@ -233,7 +250,7 @@ var AnimasterParty = (function ()
         }
 
         var hp = parseInt(animal.current_hp, 10) || 0;
-        var maxHp = parseInt(animal.max_hp, 10) || 1;
+        var maxHp = displayMaxHp(animal);
         var ratio = hp / maxHp;
 
         if (ratio < 0)
@@ -586,6 +603,164 @@ var AnimasterParty = (function ()
         classEl.appendChild(initial);
     }
 
+    function renderHudBuffIcons(containerEl, buffsArray)
+    {
+        if (typeof AnimasterBuffDisplay !== 'undefined' && typeof AnimasterBuffDisplay.renderBuffIcons === 'function')
+        {
+            return AnimasterBuffDisplay.renderBuffIcons(containerEl, buffsArray);
+        }
+
+        if (!containerEl)
+        {
+            return false;
+        }
+
+        containerEl.innerHTML = '';
+        containerEl.hidden = true;
+        return false;
+    }
+
+    function appendHudPetBuffStrip(metaEl, animal)
+    {
+        if (!metaEl || !animal)
+        {
+            return;
+        }
+
+        var buffs = animal.active_combat_buffs || [];
+        var strip = metaEl.querySelector('.party-hud-pet-buffs');
+
+        if (!buffs.length)
+        {
+            if (strip)
+            {
+                strip.remove();
+            }
+
+            return;
+        }
+
+        if (!strip)
+        {
+            strip = document.createElement('div');
+            strip.className = 'combat-buff-strip party-hud-pet-buffs';
+            metaEl.appendChild(strip);
+        }
+
+        renderHudBuffIcons(strip, buffs);
+    }
+
+    function buildHudMemberCard(member, options)
+    {
+        options = options || {};
+
+        if (!member)
+        {
+            return null;
+        }
+
+        var card = document.createElement('div');
+        card.className = 'party-hud-member';
+
+        if (options.isSelf)
+        {
+            card.classList.add('is-self');
+        }
+
+        card.setAttribute('data-user-id', String(member.id_user_ig || ''));
+
+        if (!member.flg_online)
+        {
+            card.classList.add('is-offline');
+        }
+
+        if (!options.hideFarIcon && isMemberTooFar(member))
+        {
+            card.classList.add('is-far');
+        }
+
+        var head = document.createElement('div');
+        head.className = 'party-hud-head';
+
+        var classWrap = document.createElement('div');
+        classWrap.className = 'party-hud-class-wrap';
+
+        var classEl = document.createElement('div');
+        renderClassIcon(classEl, member);
+        classWrap.appendChild(classEl);
+
+        if (member.is_leader)
+        {
+            var star = document.createElement('span');
+            star.className = 'party-hud-leader-star';
+            star.textContent = '\u2605';
+            star.title = t('party.leader');
+            star.setAttribute('aria-label', t('party.leader'));
+            classWrap.appendChild(star);
+        }
+
+        head.appendChild(classWrap);
+
+        if (!options.hideFarIcon)
+        {
+            var farIcon = document.createElement('span');
+            farIcon.className = 'party-hud-far-icon';
+            farIcon.textContent = '!';
+            farIcon.title = t('party.far_tooltip');
+            farIcon.setAttribute('aria-label', t('party.far_tooltip'));
+            farIcon.hidden = !isMemberTooFar(member);
+            head.appendChild(farIcon);
+        }
+
+        var name = document.createElement('span');
+        name.className = 'party-hud-name';
+        name.textContent = member.display_name || 'Player';
+        head.appendChild(name);
+
+        card.appendChild(head);
+
+        var petRow = document.createElement('div');
+        petRow.className = 'party-hud-pet';
+
+        var animal = member.lead_animal;
+
+        if (animal)
+        {
+            var thumb = document.createElement('span');
+            thumb.className = 'party-hud-pet-thumb';
+            renderHudAnimalThumb(thumb, animal);
+            petRow.appendChild(thumb);
+
+            var meta = document.createElement('div');
+            meta.className = 'party-hud-pet-meta';
+
+            var lvl = document.createElement('span');
+            lvl.className = 'party-hud-pet-lvl';
+            lvl.textContent = t('team.lv_short', { level: parseInt(animal.lvl, 10) || 1 });
+            meta.appendChild(lvl);
+
+            var hpWrap = document.createElement('div');
+            hpWrap.className = 'party-hud-pet-hp';
+            renderHudMiniBar(hpWrap, hpRatio(animal), hpBarClass(hpRatio(animal)));
+            meta.appendChild(hpWrap);
+
+            appendHudPetBuffStrip(meta, animal);
+
+            petRow.appendChild(meta);
+        }
+        else
+        {
+            var empty = document.createElement('span');
+            empty.className = 'party-hud-pet-empty';
+            empty.textContent = t('party.hud_no_animal');
+            petRow.appendChild(empty);
+        }
+
+        card.appendChild(petRow);
+
+        return card;
+    }
+
     function renderHud()
     {
         if (!hudEl || !hudListEl)
@@ -606,102 +781,38 @@ var AnimasterParty = (function ()
         hudEl.hidden = false;
         hudEl.setAttribute('aria-hidden', 'false');
 
+        var hasOthers = false;
+
         (partyState.members || []).forEach(function (member)
         {
-            var card = document.createElement('div');
-            card.className = 'party-hud-member';
-            card.setAttribute('data-user-id', String(member.id_user_ig || ''));
-
-            if (!member.flg_online)
+            if (isSelfMember(member))
             {
-                card.classList.add('is-offline');
+                return;
             }
 
-            if (isMemberTooFar(member))
+            hasOthers = true;
+
+            var card = buildHudMemberCard(member);
+
+            if (card)
             {
-                card.classList.add('is-far');
+                hudListEl.appendChild(card);
             }
-
-            if (playerRef && parseInt(member.id_user_ig, 10) === parseInt(playerRef.id_user_ig, 10))
-            {
-                card.classList.add('is-self');
-            }
-
-            var head = document.createElement('div');
-            head.className = 'party-hud-head';
-
-            var classWrap = document.createElement('div');
-            classWrap.className = 'party-hud-class-wrap';
-
-            var classEl = document.createElement('div');
-            renderClassIcon(classEl, member);
-            classWrap.appendChild(classEl);
-
-            if (member.is_leader)
-            {
-                var star = document.createElement('span');
-                star.className = 'party-hud-leader-star';
-                star.textContent = '\u2605';
-                star.title = t('party.leader');
-                star.setAttribute('aria-label', t('party.leader'));
-                classWrap.appendChild(star);
-            }
-
-            head.appendChild(classWrap);
-
-            var farIcon = document.createElement('span');
-            farIcon.className = 'party-hud-far-icon';
-            farIcon.textContent = '!';
-            farIcon.title = t('party.far_tooltip');
-            farIcon.setAttribute('aria-label', t('party.far_tooltip'));
-            farIcon.hidden = !isMemberTooFar(member);
-            head.appendChild(farIcon);
-
-            var name = document.createElement('span');
-            name.className = 'party-hud-name';
-            name.textContent = member.display_name || 'Player';
-            head.appendChild(name);
-
-            card.appendChild(head);
-
-            var petRow = document.createElement('div');
-            petRow.className = 'party-hud-pet';
-
-            var animal = member.lead_animal;
-
-            if (animal)
-            {
-                var thumb = document.createElement('span');
-                thumb.className = 'party-hud-pet-thumb';
-                renderHudAnimalThumb(thumb, animal);
-                petRow.appendChild(thumb);
-
-                var meta = document.createElement('div');
-                meta.className = 'party-hud-pet-meta';
-
-                var lvl = document.createElement('span');
-                lvl.className = 'party-hud-pet-lvl';
-                lvl.textContent = t('team.lv_short', { level: parseInt(animal.lvl, 10) || 1 });
-                meta.appendChild(lvl);
-
-                var hpWrap = document.createElement('div');
-                hpWrap.className = 'party-hud-pet-hp';
-                renderHudMiniBar(hpWrap, hpRatio(animal), hpBarClass(hpRatio(animal)));
-                meta.appendChild(hpWrap);
-
-                petRow.appendChild(meta);
-            }
-            else
-            {
-                var empty = document.createElement('span');
-                empty.className = 'party-hud-pet-empty';
-                empty.textContent = t('party.hud_no_animal');
-                petRow.appendChild(empty);
-            }
-
-            card.appendChild(petRow);
-            hudListEl.appendChild(card);
         });
+
+        if (!hasOthers)
+        {
+            hudEl.hidden = true;
+            hudEl.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    function syncSelfHud(member)
+    {
+        if (typeof AnimasterSelfHud !== 'undefined' && typeof AnimasterSelfHud.update === 'function')
+        {
+            AnimasterSelfHud.update(member || null);
+        }
     }
 
     function getPartyState()
@@ -1241,6 +1352,8 @@ var AnimasterParty = (function ()
                 renderHud();
             }
 
+            syncSelfHud(result.self_hud || null);
+
             if (result.party_pve_battle)
             {
                 maybeJoinPartyBattle(result.party_pve_battle);
@@ -1267,6 +1380,7 @@ var AnimasterParty = (function ()
         isPlayerFarFromParty: isPlayerFarFromParty,
         tickDistanceIndicators: tickDistanceIndicators,
         isFarFromAnyPartyMember: isFarFromAnyPartyMember,
-        getFarPartyBearings: getFarPartyBearings
+        getFarPartyBearings: getFarPartyBearings,
+        buildHudMemberCard: buildHudMemberCard
     };
 })();

@@ -18,6 +18,7 @@ This doc still captures the **current (pre-005) state** below for context/ration
 1. Every ability with a stat-changing effect grants a **battle-scoped buff/debuff** to its target (or the caster, for self-buffs), starting the turn it lands.
 2. Combat stats are **live-calculated** every time they're needed (base stats + all active layers, recomputed fresh) instead of being permanently multiplied into a persisted "current stat" value. Removing/expiring a layer must instantly restore the correct value with zero residue — no order-dependent rollback math.
 3. All battle participants (player animals, wild animals, party allies) show their active buffs/debuffs in the combat UI as a small square icon per buff **type**, with a stack-count badge, in all battle types (`solo_pve`, `pvp`, `party_pve`).
+4. While in combat, each animal gets an **(i) info affordance** that opens a **draggable, closeable stat panel** listing that animal's combat stats. Stats modified by active buff/debuff layers show the **effective value in bold**, inline buff icon(s), and a tooltip with **duration + stacked effect label**; unmodified stats show base value only.
 
 ## Current state pre-005 (context/rationale only — not the implementation target)
 
@@ -119,11 +120,12 @@ Shared pieces added to `private_functions/buffs.php` (battle-type-agnostic — t
 - `BUFFS::grantAbilityEffect($conn, $battle_type, $id_battle, $ability_effect_row, $caster_entity, $target_entity, $applied_at_turn)` — rolls `effect_chance`, resolves `self`/`target` to the right `(entity_type, id_entity)`, calls `grantBattleTurnBuff()`.
 - `BUFFS::computeEffectiveStats($conn, $battle_type, $id_battle, $entity_type, $id_entity, $id_user_ig_or_null, array $base_stats)` — thin wrapper combining `applyAtBattleStart` (time layers) + `applyBattleTurnLayersToStats` (turn layers) in one call.
 - `BUFFS::fetchCombatDisplay($conn, $battle_type, $id_battle, $entity_type, $id_entity, $id_user_ig_or_null, $lang)` — merges time layers + turn layers into one list shaped for the frontend icon strip (see Frontend section), reusing the grouping-by-identical-effect logic already proven in `team.js` (ported to PHP or kept client-side — see open question).
+- `BUFFS::fetchCombatStatSheet($conn, $battle_type, $id_battle, $entity_type, $id_entity, $id_user_ig_or_null, array $base_stats, $lang)` — returns one row per combat stat (`hp`, `max_hp`, `atk`, `def`, `matk`, `mdef`, `acc`, `eva`, `cr`, `spd`) with `base`, `effective`, and the subset of `active_combat_buffs` entries that touch that `stat_key` (empty when unchanged). Used by the per-animal stat inspector panel; must use the same live-recompute path as `computeEffectiveStats`.
 
 These plug into 005's deliverables at exactly three points, **written once**:
 
 1. **`MoveResolver.php`** — wherever it currently computes "attacker/defender effective stats for this move" (the single successor to today's three separate damage-calc blocks), it calls `BUFFS::computeEffectiveStats(...)` for each side instead of trusting a persisted/carried-forward stat. After resolving an ability that has `ability_effects` rows, it calls `BUFFS::grantAbilityEffect(...)` for each one. This is the crux of the whole module: because there's one resolver, this is a single code path instead of three.
-2. **`TurnQueue.php`** — wherever it advances the round/turn counter, it also calls `BUFFS::tickBattleTurnBuffs($conn, $battle_type, $id_battle)` exactly once per full round, regardless of battle type (solo_pve/pvp = both sides acted once; party_pve = round resolved for the whole party, same event `battle_turn_buffs` already keys off).
+2. **`TurnQueue.php`** — after a **resolved round** completes (all execution slots in the speed-sorted queue have run, or the battle ended early), advance `current_turn` once and call `BUFFS::tickBattleTurnBuffs($conn, $battle_type, $id_battle)` exactly once. A "round" means one planning → resolution cycle: solo = 1 human + 1 wild action; pvp = up to 2 human actions in speed order; party_pve = N confirmed party actions + N wild actions (N = alive party size). Do not tick on planning polls or partial submissions.
 3. **`CombatSession.php`** — on battle end (win/loss/flee/disband, wherever that's centralized post-005), calls `BUFFS::clearBattleTurnBuffs($conn, $battle_type, $id_battle)`.
 
 No per-battle-type special-casing should be needed inside `buffs.php` itself — if `MoveResolver`/`TurnQueue` end up needing different call shapes per battle type, that's a signal 005's abstraction isn't finished yet, not that this module should special-case around it.
@@ -136,6 +138,30 @@ Exact shape depends on what 005 lands on for `CombatSession`'s client-facing ser
 
 1. **Preferred:** 005 already unifies the response envelope across battle types — in that case `active_combat_buffs` is just one more field per combatant in that shared shape, done once.
 2. **Fallback (if 005 keeps each battle type's existing response format for compatibility):** extend `pvp_meta` / `party_pve_meta` per participant with `active_combat_buffs: [...]`, and add a new `solo_pve_meta` envelope (`solo_pve` currently has none — it only returns raw move rows) carrying the same field for `p_a`/`w_a`. Same JSON-string-in-envelope pattern as the other two, additive, existing move-row consumers unaffected.
+
+Each combatant should also expose a **`combat_stat_sheet`** array (or equivalent keyed object) for the stat inspector panel — built server-side via `fetchCombatStatSheet` so the client does not re-derive effective values:
+
+```json
+{
+  "stat_key": "atk",
+  "label": "Attack",
+  "base": 42,
+  "effective": 38,
+  "is_modified": true,
+  "buffs": [
+    {
+      "buff_code": "atk_down_10",
+      "name": "Attack Down",
+      "is_debuff": true,
+      "total_effect_label": "-10% ATK",
+      "turns_remaining": 2,
+      "scope": "turn"
+    }
+  ]
+}
+```
+
+When `is_modified` is false, omit `buffs` (or send `[]`) and set `effective === base`. HP rows follow the same shape; current HP is the live `effective`, max HP uses base + layers if max-HP buffs ever exist.
 
 Either way, the per-combatant buff list shape is the same (already pre-grouped/stacked server-side so the client doesn't need to duplicate `team.js`'s grouping logic per battle type):
 
@@ -157,6 +183,8 @@ Either way, the per-combatant buff list shape is the same (already pre-grouped/s
 
 ## Frontend (`combat.js` — already the single shared module for all 3 battle types)
 
+### Buff icon strip (compact, always visible)
+
 - New shared renderer, e.g. `renderCombatBuffIcons(containerEl, buffsArray)`: for each entry, a small square `div.combat-buff-icon` (green border/background tint for buffs, red for debuffs), a short text label derived client-side from `stat_key` + direction (e.g. `ATK▼`, `SPD▲`) — no icon image assets needed, and a stack-count badge (`.combat-buff-stack`, only rendered when `stack_count > 1`, same UX precedent as `team.js`'s expandable stack badge).
 - `title` attribute (native tooltip) with the full name + exact `total_effect_label` + turns remaining for hover detail — no need for a custom tooltip component for v1.
 - Placement: one small icon row per combatant, near their name/HP bar —
@@ -165,16 +193,26 @@ Either way, the per-combatant buff list shape is the same (already pre-grouped/s
   - `party_pve`: each ally row in `.combat-party-actions-list` (same row structure the inactivity-vote countdown was just added to) + the wild row(s).
 - Re-render on the existing poll cadence for each battle type (no new timer needed — buffs change at most once per turn/round, which already triggers a re-render).
 
+### Stat inspector panel (on demand, per animal)
+
+- **Trigger:** a small `(i)` button/icon on each animal row in combat (player active animal, wild, PvP opponent, each party ally row, wild row). One panel instance per open animal is enough for v1; opening another animal's `(i)` may stack a second panel or focus/replace — prefer **one panel at a time** (reuse the same draggable shell, swap contents) to avoid clutter on mobile.
+- **Panel chrome:** floating overlay (`div.combat-stat-panel`), **draggable** by a title/header bar (same drag pattern as other game panels if one exists; otherwise lightweight pointer-drag on the header only), **closeable** via `×` and optionally Escape. Panel position persists only for the current battle session (in-memory; no localStorage required for v1).
+- **Contents:** scrollable list of stats from `combat_stat_sheet` — label, base value (muted when modified), **effective value in bold** when `is_modified`, otherwise a single normal-weight value.
+- **Modified stat row:** to the right of the effective value, render the same buff icon component used in the strip (reuse `renderCombatBuffIcons` on a per-stat subset). Tooltip on each icon: buff name, `total_effect_label`, and duration (`N turns` for `scope: "turn"`, clock-style label for `scope: "time"` when present).
+- **Data source:** always trust server `combat_stat_sheet` / `effective` — do not recompute layers client-side (keeps panel consistent with `MoveResolver` math).
+- **Accessibility:** `(i)` button has `aria-label` / `title` ("Stats"); panel is `role="dialog"` with labelled header including animal nickname/species.
+
 ## Migration / rollout order
 
 0. **Prerequisite:** 005_COMBAT_ENGINE.md ships — `MoveResolver.php`/`TurnQueue.php`/`CombatSession.php` exist and all three battle types (`solo_pve`, `pvp`, `party_pve`) run through them as thin controllers. Do not start this module's implementation before that lands.
 1. Schema: `ability_effects` table + `battle_turn_buffs.id_ability_effect` column + 3 new `buff_definitions` rows + `ability_effects` seed rows for the 5 legacy abilities.
-2. `BUFFS` class additions (`rollAbilityEffects`, `grantAbilityEffect`, `computeEffectiveStats`, `fetchCombatDisplay`).
+2. `BUFFS` class additions (`rollAbilityEffects`, `grantAbilityEffect`, `computeEffectiveStats`, `fetchCombatDisplay`, `fetchCombatStatSheet`).
 3. Wire the three call sites into `MoveResolver.php` / `TurnQueue.php` / `CombatSession.php` (single implementation, exercised by all battle types at once).
-4. Meta/API exposure (unified shape if 005 provides one; otherwise the three-envelope fallback).
-5. Frontend icon strip in `combat.js` + CSS.
-6. Bump `ANIMASTER_ASSET_VERSION`.
-7. (Follow-up, out of scope here) `dev_species.php` admin UI still edits the deprecated `abilities.effect`/`effect_chance` fields — needs a follow-up pass to manage `ability_effects` rows instead so new abilities don't get authored against the dead legacy field.
+4. Meta/API exposure (unified shape if 005 provides one; otherwise the three-envelope fallback) — include `combat_stat_sheet` per combatant alongside `active_combat_buffs`.
+5. Frontend buff icon strip in `combat.js` + CSS.
+6. Frontend stat inspector panel (`(i)` trigger, draggable/closeable panel, modified-stat highlighting) in `combat.js` + CSS.
+7. Bump `ANIMASTER_ASSET_VERSION`.
+8. (Follow-up, out of scope here) `dev_species.php` admin UI still edits the deprecated `abilities.effect`/`effect_chance` fields — needs a follow-up pass to manage `ability_effects` rows instead so new abilities don't get authored against the dead legacy field.
 
 ## Open questions to resolve during implementation (not blocking the plan)
 
@@ -189,5 +227,8 @@ Either way, the per-combatant buff list shape is the same (already pre-grouped/s
 - [ ] Effective damage/accuracy math reflects the debuff immediately (live-calculated), and reverts to exact pre-debuff values the turn it expires (`turns_remaining` reaches 0) — no residual drift.
 - [ ] Stacking the same debuff twice (e.g. hit by `Growl` twice) shows `stack_count: 2` and the correct combined percentage, matching `applyLayersToStats`' multiplicative-per-layer math.
 - [ ] Icon strip renders correctly for `solo_pve`, `pvp`, and `party_pve`, for both buffs (green) and debuffs (red), including merged time-based buffs from `entity_buffs`.
+- [ ] `(i)` stat panel opens for each animal row, is draggable and closeable, and lists all combat stats from `combat_stat_sheet`.
+- [ ] Modified stats show **bold effective value**, base value when different, buff icon(s) with tooltip (name + duration + effect label); unmodified stats show a single normal value.
+- [ ] Stat panel values match damage/accuracy outcomes after a debuff lands and after it expires (same numbers `MoveResolver` used).
 - [ ] `battle_turn_buffs` rows are cleared on battle end for all three battle types (win/loss/flee/disband).
 - [ ] A debuff granted to a `party_pve` member who then leaves/faints doesn't crash meta building (graceful skip, consistent with existing `flg_active`/fainted handling).

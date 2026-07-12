@@ -406,7 +406,24 @@ var AnimasterApi = (function ()
                 };
             }
 
-            return moves;
+            var soloMeta = {};
+
+            if (envelope.solo_pve_meta)
+            {
+                try
+                {
+                    soloMeta = JSON.parse(envelope.solo_pve_meta);
+                }
+                catch (e)
+                {
+                    soloMeta = {};
+                }
+            }
+
+            return {
+                moves: moves,
+                meta: soloMeta
+            };
         });
     }
 

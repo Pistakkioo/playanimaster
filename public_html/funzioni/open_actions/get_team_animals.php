@@ -49,7 +49,7 @@ else if ($motive=="use_item")
 
 
 $result = $conn->query("
-    select id_animal,base_atk,base_def,base_matk,base_mdef,base_hp,base_acc,base_eva,base_cr,base_spd
+    select id_animal,id_user_ig,base_atk,base_def,base_matk,base_mdef,base_hp,base_acc,base_eva,base_cr,base_spd
 		  ,dna_atk,dna_def,dna_matk,dna_mdef,dna_hp,dna_acc,dna_eva,dna_cr,dna_spd
           ,pt_atk,pt_def,pt_matk,pt_mdef,pt_hp,pt_acc,pt_eva,pt_cr,pt_spd
           ,xp_atk,xp_def,xp_matk,xp_mdef,xp_hp,xp_acc,xp_eva,xp_cr,xp_spd
@@ -66,6 +66,13 @@ $rows = [];
 
 while ($row_user_animal = $result->fetch())
 {
+    if (!class_exists('BUFFS'))
+    {
+        require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/buffs.php';
+    }
+
+    $row_user_animal = BUFFS::normalizeTeamAnimalHpRow($conn, $row_user_animal, true);
+
     $id_element = $row_user_animal['id_element'];
     $element = $row_user_animal['element'];
     $lvl = $row_user_animal['lvl'];
@@ -89,7 +96,9 @@ while ($row_user_animal = $result->fetch())
     $xp_mdef = $row_user_animal['xp_mdef'];$xp_hp = $row_user_animal['xp_hp'];$xp_spd = $row_user_animal['xp_spd'];
     
     $user_animal_hp = floor(0.01 * (2 * $base_hp + $dna_hp + floor(0.25 * $pt_hp) + floor(0.25 * $xp_hp)) * $lvl) + $lvl + 10;
-    
+    $user_animal_current_hp = (int) ($row_user_animal['current_hp'] ?? 0);
+    $effective_max_hp = (int) ($row_user_animal['effective_max_hp'] ?? $user_animal_hp);
+
     $user_animal_atk = floor(0.01 * (2 * $base_atk + $dna_atk + floor(0.25 * $pt_atk) + floor(0.25 * $xp_atk)) * $lvl) + 5;
     $user_animal_def = floor(0.01 * (2 * $base_def + $dna_def + floor(0.25 * $pt_def) + floor(0.25 * $xp_def)) * $lvl) + 5;
     $user_animal_matk = floor(0.01 * (2 * $base_matk + $dna_matk + floor(0.25 * $pt_matk) + floor(0.25 * $xp_matk)) * $lvl) + 5;

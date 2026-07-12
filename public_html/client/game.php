@@ -100,8 +100,11 @@ $bootstrap = [
                 </div>
                 <div id="player-chat-bubbles" class="player-chat-bubbles" aria-hidden="true"></div>
 
-                <div id="party-hud" class="party-hud" hidden aria-hidden="true" aria-label="Party">
-                    <div id="party-hud-list" class="party-hud-list"></div>
+                <div id="status-hud-column" class="status-hud-column" aria-label="Status">
+                    <div id="self-hud" class="self-hud" hidden aria-hidden="true"></div>
+                    <div id="party-hud" class="party-hud" hidden aria-hidden="true" aria-label="Party">
+                        <div id="party-hud-list" class="party-hud-list"></div>
+                    </div>
                 </div>
 
                 <div id="quest-tracker" class="quest-tracker" hidden aria-hidden="true">
@@ -190,6 +193,7 @@ $bootstrap = [
                                         <span id="team-detail-xp-text" class="team-detail-bar-text"></span>
                                     </div>
                                 </div>
+                                <div id="team-tab-current" class="team-detail-panel" role="tabpanel" hidden></div>
                                 <div id="team-tab-base" class="team-detail-panel" role="tabpanel" hidden></div>
                                 <div id="team-tab-dna" class="team-detail-panel" role="tabpanel" hidden></div>
                                 <div id="team-tab-exp" class="team-detail-panel" role="tabpanel" hidden></div>
@@ -501,6 +505,7 @@ $bootstrap = [
     <script src="<?php echo animaster_h(animaster_asset_url('js/spawn.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/dialog.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/panel-drag.js')); ?>"></script>
+    <script src="<?php echo animaster_h(animaster_asset_url('js/buff-display.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/element-icons.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/inventory.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/team.js')); ?>"></script>
@@ -511,6 +516,7 @@ $bootstrap = [
     <script src="<?php echo animaster_h(animaster_asset_url('js/target.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/trade.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/party.js')); ?>"></script>
+    <script src="<?php echo animaster_h(animaster_asset_url('js/self-hud.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/quests.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/duel.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/chat.js')); ?>"></script>

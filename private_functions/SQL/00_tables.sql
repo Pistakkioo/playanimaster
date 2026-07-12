@@ -1118,6 +1118,21 @@ CREATE TABLE IF NOT EXISTS playanimaster_db.battle_turn_buffs (
         FOREIGN KEY (id_buff_definition) REFERENCES buff_definitions (id_buff_definition)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS playanimaster_db.ability_effects (
+    id_ability_effect INT(11) NOT NULL AUTO_INCREMENT,
+    id_ability INT(11) NOT NULL,
+    id_buff_definition INT(11) NOT NULL,
+    effect_target ENUM('self','target') NOT NULL DEFAULT 'target',
+    effect_chance TINYINT UNSIGNED NOT NULL DEFAULT 100,
+    duration_turns INT(11) NOT NULL DEFAULT 3,
+    sort_order INT(11) NOT NULL DEFAULT 0,
+    PRIMARY KEY (id_ability_effect),
+    KEY idx_ability_effects_ability (id_ability),
+    KEY idx_ability_effects_definition (id_buff_definition),
+    CONSTRAINT fk_ability_effects_ability FOREIGN KEY (id_ability) REFERENCES abilities (id_ability),
+    CONSTRAINT fk_ability_effects_definition FOREIGN KEY (id_buff_definition) REFERENCES buff_definitions (id_buff_definition)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 
 

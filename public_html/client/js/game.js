@@ -84,6 +84,7 @@
     AnimasterTarget.init();
     AnimasterTrade.init();
     AnimasterParty.init();
+    AnimasterSelfHud.init();
     AnimasterQuests.init();
     AnimasterDuel.init({
         onBattleStart: function (battleInfo)

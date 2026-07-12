@@ -1,7 +1,7 @@
 -- ANIMASTER static data export
 -- Database: playanimaster_db
--- Generated: 2026-07-11 17:06:48
--- Tables: elements, classes, subclasses, abilities, species, species_abilities, item_types, costanti, buff_definitions, player_classes, player_class_abilities, requirements, consequences, zones, npcs, conversations, dialogues, dialogues_options, conversation_requirements, conversation_consequences, npc_requirements, quests, quest_requirements, spawn_points, zone_animals, wild_animal_drop_types, language_texts, chat_word_replacements, chat_global_item_config, quest_objectives
+-- Generated: 2026-07-12 11:34:51
+-- Tables: elements, classes, subclasses, abilities, species, species_abilities, item_types, costanti, buff_definitions, player_classes, player_class_abilities, requirements, consequences, zones, npcs, conversations, dialogues, dialogues_options, conversation_requirements, conversation_consequences, npc_requirements, quests, quest_requirements, spawn_points, zone_animals, wild_animal_drop_types, language_texts, chat_word_replacements, chat_global_item_config, ability_effects, quest_objectives
 -- Sync: php scripts/sync_static_data.php
 --       dev_static_data.php (download or write to repo)
 -- One INSERT per table with ON DUPLICATE KEY UPDATE (see SQL/README.md).
@@ -311,7 +311,7 @@ ON DUPLICATE KEY UPDATE
     `descrizione_it` = VALUES(`descrizione_it`),
     `descrizione_pt` = VALUES(`descrizione_pt`);
 
--- costanti (8 rows)
+-- costanti (11 rows)
 INSERT INTO `playanimaster_db`.`costanti` (`id_costante`, `costante`, `valore`) VALUES
 (4, 'lvl_up_constant_animal', 40),
 (5, 'lvl_up_constant_player', 80),
@@ -320,17 +320,23 @@ INSERT INTO `playanimaster_db`.`costanti` (`id_costante`, `costante`, `valore`) 
 (8, 'INITIAL_POSITION_Y', 0),
 (9, 'INITIAL_POSITION_Z', 0),
 (10, 'INITIAL_MOVE_SPEED', 123),
-(11, 'party_pve_inactivity_vote_delay_seconds', 30)
+(11, 'party_pve_inactivity_vote_delay_seconds', 30),
+(12, 'request_distance_trade', 50),
+(13, 'request_distance_party', 1000),
+(14, 'request_distance_duel', 50)
 ON DUPLICATE KEY UPDATE
     `costante` = VALUES(`costante`),
     `valore` = VALUES(`valore`);
 
--- buff_definitions (4 rows)
-INSERT INTO `playanimaster_db`.`buff_definitions` (`id_buff_definition`, `buff_code`, `name`, `name_it`, `name_pt`, `description`, `description_it`, `description_pt`, `target_entity`, `stat_key`, `modifier_kind`, `modifier_value`, `is_debuff`, `flg_active`, `dt_c`) VALUES
-(1, 'atk_up_10', 'Attack Up', 'Attacco +', 'Ataque +', 'Raises attack by 10%.', 'Aumenta l\'attacco del 10%.', 'Aumenta o ataque em 10%.', 'animal', 'atk', 'percent', '10.0000', 'N', 'S', '2026-06-28 09:54:37'),
-(2, 'def_down_10', 'Defense Down', 'Difesa -', 'Defesa -', 'Lowers defense by 10%.', 'Riduce la difesa del 10%.', 'Reduz a defesa em 10%.', 'animal', 'def', 'percent', '10.0000', 'S', 'S', '2026-06-28 09:54:37'),
-(3, 'party_spd_up_5', 'Party Speed Up', 'Velocita squadra +', 'Velocidade grupo +', 'Raises speed of all team animals by 5%.', 'Aumenta la velocita di tutta la squadra del 5%.', 'Aumenta a velocidade de toda a equipa em 5%.', 'user_ig', 'spd', 'percent', '5.0000', 'N', 'S', '2026-06-28 09:54:37'),
-(5, 'atk_up_100', 'Attack Up', 'Attacco +', 'Ataque +', 'Raises attack by 100%.', 'Aumenta l\'attacco del 100%.', 'Aumenta o ataque em 100%.', 'animal', 'atk', 'percent', '100.0000', 'N', 'S', '2026-06-28 09:54:37')
+-- buff_definitions (7 rows)
+INSERT INTO `playanimaster_db`.`buff_definitions` (`id_buff_definition`, `buff_code`, `name`, `name_it`, `name_pt`, `description`, `description_it`, `description_pt`, `target_entity`, `stat_key`, `modifier_kind`, `modifier_value`, `tier`, `icon`, `is_debuff`, `flg_active`, `dt_c`) VALUES
+(1, 'atk_up_10', 'Attack Up', 'Attacco +', 'Ataque +', 'Raises attack by 10%.', 'Aumenta l\'attacco del 10%.', 'Aumenta o ataque em 10%.', 'animal', 'atk', 'percent', '10', 1, '⚔', 'N', 'S', '2026-06-28 09:54:37'),
+(2, 'def_down_10', 'Defense Down', 'Difesa -', 'Defesa -', 'Lowers defense by 10%.', 'Riduce la difesa del 10%.', 'Reduz a defesa em 10%.', 'animal', 'def', 'percent', '10', 1, '🛡', 'S', 'S', '2026-06-28 09:54:37'),
+(3, 'party_spd_up_5', 'Party Speed Up', 'Velocita squadra +', 'Velocidade grupo +', 'Raises speed of all team animals by 5%.', 'Aumenta la velocita di tutta la squadra del 5%.', 'Aumenta a velocidade de toda a equipa em 5%.', 'user_ig', 'spd', 'percent', '5', 1, '💨', 'N', 'S', '2026-06-28 09:54:37'),
+(5, 'all_up_100', 'All Up', 'Tutto +', 'Tudo +', 'Raises all stats by 100%.', 'Aumenta tutto del 100%.', 'Aumenta tudo em 100%.', 'animal', 'acc,atk,cr,def,eva,matk,max_hp,mdef,spd', 'percent', '100,100,100,100,100,100,100,100,100', 5, '⚔', 'N', 'S', '2026-06-28 09:54:37'),
+(6, 'atk_down_10', 'Attack Down', 'Attacco -', 'Ataque -', 'Lowers attack by 10%.', 'Riduce l\'attacco del 10%.', 'Reduz o ataque em 10%.', 'animal', 'atk', 'percent', '10', 1, '⚔', 'S', 'S', '2026-07-08 12:00:00'),
+(7, 'acc_down_10', 'Accuracy Down', 'Precisione -', 'Precisao -', 'Lowers accuracy by 10%.', 'Riduce la precisione del 10%.', 'Reduz a precisao em 10%.', 'animal', 'acc', 'percent', '10', 1, '🎯', 'S', 'S', '2026-07-08 12:00:00'),
+(8, 'acc_down_20', 'Accuracy Down', 'Precisione -', 'Precisao -', 'Lowers accuracy by 20%.', 'Riduce la precisione del 20%.', 'Reduz a precisao em 20%.', 'animal', 'acc', 'percent', '20', 2, '🎯', 'S', 'S', '2026-07-08 12:00:00')
 ON DUPLICATE KEY UPDATE
     `buff_code` = VALUES(`buff_code`),
     `name` = VALUES(`name`),
@@ -343,6 +349,8 @@ ON DUPLICATE KEY UPDATE
     `stat_key` = VALUES(`stat_key`),
     `modifier_kind` = VALUES(`modifier_kind`),
     `modifier_value` = VALUES(`modifier_value`),
+    `tier` = VALUES(`tier`),
+    `icon` = VALUES(`icon`),
     `is_debuff` = VALUES(`is_debuff`),
     `flg_active` = VALUES(`flg_active`);
 
@@ -1079,7 +1087,10 @@ INSERT INTO `playanimaster_db`.`language_texts` (`id_language_text`, `dt_c`, `ta
 (499, '2026-07-08 10:00:00', 'quest.objective_collect_item', 'Collect {target_name}', 'Raccogli {target_name}', 'Re??ne {target_name}'),
 (500, '2026-07-08 10:00:00', 'quest.objective_talk_npc', 'Talk to an NPC', 'Parla con un NPC', 'Fala com um NPC'),
 (501, '2026-07-08 10:00:00', 'quest.objective_reach_level', 'Reach level {target}', 'Raggiungi il livello {target}', 'Atinge o n??vel {target}'),
-(502, '2026-07-08 10:00:00', 'hud.quests', 'Quests', 'Missioni', 'Miss??es')
+(502, '2026-07-08 10:00:00', 'hud.quests', 'Quests', 'Missioni', 'Miss??es'),
+(503, '2026-07-12 12:00:00', 'team.tab_current', 'Current', 'Attuali', 'Atuais'),
+(504, '2026-07-12 12:00:00', 'team.current_stats_hint', 'Level stats \u2192 current (with active buffs)', 'Stat da livello \u2192 attuali (con buff attivi)', 'Stats de n\u00edvel \u2192 atuais (com buffs ativos)'),
+(505, '2026-07-12 12:00:00', 'team.current_stats_empty', 'Stats unavailable.', 'Statistiche non disponibili.', 'Estat\u00edsticas indispon\u00edveis.')
 ON DUPLICATE KEY UPDATE
     `tag` = VALUES(`tag`),
     `text` = VALUES(`text`),
@@ -1323,6 +1334,21 @@ ON DUPLICATE KEY UPDATE
     `flg_active` = VALUES(`flg_active`);
 
 -- chat_global_item_config: (empty)
+
+-- ability_effects (5 rows)
+INSERT INTO `playanimaster_db`.`ability_effects` (`id_ability_effect`, `id_ability`, `id_buff_definition`, `effect_target`, `effect_chance`, `duration_turns`, `sort_order`) VALUES
+(1, 3, 6, 'target', 100, 999, 0),
+(2, 4, 6, 'target', 100, 999, 0),
+(3, 5, 2, 'target', 100, 999, 0),
+(4, 6, 7, 'target', 60, 999, 0),
+(5, 8, 8, 'target', 100, 999, 0)
+ON DUPLICATE KEY UPDATE
+    `id_ability` = VALUES(`id_ability`),
+    `id_buff_definition` = VALUES(`id_buff_definition`),
+    `effect_target` = VALUES(`effect_target`),
+    `effect_chance` = VALUES(`effect_chance`),
+    `duration_turns` = VALUES(`duration_turns`),
+    `sort_order` = VALUES(`sort_order`);
 
 -- quest_objectives (11 rows)
 INSERT INTO `playanimaster_db`.`quest_objectives` (`id_quest_objective`, `id_quest`, `phase`, `sort_order`, `objective_type`, `target_ref`, `target_count`, `description`, `description_it`, `description_pt`) VALUES

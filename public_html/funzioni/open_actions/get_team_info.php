@@ -38,6 +38,12 @@ while ($row_user_animal = $result->fetch())
         (int) $row_user_animal['id_user_ig'],
         $LANG
     );
+    $row_user_animal['current_stat_sheet'] = BUFFS::fetchTeamCurrentStatSheet(
+        $conn,
+        $row_user_animal,
+        $LANG
+    );
+    $row_user_animal = BUFFS::normalizeTeamAnimalHpRow($conn, $row_user_animal, true);
 
     $rows[] = $row_user_animal;
 }

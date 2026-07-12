@@ -61,6 +61,7 @@ var AnimasterTeam = (function ()
 
     var DETAIL_TABS = [
         { id: 'overview', labelKey: 'team.tab_overview' },
+        { id: 'current', labelKey: 'team.tab_current' },
         { id: 'base', labelKey: 'team.tab_base', prefix: 'base_' },
         { id: 'dna', labelKey: 'team.tab_dna', prefix: 'dna_' },
         { id: 'exp', labelKey: 'team.tab_exp', prefix: 'xp_' },
@@ -104,6 +105,7 @@ var AnimasterTeam = (function ()
         detailTabsEl = document.getElementById('team-detail-tabs');
         detailTabPanels = {
             overview: document.getElementById('team-tab-overview'),
+            current: document.getElementById('team-tab-current'),
             base: document.getElementById('team-tab-base'),
             dna: document.getElementById('team-tab-dna'),
             exp: document.getElementById('team-tab-exp'),
@@ -519,10 +521,22 @@ var AnimasterTeam = (function ()
         };
     }
 
+    function displayMaxHp(animal)
+    {
+        var effective = parseInt(animal && animal.effective_max_hp, 10) || 0;
+
+        if (effective > 0)
+        {
+            return effective;
+        }
+
+        return parseInt(animal && animal.max_hp, 10) || 1;
+    }
+
     function hpRatio(animal)
     {
         var hp = parseInt(animal.current_hp, 10) || 0;
-        var maxHp = parseInt(animal.max_hp, 10) || 1;
+        var maxHp = displayMaxHp(animal);
         var ratio = hp / maxHp;
 
         if (ratio < 0)
@@ -1345,6 +1359,142 @@ var AnimasterTeam = (function ()
         });
     }
 
+    var CURRENT_STAT_LABELS = {
+        hp: 'HP',
+        max_hp: 'Max HP',
+        atk: 'ATK',
+        def: 'DEF',
+        matk: 'MATK',
+        mdef: 'MDEF',
+        acc: 'ACC',
+        eva: 'EVA',
+        cr: 'CR',
+        spd: 'SPD'
+    };
+
+    function formatCurrentStatValue(statKey, value)
+    {
+        if (statKey === 'acc' || statKey === 'eva' || statKey === 'cr')
+        {
+            return String(parseInt(value, 10) || 0);
+        }
+
+        var numeric = Number(value);
+
+        if (isNaN(numeric))
+        {
+            return '0';
+        }
+
+        if (Math.abs(numeric - Math.round(numeric)) < 0.001)
+        {
+            return String(Math.round(numeric));
+        }
+
+        return numeric.toFixed(1);
+    }
+
+    function renderCurrentStatBuffIcons(containerEl, buffsArray)
+    {
+        if (typeof AnimasterBuffDisplay !== 'undefined' && typeof AnimasterBuffDisplay.renderBuffIcons === 'function')
+        {
+            AnimasterBuffDisplay.renderBuffIcons(containerEl, buffsArray);
+        }
+    }
+
+    function renderCurrentStatPanel(panelEl, animal)
+    {
+        if (!panelEl)
+        {
+            return;
+        }
+
+        panelEl.innerHTML = '';
+
+        if (!animal)
+        {
+            var empty = document.createElement('p');
+            empty.className = 'team-detail-empty';
+            empty.textContent = t('team.no_animals');
+            panelEl.appendChild(empty);
+            return;
+        }
+
+        var hint = document.createElement('p');
+        hint.className = 'team-current-stats-hint';
+        hint.textContent = t('team.current_stats_hint');
+        panelEl.appendChild(hint);
+
+        var sheet = animal.current_stat_sheet || [];
+
+        if (!sheet.length)
+        {
+            var missing = document.createElement('p');
+            missing.className = 'team-detail-empty';
+            missing.textContent = t('team.current_stats_empty');
+            panelEl.appendChild(missing);
+            return;
+        }
+
+        var list = document.createElement('div');
+        list.className = 'team-current-stats';
+
+        sheet.forEach(function (row)
+        {
+            var statKey = row.stat_key || '';
+            var label = CURRENT_STAT_LABELS[statKey] || statKey;
+            var baseText = formatCurrentStatValue(statKey, row.base);
+            var effectiveText = formatCurrentStatValue(statKey, row.effective);
+            var line = document.createElement('div');
+            line.className = 'combat-stat-row';
+
+            if (row.is_modified)
+            {
+                line.classList.add('combat-stat-row-modified');
+            }
+
+            var labelEl = document.createElement('span');
+            labelEl.className = 'combat-stat-label';
+            labelEl.textContent = label;
+
+            var valueEl = document.createElement('span');
+            valueEl.className = 'combat-stat-value';
+
+            if (row.is_modified && row.buffs && row.buffs.length)
+            {
+                var buffWrap = document.createElement('span');
+                buffWrap.className = 'combat-stat-row-buffs';
+                renderCurrentStatBuffIcons(buffWrap, row.buffs);
+                valueEl.appendChild(buffWrap);
+            }
+
+            if (row.is_modified)
+            {
+                var baseEl = document.createElement('span');
+                baseEl.className = 'combat-stat-base';
+                baseEl.textContent = baseText;
+
+                var effectiveEl = document.createElement('span');
+                effectiveEl.className = 'combat-stat-effective';
+                effectiveEl.textContent = effectiveText;
+
+                valueEl.appendChild(baseEl);
+                valueEl.appendChild(document.createTextNode(' \u2192 '));
+                valueEl.appendChild(effectiveEl);
+            }
+            else
+            {
+                valueEl.textContent = effectiveText;
+            }
+
+            line.appendChild(labelEl);
+            line.appendChild(valueEl);
+            list.appendChild(line);
+        });
+
+        panelEl.appendChild(list);
+    }
+
     function formatAbilityMeta(ability)
     {
         var parts = [];
@@ -1375,6 +1525,7 @@ var AnimasterTeam = (function ()
     {
         if (!selectedAnimal)
         {
+            renderCurrentStatPanel(detailTabPanels.current, null);
             renderStatPanel(detailTabPanels.base, null, 'base_');
             renderStatPanel(detailTabPanels.dna, null, 'dna_');
             renderStatPanel(detailTabPanels.exp, null, 'xp_');
@@ -1383,7 +1534,11 @@ var AnimasterTeam = (function ()
             return;
         }
 
-        if (activeDetailTab === 'base')
+        if (activeDetailTab === 'current')
+        {
+            renderCurrentStatPanel(detailTabPanels.current, selectedAnimal);
+        }
+        else if (activeDetailTab === 'base')
         {
             renderStatPanel(detailTabPanels.base, selectedAnimal, 'base_');
         }
@@ -1422,6 +1577,16 @@ var AnimasterTeam = (function ()
 
     function buffStackKey(buff)
     {
+        var buffCode = String(buff.buff_code || '').trim();
+
+        if (buffCode)
+        {
+            return [
+                buff.scope || 'animal',
+                buffCode
+            ].join('|');
+        }
+
         return [
             buff.scope || 'animal',
             buff.is_debuff || 'N',
@@ -1433,11 +1598,21 @@ var AnimasterTeam = (function ()
 
     function formatBuffStatLabel(statKey)
     {
+        if (typeof AnimasterBuffDisplay !== 'undefined')
+        {
+            return AnimasterBuffDisplay.statKeyLabel(statKey);
+        }
+
         return String(statKey || '').toUpperCase();
     }
 
     function computeStackedBuffEffect(stacks)
     {
+        if (typeof AnimasterBuffDisplay !== 'undefined')
+        {
+            return AnimasterBuffDisplay.computeStackedEffect(stacks);
+        }
+
         if (!stacks.length)
         {
             return '';
@@ -1526,6 +1701,7 @@ var AnimasterTeam = (function ()
                 is_debuff: first.is_debuff === 'S',
                 scope: first.scope || 'animal',
                 name: first.name || first.buff_code || '',
+                icon: first.icon || '',
                 description: first.description || '',
                 totalEffect: computeStackedBuffEffect(stacks),
                 minSecondsRemaining: minStackSecondsRemaining(stacks)
@@ -1571,6 +1747,17 @@ var AnimasterTeam = (function ()
 
             var head = document.createElement('div');
             head.className = 'team-buff-head';
+
+            if (group.icon && typeof AnimasterBuffDisplay !== 'undefined')
+            {
+                var iconBuff = Object.assign({}, group.stacks[0], {
+                    total_effect_label: group.totalEffect,
+                    stack_count: group.stackCount
+                });
+                var iconBadge = AnimasterBuffDisplay.createBuffIconElement(iconBuff);
+                iconBadge.classList.add('team-buff-icon');
+                head.appendChild(iconBadge);
+            }
 
             var name = document.createElement('span');
             name.className = 'team-buff-name';
@@ -1713,7 +1900,7 @@ var AnimasterTeam = (function ()
         }
 
         var hp = parseInt(animal.current_hp, 10) || 0;
-        var maxHp = parseInt(animal.max_hp, 10) || 0;
+        var maxHp = displayMaxHp(animal);
         var hpPctValue = hpRatio(animal);
         var xp = xpRange(animal);
 

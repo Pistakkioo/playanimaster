@@ -11,6 +11,31 @@ $LANG = $_POST['lang'];
 
 $where_character = "id_user_ig = \"$id_user_ig\"";
 
+if ($id_user_ig > 0)
+{
+    if (!class_exists('BUFFS'))
+    {
+        require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/buffs.php';
+    }
+
+    $repair_stmt = $conn->prepare('
+        SELECT A.id_animal
+        FROM animals A
+        WHERE A.id_user_ig = :id_user_ig
+    ');
+    $repair_stmt->execute([':id_user_ig' => (int) $id_user_ig]);
+
+    while ($repair_row = $repair_stmt->fetch(PDO::FETCH_ASSOC))
+    {
+        $level_row = BUFFS::fetchAnimalLevelRow($conn, (int) $repair_row['id_animal']);
+
+        if ($level_row)
+        {
+            BUFFS::normalizeTeamAnimalHpRow($conn, $level_row, true);
+        }
+    }
+}
+
 $result_heal = $conn->query("
     update animals set current_hp = max_hp 
     where id_user_ig = \"$id_user_ig\"

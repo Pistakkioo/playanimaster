@@ -66,12 +66,12 @@ if($b_status!="ongoing")
         where id_battle_solo_pve = \"$id_battle\"
     ");
 
-    if (!class_exists('BUFFS'))
+    if (!class_exists('CombatSession'))
     {
-        require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/buffs.php';
+        require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/combat/CombatSession.php';
     }
 
-    BUFFS::onSoloPveBattleEnd($conn, $id_battle);
+    CombatSession::onBattleEnd($conn, CombatSession::TYPE_SOLO, $id_battle);
 }
 
 

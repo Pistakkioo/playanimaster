@@ -10,10 +10,9 @@ if (!defined('ANIMASTER_DUEL_COOLDOWN_SECONDS'))
     define('ANIMASTER_DUEL_COOLDOWN_SECONDS', 30);
 }
 
-if (!defined('ANIMASTER_DUEL_INTERACT_RADIUS'))
-{
-    define('ANIMASTER_DUEL_INTERACT_RADIUS', 10);
-}
+require_once __DIR__ . '/combat/CombatSession.php';
+require_once __DIR__ . '/combat/TurnQueue.php';
+require_once __DIR__ . '/combat/Permissions.php';
 
 function animaster_pvp_expire_requests($conn)
 {
@@ -263,7 +262,7 @@ function animaster_pvp_send_request($conn, $id_challenger, $id_target)
         $target['position_z']
     );
 
-    if ($distance > ANIMASTER_DUEL_INTERACT_RADIUS)
+    if ($distance > animaster_request_distance('duel'))
     {
         return ['error' => 'OUT_OF_RANGE'];
     }
@@ -955,12 +954,12 @@ function animaster_pvp_finish_battle($conn, $battle_row, $winner_id, $end_reason
     animaster_pvp_clear_user_flags($conn, (int) $battle_row['id_user_ig_a']);
     animaster_pvp_clear_user_flags($conn, (int) $battle_row['id_user_ig_b']);
 
-    if (!class_exists('BUFFS'))
+    if (!class_exists('CombatSession'))
     {
-        require_once __DIR__ . '/buffs.php';
+        require_once __DIR__ . '/combat/CombatSession.php';
     }
 
-    BUFFS::clearBattleTurnBuffs($conn, 'pvp', $id_battle);
+    CombatSession::onBattleEnd($conn, CombatSession::TYPE_PVP, $id_battle);
 }
 
 function animaster_pvp_viewer_status($battle_row, $viewer_id, $raw_status)
@@ -1291,6 +1290,21 @@ function animaster_pvp_record_move($conn, $battle_row, $turn, $order, $id_user_i
     ]);
 }
 
+function animaster_pvp_apply_fighter_to_state(array &$state, $side, array $fighter)
+{
+    $prefix = ($side === 'w_a') ? 'w_a_res_' : 'p_a_res_';
+
+    if (array_key_exists('current_hp', $fighter))
+    {
+        $state[$prefix . 'hp'] = (int) $fighter['current_hp'];
+    }
+
+    if (array_key_exists('max_hp', $fighter))
+    {
+        $state[$prefix . 'max_hp'] = (int) $fighter['max_hp'];
+    }
+}
+
 function animaster_pvp_execute_action($conn, &$battle_row, $state, $id_user_ig, $type, $id, $lang_suffix)
 {
     $id_user_ig = (int) $id_user_ig;
@@ -1348,79 +1362,125 @@ function animaster_pvp_execute_action($conn, &$battle_row, $state, $id_user_ig, 
 
         if ($actor_side === 'a')
         {
-            $atk = $state['p_a_res_atk'];
-            $matk = $state['p_a_res_matk'];
-            $def = $state['w_a_res_def'];
-            $mdef = $state['w_a_res_mdef'];
-            $acc = $state['p_a_res_acc'];
-            $eva = $state['w_a_res_eva'];
-            $cr = $state['p_a_res_cr'];
-            $lvl = $state['p_a_lvl'];
-            $attacker_elem = $state['p_a_id_element'];
-            $defender_elem = $state['w_a_id_element'];
-            $attacker_nick = $state['p_a_nickname'];
-            $move_speed = $state['p_a_res_spd'];
+            $attacker = [
+                'lvl' => (int) $state['p_a_lvl'],
+                'acc' => (int) $state['p_a_res_acc'],
+                'cr' => (int) $state['p_a_res_cr'],
+                'atk' => (float) $state['p_a_res_atk'],
+                'def' => (float) $state['p_a_res_def'],
+                'matk' => (float) $state['p_a_res_matk'],
+                'mdef' => (float) $state['p_a_res_mdef'],
+                'eva' => (int) $state['p_a_res_eva'],
+                'spd' => (int) $state['p_a_res_spd'],
+                'current_hp' => (int) $state['p_a_res_hp'],
+                'max_hp' => (int) $state['p_a_res_max_hp'],
+                'id_element' => (int) $state['p_a_id_element'],
+                'nickname' => (string) $state['p_a_nickname'],
+            ];
+            $defender = [
+                'lvl' => (int) $state['w_a_lvl'],
+                'acc' => (int) $state['w_a_res_acc'],
+                'cr' => (int) $state['w_a_res_cr'],
+                'atk' => (float) $state['w_a_res_atk'],
+                'def' => (float) $state['w_a_res_def'],
+                'matk' => (float) $state['w_a_res_matk'],
+                'mdef' => (float) $state['w_a_res_mdef'],
+                'eva' => (int) $state['w_a_res_eva'],
+                'spd' => (int) $state['w_a_res_spd'],
+                'current_hp' => (int) $state['w_a_res_hp'],
+                'max_hp' => (int) $state['w_a_res_max_hp'],
+                'id_element' => (int) $state['w_a_id_element'],
+                'nickname' => (string) $state['w_a_species'],
+            ];
+            $move_speed = (int) $state['p_a_res_spd'];
         }
         else
         {
-            $atk = $state['w_a_res_atk'];
-            $matk = $state['w_a_res_matk'];
-            $def = $state['p_a_res_def'];
-            $mdef = $state['p_a_res_mdef'];
-            $acc = $state['w_a_res_acc'];
-            $eva = $state['p_a_res_eva'];
-            $cr = $state['w_a_res_cr'];
-            $lvl = $state['w_a_lvl'];
-            $attacker_elem = $state['w_a_id_element'];
-            $defender_elem = $state['p_a_id_element'];
-            $attacker_nick = $state['w_a_species'];
-            $move_speed = $state['w_a_res_spd'];
+            $attacker = [
+                'lvl' => (int) $state['w_a_lvl'],
+                'acc' => (int) $state['w_a_res_acc'],
+                'cr' => (int) $state['w_a_res_cr'],
+                'atk' => (float) $state['w_a_res_atk'],
+                'def' => (float) $state['w_a_res_def'],
+                'matk' => (float) $state['w_a_res_matk'],
+                'mdef' => (float) $state['w_a_res_mdef'],
+                'eva' => (int) $state['w_a_res_eva'],
+                'spd' => (int) $state['w_a_res_spd'],
+                'current_hp' => (int) $state['w_a_res_hp'],
+                'max_hp' => (int) $state['w_a_res_max_hp'],
+                'id_element' => (int) $state['w_a_id_element'],
+                'nickname' => (string) $state['w_a_species'],
+            ];
+            $defender = [
+                'lvl' => (int) $state['p_a_lvl'],
+                'acc' => (int) $state['p_a_res_acc'],
+                'cr' => (int) $state['p_a_res_cr'],
+                'atk' => (float) $state['p_a_res_atk'],
+                'def' => (float) $state['p_a_res_def'],
+                'matk' => (float) $state['p_a_res_matk'],
+                'mdef' => (float) $state['p_a_res_mdef'],
+                'eva' => (int) $state['p_a_res_eva'],
+                'spd' => (int) $state['p_a_res_spd'],
+                'current_hp' => (int) $state['p_a_res_hp'],
+                'max_hp' => (int) $state['p_a_res_max_hp'],
+                'id_element' => (int) $state['p_a_id_element'],
+                'nickname' => (string) $state['p_a_nickname'],
+            ];
+            $move_speed = (int) $state['w_a_res_spd'];
         }
 
-        $hit_acc = $acc * ((int) $ability['accuracy'] / 100);
-        $hit_acc *= (100 - $eva) / 100;
-        $hit_roll = rand(1, 100);
-        $move_hit = 'N';
-        $crit_mult = 1;
-
-        if ($hit_roll <= $hit_acc)
+        if (!class_exists('MoveResolver'))
         {
-            $move_hit = 'S';
+            require_once __DIR__ . '/combat/MoveResolver.php';
         }
 
-        $damage = 0;
+        $id_battle = (int) $battle_row['id_battle_pvp'];
+        $applied_turn = (int) $battle_row['current_turn'];
+        $p_a_entity = [
+            'entity_type' => 'animal',
+            'id_entity' => (int) $state['p_a_id'],
+            'id_user_ig' => (int) $battle_row['id_user_ig_a'],
+        ];
+        $w_a_entity = [
+            'entity_type' => 'animal',
+            'id_entity' => (int) $state['w_a_id'],
+            'id_user_ig' => (int) $battle_row['id_user_ig_b'],
+        ];
 
-        if ($move_hit === 'S')
+        if ($actor_side === 'a')
         {
-            if (rand(1, 100) <= $cr)
-            {
-                $crit_mult = 1.5;
-                $move_hit = 'C';
-            }
-
-            $type_mult = ((int) $ability['id_element'] === (int) $attacker_elem) ? 1.5 : 1;
-            $damage = (int) (($lvl * 0.5 * (int) $ability['power'] * $atk / max(1, $def))
-                + ($lvl * 0.5 * (int) $ability['m_power'] * $matk / max(1, $mdef)));
-            $damage = (int) ($damage / 40);
-
-            if ((int) $ability['power'] > 0 || (int) $ability['m_power'] > 0)
-            {
-                $damage += 3;
-            }
-
-            $damage = (int) ($damage * $crit_mult * $type_mult);
-            $damage = (int) ($damage * FUNZIONI::element_bonus((int) $ability['id_element'], (int) $defender_elem));
-            $damage = max(0, $damage);
-
-            if ($actor_side === 'a')
-            {
-                $state['w_a_res_hp'] -= $damage;
-            }
-            else
-            {
-                $state['p_a_res_hp'] -= $damage;
-            }
+            $attacker_entity = $p_a_entity;
+            $defender_entity = $w_a_entity;
         }
+        else
+        {
+            $attacker_entity = $w_a_entity;
+            $defender_entity = $p_a_entity;
+        }
+
+        $move_result = MoveResolver::resolveAbility($ability, $attacker, $defender, [
+            'lang_suffix' => (string) $lang_suffix,
+            'conn' => $conn,
+            'battle_type' => CombatSession::TYPE_PVP,
+            'id_battle' => $id_battle,
+            'applied_at_turn' => $applied_turn,
+            'attacker_entity' => $attacker_entity,
+            'defender_entity' => $defender_entity,
+        ]);
+
+        if ($actor_side === 'a')
+        {
+            animaster_pvp_apply_fighter_to_state($state, 'p_a', $move_result['attacker']);
+            animaster_pvp_apply_fighter_to_state($state, 'w_a', $move_result['defender']);
+        }
+        else
+        {
+            animaster_pvp_apply_fighter_to_state($state, 'w_a', $move_result['attacker']);
+            animaster_pvp_apply_fighter_to_state($state, 'p_a', $move_result['defender']);
+        }
+
+        $move_hit = $move_result['move_hit'];
+        $move_description = $move_result['move_description'];
 
         if ($state['w_a_res_hp'] < 0)
         {
@@ -1434,20 +1494,14 @@ function animaster_pvp_execute_action($conn, &$battle_row, $state, $id_user_ig, 
 
         $move_type = 'ability';
         $id_rif = $id;
-        $move_description = $attacker_nick . ' used ' . $ability['ability_name'];
 
-        if ($lang_suffix === '_it')
+        if (!class_exists('BUFFS'))
         {
-            $move_description = $attacker_nick . ' ha usato ' . $ability['ability_name'];
-        }
-        elseif ($lang_suffix === '_pt')
-        {
-            $move_description = $attacker_nick . ' usou ' . $ability['ability_name'];
+            require_once __DIR__ . '/buffs.php';
         }
 
-        $stmt = $conn->prepare('UPDATE animals SET current_hp = :hp WHERE id_animal = :id_animal');
-        $stmt->execute(['hp' => $state['p_a_res_hp'], 'id_animal' => $state['p_a_id']]);
-        $stmt->execute(['hp' => $state['w_a_res_hp'], 'id_animal' => $state['w_a_id']]);
+        BUFFS::persistAnimalHpAfterBattle($conn, (int) $state['p_a_id'], (int) $state['p_a_res_hp']);
+        BUFFS::persistAnimalHpAfterBattle($conn, (int) $state['w_a_id'], (int) $state['w_a_res_hp']);
 
         if ($state['w_a_res_hp'] <= 0)
         {
@@ -1493,23 +1547,7 @@ function animaster_pvp_resolve_turn_choices($conn, &$battle_row, $turn, $lang_su
     $id_battle = (int) $battle_row['id_battle_pvp'];
     $choices = animaster_pvp_fetch_turn_choices($conn, $id_battle, $turn);
 
-    if (count($choices) < 1)
-    {
-        return ['error' => 'WAITING_OPPONENT'];
-    }
-
-    $has_flee = false;
-
-    foreach ($choices as $choice)
-    {
-        if ((string) $choice['action_type'] === 'action' && (int) $choice['action_id'] === 4)
-        {
-            $has_flee = true;
-            break;
-        }
-    }
-
-    if (count($choices) < 2 && !$has_flee)
+    if (!Permissions::pvpShouldResolveTurn(count($choices), $choices))
     {
         return ['error' => 'WAITING_OPPONENT'];
     }
@@ -1524,6 +1562,12 @@ function animaster_pvp_resolve_turn_choices($conn, &$battle_row, $turn, $lang_su
     $state = animaster_pvp_state_from_move($state_move);
     $first_user = animaster_pvp_first_actor_user_id($battle_row, $state['p_a_res_spd'], $state['w_a_res_spd']);
     $second_user = animaster_pvp_second_actor_user_id($battle_row, $state['p_a_res_spd'], $state['w_a_res_spd']);
+    $ordered_users = TurnQueue::orderPvpActorUserIds(
+        $first_user,
+        $second_user,
+        $state['p_a_res_spd'],
+        $state['w_a_res_spd']
+    );
 
     $choice_map = [];
 
@@ -1532,7 +1576,6 @@ function animaster_pvp_resolve_turn_choices($conn, &$battle_row, $turn, $lang_su
         $choice_map[(int) $choice['id_user_ig']] = $choice;
     }
 
-    $ordered_users = [$first_user, $second_user];
     $order = 0;
 
     foreach ($ordered_users as $actor_id)
@@ -1578,42 +1621,24 @@ function animaster_pvp_resolve_turn_choices($conn, &$battle_row, $turn, $lang_su
         }
     }
 
-    animaster_pvp_clear_turn_choices($conn, $id_battle, $turn);
+    $advance = CombatSession::completePvpPlanningTurn(
+        $conn,
+        $id_battle,
+        $turn,
+        trim((string) $battle_row['flg_status']) === 'O',
+        function ($resolvedTurn) use ($conn, $id_battle)
+        {
+            animaster_pvp_clear_turn_choices($conn, $id_battle, $resolvedTurn);
+        }
+    );
 
-    if (trim((string) $battle_row['flg_status']) === 'O')
-    {
-        $next_turn = $turn + 1;
-
-        $stmt = $conn->prepare('
-            UPDATE battles_pvp
-            SET awaiting_user_ig = NULL,
-                current_turn = :turn,
-                dt_m = NOW()
-            WHERE id_battle_pvp = :id_battle
-        ');
-        $stmt->execute([
-            'turn' => $next_turn,
-            'id_battle' => $id_battle
-        ]);
-
-        $battle_row['awaiting_user_ig'] = null;
-        $battle_row['current_turn'] = $next_turn;
-    }
-    else
-    {
-        $stmt = $conn->prepare('
-            UPDATE battles_pvp
-            SET awaiting_user_ig = NULL, dt_m = NOW()
-            WHERE id_battle_pvp = :id_battle
-        ');
-        $stmt->execute(['id_battle' => $id_battle]);
-        $battle_row['awaiting_user_ig'] = null;
-    }
+    $battle_row['awaiting_user_ig'] = $advance['awaiting_user_ig'];
+    $battle_row['current_turn'] = $advance['current_turn'];
 
     return ['ok' => true];
 }
 
-function animaster_pvp_build_meta($conn, $battle_row, $id_user_ig, $turn_moves, $view_turn = null)
+function animaster_pvp_build_meta($conn, $battle_row, $id_user_ig, $turn_moves, $view_turn = null, $lang_suffix = '')
 {
     $id_user_ig = (int) $id_user_ig;
     $id_battle = (int) $battle_row['id_battle_pvp'];
@@ -1635,19 +1660,37 @@ function animaster_pvp_build_meta($conn, $battle_row, $id_user_ig, $turn_moves, 
             && !animaster_pvp_team_has_hp($conn, $id_user_ig);
     }
 
-    return [
-        'awaiting_user_ig' => null,
-        'can_act' => $battle_open && !$has_submitted && $current_resolved === 0,
-        'submitted' => $has_submitted && $current_resolved === 0,
-        'opponent_locked' => !$has_submitted && $choice_count > 0,
-        'opponent_submitted' => $has_submitted && $choice_count >= 2 && $current_resolved === 0,
-        'both_locked' => $choice_count >= 2 && $current_resolved === 0,
-        'choices_locked' => $choice_count >= 2 && $current_resolved === 0,
-        'turn_complete' => $turn_complete,
-        'battle_finished' => !$battle_open,
-        'needs_recovery' => $needs_recovery,
-        'current_turn' => $current_turn
-    ];
+    $combatants = [];
+
+    if ($turn_moves)
+    {
+        $last_move = $turn_moves[count($turn_moves) - 1];
+        $combatants = CombatSession::combatantsFromPvpState(animaster_pvp_state_from_move($last_move), $battle_row);
+    }
+
+    return CombatSession::attachCombatants(
+        [
+            'battle_type' => CombatSession::TYPE_PVP,
+            'awaiting_user_ig' => null,
+            'can_act' => $battle_open && !$has_submitted && $current_resolved === 0,
+            'submitted' => $has_submitted && $current_resolved === 0,
+            'opponent_locked' => !$has_submitted && $choice_count > 0,
+            'opponent_submitted' => $has_submitted && $choice_count >= 2 && $current_resolved === 0,
+            'both_locked' => $choice_count >= 2 && $current_resolved === 0,
+            'choices_locked' => $choice_count >= 2 && $current_resolved === 0,
+            'turn_complete' => $turn_complete,
+            'battle_finished' => !$battle_open,
+            'needs_recovery' => $needs_recovery,
+            'current_turn' => $current_turn,
+        ],
+        $combatants,
+        $conn,
+        [
+            'battle_type' => CombatSession::TYPE_PVP,
+            'id_battle' => $id_battle,
+            'lang' => $lang_suffix,
+        ]
+    );
 }
 
 function animaster_pvp_process_action($conn, $battle_row, $id_user_ig, $turn, $type, $id, $lang_suffix)
@@ -1668,7 +1711,7 @@ function animaster_pvp_process_action($conn, $battle_row, $id_user_ig, $turn, $t
         return ['error' => 'INVALID_TURN'];
     }
 
-    if ($turn !== $current_turn)
+    if (!CombatSession::isPvpTurnInSync($turn, $current_turn))
     {
         return ['error' => 'INVALID_TURN'];
     }
@@ -1685,10 +1728,9 @@ function animaster_pvp_process_action($conn, $battle_row, $id_user_ig, $turn, $t
 
     animaster_pvp_save_turn_choice($conn, $id_battle, $turn, $id_user_ig, $type, $id);
 
-    $choice_count = animaster_pvp_count_turn_choices($conn, $id_battle, $turn);
-    $is_flee = ($type === 'action' && $id === 4);
+    $choices = animaster_pvp_fetch_turn_choices($conn, $id_battle, $turn);
 
-    if ($choice_count < 2 && !$is_flee)
+    if (!Permissions::pvpShouldResolveTurn(count($choices), $choices))
     {
         return ['ok' => true, 'waiting_opponent' => true];
     }
@@ -1833,6 +1875,6 @@ function animaster_pvp_get_battle_info($conn, $params)
     return [
         'ok' => true,
         'moves' => $output_moves,
-        'meta' => animaster_pvp_build_meta($conn, $battle_row, $id_user_ig, $moves, $turn)
+        'meta' => animaster_pvp_build_meta($conn, $battle_row, $id_user_ig, $moves, $turn, $lang_suffix)
     ];
 }

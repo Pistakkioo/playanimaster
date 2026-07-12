@@ -123,6 +123,7 @@ $id_species = $row_user_animal['id_species'];
 $nick = $row_user_animal['nickname'];
 $user_animal_current_hp = $row_user_animal['current_hp'];
 $user_animal_current_xp = $row_user_animal['experience'];
+$needs_initial_hp = ($user_animal_current_hp === null || $user_animal_current_hp === '');
 
 $base_atk = $row_user_animal['base_atk'];$base_def = $row_user_animal['base_def'];$base_matk = $row_user_animal['base_matk'];
 $base_mdef = $row_user_animal['base_mdef'];$base_hp = $row_user_animal['base_hp'];$base_spd = $row_user_animal['base_spd'];
@@ -158,6 +159,16 @@ if (!class_exists('BUFFS'))
     require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/buffs.php';
 }
 
+$row_user_animal['id_animal'] = (int) $id_first_animal;
+$row_user_animal['id_user_ig'] = (int) $id_user_ig;
+$base_level_stats = BUFFS::computeAnimalLevelStats($row_user_animal);
+$user_animal_hp = (int) $base_level_stats['max_hp'];
+
+if ($needs_initial_hp)
+{
+    $user_animal_current_hp = $user_animal_hp;
+}
+
 $buff_stats = BUFFS::applyAtBattleStart($conn, (int) $id_first_animal, (int) $id_user_ig, [
     'atk' => (int) $user_animal_atk,
     'def' => (int) $user_animal_def,
@@ -182,15 +193,9 @@ $user_animal_cr = (int) $buff_stats['cr'];
 $user_animal_current_hp = (int) $buff_stats['hp'];
 $user_animal_hp = (int) $buff_stats['max_hp'];
 
-
-if($user_animal_current_hp=="")
+if ($needs_initial_hp)
 {
-    // SET THE CURRENT HP OF THE ANIMAL TO MAX HP
-    $result_hp = $conn->query("
-        update animals set current_hp = \"$user_animal_hp\", max_hp = \"$user_animal_hp\"
-        where id_animal = \"$id_first_animal\"
-    ");
-    $user_animal_current_hp=$user_animal_hp;
+    BUFFS::persistAnimalHpAfterBattle($conn, (int) $id_first_animal, (int) $user_animal_current_hp);
 }
 
 

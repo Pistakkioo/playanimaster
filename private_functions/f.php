@@ -716,4 +716,34 @@ class FUNZIONI
     }
     
 }
+
+/**
+ * Max XZ distance for trade / party / duel requests (from costanti table).
+ *
+ * @param string $kind trade|party|duel
+ */
+function animaster_request_distance($kind)
+{
+    $defaults = [
+        'trade' => 50,
+        'party' => 1000,
+        'duel' => 50,
+    ];
+    $name = 'request_distance_' . $kind;
+
+    if (defined($name))
+    {
+        return (int) constant($name);
+    }
+
+    return (int) ($defaults[$kind] ?? 50);
+}
+
+function animaster_distance_xz($x1, $z1, $x2, $z2)
+{
+    $dx = (float) $x1 - (float) $x2;
+    $dz = (float) $z1 - (float) $z2;
+
+    return sqrt(($dx * $dx) + ($dz * $dz));
+}
 ?>

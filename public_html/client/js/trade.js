@@ -279,6 +279,11 @@ var AnimasterTrade = (function ()
             return t('trade.error_offline');
         }
 
+        if (key === 'OUT_OF_RANGE')
+        {
+            return t('trade.error_range');
+        }
+
         if (key === 'BUSY' || key === 'ALREADY_PENDING')
         {
             return t('trade.error_busy');

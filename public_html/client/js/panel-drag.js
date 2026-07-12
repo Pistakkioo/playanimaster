@@ -29,10 +29,10 @@ var AnimasterPanelDrag = (function ()
             }
 
             e.preventDefault();
+            e.stopPropagation();
 
             panel.classList.add('side-panel-dragged');
 
-            var boundsRect = boundsEl.getBoundingClientRect();
             var rect = panel.getBoundingClientRect();
 
             drag.active = true;
@@ -46,10 +46,14 @@ var AnimasterPanelDrag = (function ()
                     return;
                 }
 
+                var boundsRect = boundsEl.getBoundingClientRect();
+                var panelRect = panel.getBoundingClientRect();
+                var panelWidth = panelRect.width || panel.offsetWidth;
+                var panelHeight = panelRect.height || panel.offsetHeight;
                 var left = ev.clientX - boundsRect.left - drag.offsetX;
                 var top = ev.clientY - boundsRect.top - drag.offsetY;
-                var maxLeft = Math.max(0, boundsRect.width - panel.offsetWidth);
-                var maxTop = Math.max(0, boundsRect.height - panel.offsetHeight);
+                var maxLeft = Math.max(0, boundsRect.width - panelWidth);
+                var maxTop = Math.max(0, boundsRect.height - panelHeight);
 
                 panel.style.left = Math.min(maxLeft, Math.max(0, left)) + 'px';
                 panel.style.top = Math.min(maxTop, Math.max(0, top)) + 'px';

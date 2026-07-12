@@ -521,6 +521,30 @@ WHERE NOT EXISTS (
     SELECT 1 FROM costanti WHERE costante = 'party_pve_inactivity_vote_delay_seconds'
 );
 
+INSERT INTO costanti (costante, valore)
+SELECT 'request_distance_trade', 50
+WHERE NOT EXISTS (
+    SELECT 1 FROM costanti WHERE costante = 'request_distance_trade'
+);
+
+INSERT INTO costanti (costante, valore)
+SELECT 'request_distance_party', 1000
+WHERE NOT EXISTS (
+    SELECT 1 FROM costanti WHERE costante = 'request_distance_party'
+);
+
+INSERT INTO costanti (costante, valore)
+SELECT 'request_distance_duel', 50
+WHERE NOT EXISTS (
+    SELECT 1 FROM costanti WHERE costante = 'request_distance_duel'
+);
+
+INSERT INTO language_texts (dt_c, tag, text, text_it, text_pt)
+SELECT '2026-07-11 20:00:00', 'trade.error_range', 'Player is too far away.', 'Giocatore troppo lontano.', 'Jogador demasiado longe.'
+WHERE NOT EXISTS (
+    SELECT 1 FROM language_texts WHERE tag = 'trade.error_range'
+);
+
 
 -- Module 04 (Quests): runtime engine on top of the existing quests/user_quests/
 -- quest_requirements schema. See docs/modules/004_QUESTS.md.
@@ -585,9 +609,34 @@ ALTER TABLE playanimaster_db.conversations
 ALTER TABLE playanimaster_db.wild_animal_drop_types
     ADD COLUMN id_element INT(11) DEFAULT NULL AFTER id_species;
 
+-- 005b: ability-driven combat buff/debuff effects (replaces abilities.effect parsing)
+CREATE TABLE IF NOT EXISTS playanimaster_db.ability_effects (
+    id_ability_effect INT(11) NOT NULL AUTO_INCREMENT,
+    id_ability INT(11) NOT NULL,
+    id_buff_definition INT(11) NOT NULL,
+    effect_target ENUM('self','target') NOT NULL DEFAULT 'target',
+    effect_chance TINYINT UNSIGNED NOT NULL DEFAULT 100,
+    duration_turns INT(11) NOT NULL DEFAULT 3,
+    sort_order INT(11) NOT NULL DEFAULT 0,
+    PRIMARY KEY (id_ability_effect),
+    KEY idx_ability_effects_ability (id_ability),
+    KEY idx_ability_effects_definition (id_buff_definition),
+    CONSTRAINT fk_ability_effects_ability FOREIGN KEY (id_ability) REFERENCES abilities (id_ability),
+    CONSTRAINT fk_ability_effects_definition FOREIGN KEY (id_buff_definition) REFERENCES buff_definitions (id_buff_definition)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE playanimaster_db.battle_turn_buffs
+    ADD COLUMN id_ability_effect INT(11) NULL AFTER id_buff_definition;
+
+-- Multi-stat buff definitions: comma-separated stat_key / modifier_value pairs + tier column
+ALTER TABLE playanimaster_db.buff_definitions
+    MODIFY COLUMN stat_key VARCHAR(100) NOT NULL COMMENT 'Comma-separated stat keys, e.g. atk,def,spd',
+    MODIFY COLUMN modifier_value VARCHAR(100) NOT NULL DEFAULT '0' COMMENT 'Comma-separated values aligned with stat_key',
+    ADD COLUMN tier INT(11) NOT NULL DEFAULT 0 AFTER modifier_value;
+
+ALTER TABLE playanimaster_db.buff_definitions
+    ADD COLUMN icon VARCHAR(50) NULL DEFAULT NULL COMMENT 'HUD/combat badge glyph' AFTER tier;
 
 
 -- LAUNCHED ON PRODUCTION UP TO HERE 
 -- ... 
-
-

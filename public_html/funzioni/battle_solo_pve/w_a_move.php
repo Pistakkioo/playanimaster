@@ -1,119 +1,76 @@
 <?php
 if($w_a_res_hp>0 && $b_status=="ongoing")
 {
-    
-        $WA_move = array();
-        $result_WA_action = $conn->query("
-            select A.id_ability,A.ability$LANG as ability,A.descrizione$LANG as descrizione,A.accuracy,A.power,A.m_power,A.id_element,E.element$LANG as element,A.effect,A.effect_chance
-                from abilities A
-                join species_abilities LA ON LA.id_ability = A.id_ability
-                left join elements E on A.id_element = E.id_element
-            where LA.id_species = \"$w_a_id_species\"
-            AND LA.unlock_lvl <= \"$w_a_lvl\"
-        ");
-        $count_WA_actions = $result_WA_action->rowCount();
-        $selected_wa_n = rand(0,$count_WA_actions-1);
-        $wa_count = 0;
-        
-        
-        
-        while($row_WA_action = $result_WA_action->fetch())
+        require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/combat/AiWild.php';
+
+        $row_WA_action = AiWild::pickRandomAbility($conn, (int) $w_a_id_species, (int) $w_a_lvl, (string) $LANG);
+
+        if ($row_WA_action)
         {
-            if($wa_count==$selected_wa_n)
-            {
-                $WA_AB_acc = $w_a_res_acc*$row_WA_action['accuracy']/100;
-                $PA_EVA = (100-$p_a_res_eva)/100;
-                $WA_AB_acc*=$PA_EVA;// if p_a has 10 evasion, w_a accuracy is multiplied by 0.9 
-                $WA_num = rand(1,100);
-                $WA_AB_HIT = "N";$WA_CRIT=1;$WA_TYPE_ABILITY = 1;
-                if($WA_num<=$WA_AB_acc)
+                require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/combat/MoveResolver.php';
+
+                $attacker = [
+                    'lvl' => (int) $w_a_lvl,
+                    'acc' => (int) $w_a_res_acc,
+                    'cr' => (int) $w_a_res_cr,
+                    'atk' => (float) $w_a_res_atk,
+                    'def' => (float) $w_a_res_def,
+                    'matk' => (float) $w_a_res_matk,
+                    'mdef' => (float) $w_a_res_mdef,
+                    'eva' => (int) $w_a_res_eva,
+                    'spd' => (int) $w_a_res_spd,
+                    'current_hp' => (int) $w_a_res_hp,
+                    'max_hp' => (int) $w_a_res_max_hp,
+                    'id_element' => (int) $w_a_id_element,
+                    'nickname' => (string) $w_a_nickname,
+                ];
+                $defender = [
+                    'lvl' => (int) $p_a_lvl,
+                    'acc' => (int) $p_a_res_acc,
+                    'cr' => (int) $p_a_res_cr,
+                    'atk' => (float) $p_a_res_atk,
+                    'def' => (float) $p_a_res_def,
+                    'matk' => (float) $p_a_res_matk,
+                    'mdef' => (float) $p_a_res_mdef,
+                    'eva' => (int) $p_a_res_eva,
+                    'spd' => (int) $p_a_res_spd,
+                    'current_hp' => (int) $p_a_res_hp,
+                    'max_hp' => (int) $p_a_res_max_hp,
+                    'id_element' => (int) $p_a_id_element,
+                    'nickname' => (string) $p_a_nickname,
+                ];
+
+                $move_result = MoveResolver::resolveAbility($row_WA_action, $attacker, $defender, [
+                    'lang_suffix' => (string) $LANG,
+                    'conn' => $conn,
+                    'battle_type' => 'solo_pve',
+                    'id_battle' => (int) $id_battle,
+                    'applied_at_turn' => (int) $turn,
+                    'attacker_entity' => [
+                        'entity_type' => 'wild',
+                        'id_entity' => (int) $w_a_id,
+                        'id_user_ig' => null,
+                    ],
+                    'defender_entity' => [
+                        'entity_type' => 'animal',
+                        'id_entity' => (int) $p_a_id,
+                        'id_user_ig' => (int) $id_user_ig,
+                    ],
+                ]);
+
+                $w_a_res_hp = (int) $move_result['attacker']['current_hp'];
+                $p_a_res_hp = (int) $move_result['defender']['current_hp'];
+
+                $WA_AB_HIT = $move_result['move_hit'];
+                $WA_MOVE_DESCR = $move_result['move_description'];
+                $WA_id_ab = $move_result['id_ability'];
+
+                if (!class_exists('BUFFS'))
                 {
-                    $WA_AB_HIT = "S";
+                    require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/buffs.php';
                 }
-                if($WA_AB_HIT=="S")
-                {
-                    $WA_crit_num = rand(1,100);
-                    if($WA_crit_num<=$w_a_res_cr)
-                    {
-                        $WA_CRIT = 1.5;
-                    }
-                    if($row_WA_action['id_element']==$w_a_id_element)
-                    {
-                        $WA_TYPE_ABILITY=1.5;
-                    }
-                    $WA_AB_DMG = (intval($w_a_lvl)*.5*intval($row_WA_action['power'])*floatval($w_a_res_atk)/floatval($p_a_res_def))+(intval($w_a_lvl)*.5*intval($row_WA_action['m_power'])*floatval($w_a_res_matk)/floatval($p_a_res_mdef));
-                    //error_log("WA DMG: $w_a_lvl*.5*$row_WA_action[power]*$w_a_res_atk/$p_a_res_def+$w_a_lvl*.5*$row_WA_action[m_power]*$w_a_res_matk/$p_a_res_mdef");
-                    $WA_AB_DMG/=40;
-                    if(intval($row_WA_action['power'])>0||intval($row_WA_action['m_power'])>0){$WA_AB_DMG+=3;}
-                    $WA_AB_DMG*=$WA_CRIT;
-                    $WA_AB_DMG*=$WA_TYPE_ABILITY;
-                    
-                    $ELEMENT_BONUS = FUNZIONI::element_bonus($row_WA_action['id_element'],$p_a_id_element);
-                    $WA_AB_DMG*=$ELEMENT_BONUS;
-                    $WA_AB_DMG=intval($WA_AB_DMG);
-                    //error_log("WILD ANIMAL DAMAGE:$WA_AB_DMG");
-                    $p_a_res_hp-=$WA_AB_DMG;
-                    if($p_a_res_hp<=0)
-                    {   
-                        $p_a_res_hp=0;
-                    }
-                    else if($row_WA_action['effect']!="none")
-                    {
-                        $WA_effect_num = rand(1,100);
-                        if($WA_effect_num<$row_WA_action['effect_chance'])
-                        {
-                            $effect = explode('_',$row_WA_action['effect']);
-                            //lower_target_atk_10_%
-                            $effect_direction = $effect[0];
-                            $effect_target = $effect[1];
-                            $effect_stat = $effect[2];
-                            $effect_mult = $effect[3];
-                            $effect_unit = $effect[4];
-                            $effect_multiplier = 1;
-                            if($effect_unit=="%")
-                            {
-                                if($effect_direction=="lower")
-                                {
-                                    $effect_multiplier-=floatval($effect_mult/100);
-                                }
-                                else if($effect_direction=="increase")
-                                {
-                                    $effect_multiplier+=floatval($effect_mult/100);
-                                }
-                            }
-                            
-                            $STR_EFFECT = "";    
-                            if($effect_target=="target")
-                            {// WILL ALTER A STAT TO THE PLAYER ANIMAL
-                                $STR_EFFECT.="p_a_res_$effect_stat";
-                            }
-                            else if($effect_target=="self")
-                            {// WILL ALTER A STAT TO THE WILD ANIMAL ITSELF
-                                $STR_EFFECT.="w_a_res_$effect_stat";
-                            }
-                            $$STR_EFFECT*=$effect_multiplier;
-                        }
-                    }
-                        
-                    
-                }
-                    
-                $WA_MOVE_DESCR = $w_a_nickname." used ".$row_WA_action['ability'];
-                if($LANG=="_it"){$WA_MOVE_DESCR = $w_a_nickname." ha usato ".$row_WA_action['ability'];}
-                if($LANG=="_pt"){$WA_MOVE_DESCR = $w_a_nickname." usou ".$row_WA_action['ability'];}
-        
-                $WA_id_ab = $row_WA_action['id_ability'];
-                
-                
-                if($WA_CRIT>1)
-                {
-                    $WA_AB_HIT = "C";
-                }
-                
-                $result_hp = $conn->query("
-                    update animals set current_hp = \"$p_a_res_hp\", max_hp = \"$p_a_res_max_hp\"
-                    where id_animal = \"$p_a_id\"
-                ");
+
+                BUFFS::persistAnimalHpAfterBattle($conn, (int) $p_a_id, (int) $p_a_res_hp);
                 
                 if($w_a_res_hp<=0){$b_status = "win";}
                 if($p_a_res_hp<=0)
@@ -179,12 +136,10 @@ if($w_a_res_hp>0 && $b_status=="ongoing")
                       ,'$WA_MOVE_DESCR',\"$WA_AB_HIT\" ,\"$b_status\" 
                     )
                 ");
-                
-                
-            }
-            $wa_count++;
-        } 
-        
+
+
+        }
+    
         
         if($b_status!="ongoing")
         {
@@ -193,12 +148,12 @@ if($w_a_res_hp>0 && $b_status=="ongoing")
                 where id_battle_solo_pve = \"$id_battle\"
             ");
 
-            if (!class_exists('BUFFS'))
+            if (!class_exists('CombatSession'))
             {
-                require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/buffs.php';
+                require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/combat/CombatSession.php';
             }
 
-            BUFFS::onSoloPveBattleEnd($conn, $id_battle);
+            CombatSession::onBattleEnd($conn, CombatSession::TYPE_SOLO, $id_battle);
         }
     
 }

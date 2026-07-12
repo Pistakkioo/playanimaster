@@ -10,11 +10,6 @@ if (!defined('ANIMASTER_PARTY_MAX_MEMBERS'))
     define('ANIMASTER_PARTY_MAX_MEMBERS', 4);
 }
 
-if (!defined('ANIMASTER_PARTY_INTERACT_RADIUS'))
-{
-    define('ANIMASTER_PARTY_INTERACT_RADIUS', 10);
-}
-
 function animaster_party_expire_invites($conn)
 {
     $stmt = $conn->prepare('
@@ -138,10 +133,23 @@ function animaster_party_set_user_party($conn, $id_user_ig, $id_party)
 
 function animaster_party_fetch_lead_animal($conn, $id_user_ig)
 {
+    if (!class_exists('BUFFS'))
+    {
+        require_once __DIR__ . '/buffs.php';
+    }
+
     $stmt = $conn->prepare('
-        SELECT A.id_animal, A.lvl, A.current_hp, A.max_hp, A.id_species, A.id_element,
+        SELECT A.id_animal, A.id_user_ig, A.lvl, A.current_hp, A.max_hp, A.id_species, A.id_element,
                L.species AS species_key,
-               E.color AS element_color
+               E.color AS element_color,
+               L.base_hp, L.base_atk, L.base_def, L.base_matk, L.base_mdef, L.base_spd,
+               L.base_acc, L.base_eva, L.base_cr,
+               A.dna_hp, A.dna_atk, A.dna_def, A.dna_matk, A.dna_mdef, A.dna_spd,
+               A.dna_acc, A.dna_eva, A.dna_cr,
+               A.pt_hp, A.pt_atk, A.pt_def, A.pt_matk, A.pt_mdef, A.pt_spd,
+               A.pt_acc, A.pt_eva, A.pt_cr,
+               A.xp_hp, A.xp_atk, A.xp_def, A.xp_matk, A.xp_mdef, A.xp_spd,
+               A.xp_acc, A.xp_eva, A.xp_cr
         FROM animals A
         INNER JOIN species L ON L.id_species = A.id_species
         LEFT JOIN elements E ON E.id_element = A.id_element
@@ -159,20 +167,7 @@ function animaster_party_fetch_lead_animal($conn, $id_user_ig)
         return null;
     }
 
-    $max_hp = (int) ($row['max_hp'] ?? 0);
-    $current_hp = $row['current_hp'];
-
-    if ($current_hp === null || $current_hp === '')
-    {
-        $current_hp = $max_hp;
-    }
-
-    $current_hp = (int) $current_hp;
-
-    if ($max_hp <= 0)
-    {
-        $max_hp = max(1, $current_hp);
-    }
+    $row = BUFFS::normalizeTeamAnimalHpRow($conn, $row, true);
 
     return [
         'id_animal' => (int) $row['id_animal'],
@@ -181,9 +176,130 @@ function animaster_party_fetch_lead_animal($conn, $id_user_ig)
         'id_element' => (int) ($row['id_element'] ?? 0),
         'element_color' => (string) ($row['element_color'] ?? ''),
         'lvl' => (int) ($row['lvl'] ?? 1),
-        'current_hp' => max(0, $current_hp),
-        'max_hp' => $max_hp
+        'current_hp' => max(0, (int) ($row['current_hp'] ?? 0)),
+        'max_hp' => (int) ($row['max_hp'] ?? 1),
+        'effective_max_hp' => (int) ($row['effective_max_hp'] ?? $row['max_hp'] ?? 1)
     ];
+}
+
+function animaster_party_enrich_members_combat_buffs($conn, array &$members, $battle_type = '', $id_battle = 0, $lang = '')
+{
+    if (empty($members))
+    {
+        return;
+    }
+
+    if (!class_exists('BUFFS'))
+    {
+        require_once __DIR__ . '/buffs.php';
+    }
+
+    foreach ($members as &$member)
+    {
+        $lead = $member['lead_animal'] ?? null;
+
+        if (!$lead || (int) ($lead['id_animal'] ?? 0) <= 0)
+        {
+            continue;
+        }
+
+        $lead['active_combat_buffs'] = BUFFS::fetchCombatDisplay(
+            $conn,
+            (string) $battle_type,
+            (int) $id_battle,
+            'animal',
+            (int) $lead['id_animal'],
+            (int) ($member['id_user_ig'] ?? 0),
+            (string) $lang
+        );
+
+        $member['lead_animal'] = $lead;
+    }
+
+    unset($member);
+}
+
+function animaster_party_fetch_hud_member_snapshot($conn, $id_user_ig)
+{
+    $id_user_ig = (int) $id_user_ig;
+
+    if ($id_user_ig <= 0)
+    {
+        return null;
+    }
+
+    $stmt = $conn->prepare('
+        SELECT ui.id_user_ig, ui.display_name, ui.flg_online, ui.id_zone,
+               ui.position_x, ui.position_z,
+               p.id_user_ig_leader,
+               pc.code AS player_class_code
+        FROM users_ig ui
+        LEFT JOIN parties p ON p.id_party = ui.id_party
+        LEFT JOIN player_classes pc ON pc.id_player_class = ui.id_player_class
+        WHERE ui.id_user_ig = :id_user_ig
+        LIMIT 1
+    ');
+    $stmt->execute([':id_user_ig' => $id_user_ig]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$row)
+    {
+        return null;
+    }
+
+    $id_leader = (int) ($row['id_user_ig_leader'] ?? 0);
+
+    return [
+        'id_user_ig' => $id_user_ig,
+        'display_name' => (string) ($row['display_name'] ?: 'Player'),
+        'is_leader' => $id_leader > 0 && $id_user_ig === $id_leader,
+        'flg_online' => trim((string) ($row['flg_online'] ?? '')) === 'S',
+        'id_zone' => (int) ($row['id_zone'] ?? 0),
+        'position_x' => $row['position_x'],
+        'position_z' => $row['position_z'],
+        'player_class_code' => (string) ($row['player_class_code'] ?? ''),
+        'lead_animal' => animaster_party_fetch_lead_animal($conn, $id_user_ig)
+    ];
+}
+
+function animaster_party_fetch_self_hud_member($conn, $id_user_ig, $party, $active_battle = null)
+{
+    $id_user_ig = (int) $id_user_ig;
+    $member = null;
+
+    if ($party && !empty($party['members']))
+    {
+        foreach ($party['members'] as $row)
+        {
+            if ((int) ($row['id_user_ig'] ?? 0) === $id_user_ig)
+            {
+                $member = $row;
+                break;
+            }
+        }
+    }
+
+    if ($member)
+    {
+        return $member;
+    }
+
+    $member = animaster_party_fetch_hud_member_snapshot($conn, $id_user_ig);
+
+    if (!$member)
+    {
+        return null;
+    }
+
+    $members = [&$member];
+    animaster_party_enrich_members_combat_buffs(
+        $conn,
+        $members,
+        $active_battle ? (string) ($active_battle['battle_type'] ?? 'party_pve') : '',
+        $active_battle ? (int) ($active_battle['id_battle'] ?? 0) : 0
+    );
+
+    return $member;
 }
 
 function animaster_party_fetch_members($conn, $id_party)
@@ -508,19 +624,19 @@ function animaster_party_invite($conn, $id_sender, $id_target)
         return ['error' => 'OFFLINE'];
     }
 
-    if (!function_exists('animaster_pvp_distance'))
+    if (!function_exists('animaster_distance_xz'))
     {
-        require_once __DIR__ . '/pvp.php';
+        require_once __DIR__ . '/f.php';
     }
 
-    $dist = animaster_pvp_distance(
+    $dist = animaster_distance_xz(
         $sender['position_x'],
         $sender['position_z'],
         $target['position_x'],
         $target['position_z']
     );
 
-    if ($dist > ANIMASTER_PARTY_INTERACT_RADIUS)
+    if ($dist > animaster_request_distance('party'))
     {
         return ['error' => 'TOO_FAR'];
     }
@@ -914,9 +1030,24 @@ function animaster_party_poll($conn, $id_user_ig)
         $party_pve_battle = $active_battle;
     }
 
+    $party = animaster_party_build_state($conn, $id_user_ig);
+
+    if ($party)
+    {
+        animaster_party_enrich_members_combat_buffs(
+            $conn,
+            $party['members'],
+            $active_battle ? (string) ($active_battle['battle_type'] ?? 'party_pve') : '',
+            $active_battle ? (int) ($active_battle['id_battle'] ?? 0) : 0
+        );
+    }
+
+    $self_hud = animaster_party_fetch_self_hud_member($conn, $id_user_ig, $party, $active_battle);
+
     return [
         'ok' => true,
-        'party' => animaster_party_build_state($conn, $id_user_ig),
+        'party' => $party,
+        'self_hud' => $self_hud,
         'incoming_invites' => $incoming,
         'outgoing_invite' => $outgoing,
         'party_pve_battle' => $party_pve_battle

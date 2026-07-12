@@ -6,6 +6,10 @@ if (!defined('ANIMASTER_PARTY_PVE_JOIN_RADIUS'))
 }
 
 require_once __DIR__ . '/party.php';
+require_once __DIR__ . '/combat/CombatSession.php';
+require_once __DIR__ . '/combat/TurnQueue.php';
+require_once __DIR__ . '/combat/Permissions.php';
+require_once __DIR__ . '/combat/AiWild.php';
 
 function animaster_party_pve_distance($x1, $z1, $x2, $z2)
 {
@@ -354,10 +358,10 @@ function animaster_party_pve_handle_member_departed($conn, $id_user_ig)
         return;
     }
 
-    $round = (int) $battle['current_turn'] + 1;
+    $round = CombatSession::planningRoundFromBattle($battle);
     $confirmed_count = animaster_party_pve_count_confirmed_turn_choices($conn, $id_battle, $round);
 
-    if ($confirmed_count >= count($alive_party))
+    if (Permissions::partyPveShouldResolveRound($confirmed_count, count($alive_party), null))
     {
         // Everyone still active had already confirmed before this player
         // left; their departure was the only thing blocking resolution.
@@ -462,7 +466,7 @@ function animaster_party_pve_save_turn_choice($conn, $id_battle, $round, $id_use
 
     // A changed action invalidates the plan every other player already agreed
     // to: force everyone to look at the new board and re-confirm.
-    if ($changed)
+    if (Permissions::stagedChangeInvalidatesOthers(Permissions::MODE_PARTY, (bool) $previous, $changed))
     {
         animaster_party_pve_unconfirm_others($conn, $id_battle, $round, $id_user_ig);
     }
@@ -856,16 +860,16 @@ function animaster_party_pve_save_participant($conn, array $participant)
 
     if ($participant['side'] === 'party' && $participant['id_user_ig'])
     {
-        $stmt = $conn->prepare('
-            UPDATE animals
-            SET current_hp = :current_hp, max_hp = :max_hp
-            WHERE id_animal = :id_animal
-        ');
-        $stmt->execute([
-            ':current_hp' => (int) $participant['current_hp'],
-            ':max_hp' => (int) $participant['max_hp'],
-            ':id_animal' => (int) $participant['id_animal']
-        ]);
+        if (!class_exists('BUFFS'))
+        {
+            require_once __DIR__ . '/buffs.php';
+        }
+
+        BUFFS::persistAnimalHpAfterBattle(
+            $conn,
+            (int) $participant['id_animal'],
+            (int) $participant['current_hp']
+        );
     }
 }
 
@@ -1019,6 +1023,13 @@ function animaster_party_pve_finish_battle($conn, array $battle, $status, $id_wi
         ':end_reason' => $end_reason,
         ':id_battle' => $id_battle
     ]);
+
+    if (!class_exists('CombatSession'))
+    {
+        require_once __DIR__ . '/combat/CombatSession.php';
+    }
+
+    CombatSession::onBattleEnd($conn, CombatSession::TYPE_PARTY, $id_battle);
 
     $stmt = $conn->prepare('
         UPDATE wild_animals
@@ -1193,38 +1204,11 @@ function animaster_party_pve_insert_move(
 
 function animaster_party_pve_pick_wild_target(array $party_participants)
 {
-    $alive = [];
-
-    foreach ($party_participants as $p)
-    {
-        if ($p['side'] !== 'party')
-        {
-            continue;
-        }
-
-        if (trim((string) ($p['flg_active'] ?? 'S')) !== 'S')
-        {
-            continue;
-        }
-
-        if (trim((string) $p['flg_fainted']) === 'S' || (int) $p['current_hp'] <= 0)
-        {
-            continue;
-        }
-
-        $alive[] = $p;
-    }
-
-    if (!$alive)
-    {
-        return null;
-    }
-
-    return $alive[array_rand($alive)];
+    return AiWild::pickRandomPartyTarget($party_participants);
 }
 
 /**
- * Apply ability stat effect (e.g. lower_target_def_10_%) — same rules as solo PvE.
+ * Apply ability stat effect — deprecated; buffs are granted via MoveResolver + ability_effects.
  *
  * @param array<string, mixed> $ability
  * @param array<string, mixed> $attacker
@@ -1232,73 +1216,40 @@ function animaster_party_pve_pick_wild_target(array $party_participants)
  */
 function animaster_party_pve_apply_ability_stat_effect(array $ability, array &$attacker, array &$defender)
 {
-    $effect = trim((string) ($ability['effect'] ?? ''));
+}
 
-    if ($effect === '' || $effect === 'none')
-    {
-        return;
-    }
+function animaster_party_pve_participant_to_fighter(array $participant)
+{
+    return [
+        'lvl' => (int) ($participant['lvl'] ?? 0),
+        'acc' => (int) ($participant['acc'] ?? 0),
+        'cr' => (int) ($participant['cr'] ?? 0),
+        'atk' => (float) ($participant['atk'] ?? 0),
+        'def' => (float) ($participant['def'] ?? 0),
+        'matk' => (float) ($participant['matk'] ?? 0),
+        'mdef' => (float) ($participant['mdef'] ?? 0),
+        'eva' => (int) ($participant['eva'] ?? 0),
+        'spd' => (float) ($participant['spd'] ?? 0),
+        'current_hp' => (int) ($participant['current_hp'] ?? 0),
+        'max_hp' => (int) ($participant['max_hp'] ?? 0),
+        'id_element' => (int) ($participant['id_element'] ?? 0),
+        'nickname' => (string) ($participant['nickname'] ?: $participant['species_name'] ?? ''),
+        'id_battle_party_pve_participant' => (int) ($participant['id_battle_party_pve_participant'] ?? 0),
+        'id_animal' => (int) ($participant['id_animal'] ?? 0),
+        'side' => (string) ($participant['side'] ?? 'party'),
+        'id_user_ig' => $participant['id_user_ig'] ?? null,
+    ];
+}
 
-    $effect_chance = (int) ($ability['effect_chance'] ?? 0);
+function animaster_party_pve_participant_entity(array $participant)
+{
+    $side = (string) ($participant['side'] ?? 'party');
 
-    if ($effect_chance <= 0 || rand(1, 100) >= $effect_chance)
-    {
-        return;
-    }
-
-    $parts = explode('_', $effect);
-
-    if (count($parts) < 5)
-    {
-        return;
-    }
-
-    $effect_direction = $parts[0];
-    $effect_target = $parts[1];
-    $effect_stat = $parts[2];
-    $effect_mult = (float) $parts[3];
-    $effect_unit = $parts[4];
-    $allowed_stats = ['atk', 'def', 'matk', 'mdef', 'acc', 'eva', 'cr', 'spd'];
-
-    if (!in_array($effect_stat, $allowed_stats, true))
-    {
-        return;
-    }
-
-    $effect_multiplier = 1.0;
-
-    if ($effect_unit === '%')
-    {
-        if ($effect_direction === 'lower')
-        {
-            $effect_multiplier -= $effect_mult / 100;
-        }
-        else if ($effect_direction === 'increase')
-        {
-            $effect_multiplier += $effect_mult / 100;
-        }
-    }
-
-    if ($effect_target === 'target')
-    {
-        if (!array_key_exists($effect_stat, $defender))
-        {
-            return;
-        }
-
-        $defender[$effect_stat] = (int) round((float) $defender[$effect_stat] * $effect_multiplier);
-        $defender[$effect_stat] = max(0, (int) $defender[$effect_stat]);
-    }
-    else if ($effect_target === 'self')
-    {
-        if (!array_key_exists($effect_stat, $attacker))
-        {
-            return;
-        }
-
-        $attacker[$effect_stat] = (int) round((float) $attacker[$effect_stat] * $effect_multiplier);
-        $attacker[$effect_stat] = max(0, (int) $attacker[$effect_stat]);
-    }
+    return [
+        'entity_type' => $side === 'wild' ? 'wild' : 'animal',
+        'id_entity' => (int) ($participant['id_animal'] ?? 0),
+        'id_user_ig' => $side === 'party' ? (int) ($participant['id_user_ig'] ?? 0) : null,
+    ];
 }
 
 function animaster_party_pve_apply_ability_damage(
@@ -1307,92 +1258,44 @@ function animaster_party_pve_apply_ability_damage(
     array $attacker,
     array $defender,
     $attacker_is_wild,
-    $lang_suffix
+    $lang_suffix,
+    $id_battle,
+    $applied_at_turn
 )
 {
-    if (!class_exists('FUNZIONI'))
+    if (!class_exists('MoveResolver'))
     {
-        require_once __DIR__ . '/f.php';
+        require_once __DIR__ . '/combat/MoveResolver.php';
     }
 
-    $attacker_acc = (int) $attacker['acc'];
-    $defender_eva = (int) $defender['eva'];
-    $attacker_lvl = (int) $attacker['lvl'];
-    $attacker_atk = (float) $attacker['atk'];
-    $attacker_matk = (float) $attacker['matk'];
-    $defender_def = (float) $defender['def'];
-    $defender_mdef = (float) $defender['mdef'];
-    $attacker_cr = (int) $attacker['cr'];
-    $attacker_element = (int) $attacker['id_element'];
-    $defender_element = (int) $defender['id_element'];
+    $attackerFighter = animaster_party_pve_participant_to_fighter($attacker);
+    $defenderFighter = animaster_party_pve_participant_to_fighter($defender);
 
-    $acc = $attacker_acc * ((float) $ability['accuracy'] / 100);
-    $acc *= (100 - $defender_eva) / 100;
+    $result = MoveResolver::resolveAbility($ability, $attackerFighter, $defenderFighter, [
+        'lang_suffix' => (string) $lang_suffix,
+        'conn' => $conn,
+        'battle_type' => CombatSession::TYPE_PARTY,
+        'id_battle' => (int) $id_battle,
+        'applied_at_turn' => (int) $applied_at_turn,
+        'attacker_entity' => animaster_party_pve_participant_entity($attacker),
+        'defender_entity' => animaster_party_pve_participant_entity($defender),
+    ]);
 
-    $hit = rand(1, 100) <= $acc ? 'S' : 'N';
-    $description = '';
-    $move_hit = 'N';
-
-    if ($hit === 'S')
-    {
-        $crit = 1.0;
-        $type_bonus = 1.0;
-
-        if (rand(1, 100) <= $attacker_cr)
-        {
-            $crit = 1.5;
-        }
-
-        if ((int) $ability['id_element'] === $attacker_element)
-        {
-            $type_bonus = 1.5;
-        }
-
-        $dmg = ($attacker_lvl * 0.5 * (int) $ability['power'] * $attacker_atk / max(1, $defender_def))
-            + ($attacker_lvl * 0.5 * (int) $ability['m_power'] * $attacker_matk / max(1, $defender_mdef));
-        $dmg /= 40;
-
-        if ((int) $ability['power'] > 0 || (int) $ability['m_power'] > 0)
-        {
-            $dmg += 3;
-        }
-
-        $dmg *= $crit;
-        $dmg *= $type_bonus;
-        $dmg *= FUNZIONI::element_bonus((int) $ability['id_element'], $defender_element);
-        $dmg = (int) $dmg;
-
-        $defender['current_hp'] = max(0, (int) $defender['current_hp'] - $dmg);
-        $move_hit = 'S';
-
-        if ((int) $defender['current_hp'] > 0)
-        {
-            animaster_party_pve_apply_ability_stat_effect($ability, $attacker, $defender);
-        }
-    }
-
-    $ability_name = (string) $ability['ability'];
-    $actor_name = (string) $attacker['nickname'];
-
-    if ($lang_suffix === '_it')
-    {
-        $description = $actor_name . ' ha usato ' . $ability_name;
-    }
-    else if ($lang_suffix === '_pt')
-    {
-        $description = $actor_name . ' usou ' . $ability_name;
-    }
-    else
-    {
-        $description = $actor_name . ' used ' . $ability_name;
-    }
+    $attackerOut = array_merge($attacker, [
+        'current_hp' => (int) $result['attacker']['current_hp'],
+        'max_hp' => (int) ($result['attacker']['max_hp'] ?? $attacker['max_hp'] ?? 0),
+    ]);
+    $defenderOut = array_merge($defender, [
+        'current_hp' => (int) $result['defender']['current_hp'],
+        'max_hp' => (int) ($result['defender']['max_hp'] ?? $defender['max_hp'] ?? 0),
+    ]);
 
     return [
-        'attacker' => $attacker,
-        'defender' => $defender,
-        'move_hit' => $move_hit,
-        'move_description' => $description,
-        'id_ability' => (int) $ability['id_ability']
+        'attacker' => $attackerOut,
+        'defender' => $defenderOut,
+        'move_hit' => $result['move_hit'],
+        'move_description' => $result['move_description'],
+        'id_ability' => $result['id_ability'],
     ];
 }
 
@@ -1416,31 +1319,7 @@ function animaster_party_pve_fetch_ability($conn, $id_ability, $lang_suffix)
 
 function animaster_party_pve_fetch_random_wild_ability($conn, $id_species, $lvl, $lang_suffix)
 {
-    $lang_suffix = preg_replace('/[^_a-z]/i', '', (string) $lang_suffix);
-
-    $sql = '
-        SELECT A.id_ability, A.accuracy, A.power, A.m_power, A.id_element, A.effect, A.effect_chance,
-               A.ability' . $lang_suffix . ' AS ability
-        FROM abilities A
-        INNER JOIN species_abilities LA ON LA.id_ability = A.id_ability
-        WHERE LA.id_species = :id_species
-          AND LA.unlock_lvl <= :lvl
-    ';
-
-    $stmt = $conn->prepare($sql);
-    $stmt->execute([
-        ':id_species' => (int) $id_species,
-        ':lvl' => (int) $lvl
-    ]);
-
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    if (!$rows)
-    {
-        return null;
-    }
-
-    return $rows[array_rand($rows)];
+    return AiWild::pickRandomAbility($conn, $id_species, $lvl, $lang_suffix);
 }
 
 /**
@@ -1579,7 +1458,7 @@ function animaster_party_pve_validate_item_choice($conn, $id_user_ig, $id_item_t
  * Apply a party member's confirmed ability choice during round resolution.
  * Mutates & persists $actor/$wild, returns move fields for the resolver.
  */
-function animaster_party_pve_apply_ability_choice($conn, array $actor, array $wild, $id_ability, $id_user_ig, $lang_suffix)
+function animaster_party_pve_apply_ability_choice($conn, array $actor, array $wild, $id_ability, $id_user_ig, $lang_suffix, $id_battle, $round)
 {
     $validated = animaster_party_pve_validate_ability_choice($conn, $id_ability, $lang_suffix);
 
@@ -1588,7 +1467,16 @@ function animaster_party_pve_apply_ability_choice($conn, array $actor, array $wi
         return $validated;
     }
 
-    $result = animaster_party_pve_apply_ability_damage($conn, $validated['ability'], $actor, $wild, false, $lang_suffix);
+    $result = animaster_party_pve_apply_ability_damage(
+        $conn,
+        $validated['ability'],
+        $actor,
+        $wild,
+        false,
+        $lang_suffix,
+        $id_battle,
+        $round
+    );
     animaster_party_pve_save_participant($conn, $result['attacker']);
     animaster_party_pve_save_participant($conn, $result['defender']);
 
@@ -1782,7 +1670,7 @@ function animaster_party_pve_apply_item_choice($conn, array $actor, $id_user_ig,
  * when the wild species has no unlocked ability at this level (the slot is
  * skipped; no placeholder move is recorded).
  */
-function animaster_party_pve_apply_wild_action($conn, array $wild, array $target, $lang_suffix)
+function animaster_party_pve_apply_wild_action($conn, array $wild, array $target, $lang_suffix, $id_battle, $round)
 {
     $ability = animaster_party_pve_fetch_random_wild_ability(
         $conn,
@@ -1796,7 +1684,16 @@ function animaster_party_pve_apply_wild_action($conn, array $wild, array $target
         return null;
     }
 
-    $result = animaster_party_pve_apply_ability_damage($conn, $ability, $wild, $target, true, $lang_suffix);
+    $result = animaster_party_pve_apply_ability_damage(
+        $conn,
+        $ability,
+        $wild,
+        $target,
+        true,
+        $lang_suffix,
+        $id_battle,
+        $round
+    );
 
     animaster_party_pve_save_participant($conn, $result['attacker']);
     animaster_party_pve_save_participant($conn, $result['defender']);
@@ -1867,40 +1764,12 @@ function animaster_party_pve_resolve_round($conn, array $battle, $round, $lang_s
         return ['error' => 'NO_CONFIRMED_CHOICES'];
     }
 
-    $slots = [];
-    $idx = 0;
-
-    foreach ($confirmed_by_user as $id_user_ig => $choice)
-    {
-        $slots[] = [
-            'kind' => 'party',
-            'id_user_ig' => $id_user_ig,
-            'spd' => (float) $party_by_user[$id_user_ig]['spd'],
-            'choice' => $choice,
-            'idx' => $idx++
-        ];
-    }
-
-    $wild_action_count = count($alive_party);
-
-    for ($i = 0; $i < $wild_action_count; $i++)
-    {
-        $slots[] = [
-            'kind' => 'wild',
-            'spd' => (float) $wild['spd'],
-            'idx' => $idx++
-        ];
-    }
-
-    usort($slots, function ($a, $b)
-    {
-        if ($a['spd'] !== $b['spd'])
-        {
-            return $b['spd'] <=> $a['spd'];
-        }
-
-        return $a['idx'] <=> $b['idx'];
-    });
+    $slots = TurnQueue::buildPartyPveExecutionSlots(
+        $confirmed_by_user,
+        $party_by_user,
+        $wild,
+        count($alive_party)
+    );
 
     $order_in_turn = 0;
     $battle_status = 'ongoing';
@@ -1912,7 +1781,7 @@ function animaster_party_pve_resolve_round($conn, array $battle, $round, $lang_s
             break;
         }
 
-        if ($slot['kind'] === 'party')
+        if ($slot['kind'] === TurnQueue::SLOT_PARTY)
         {
             $id_user_ig = $slot['id_user_ig'];
             $actor = $party_by_user[$id_user_ig];
@@ -1927,7 +1796,7 @@ function animaster_party_pve_resolve_round($conn, array $battle, $round, $lang_s
 
             if ($action_type === 'ability')
             {
-                $result = animaster_party_pve_apply_ability_choice($conn, $actor, $wild, (int) $choice['action_id'], $id_user_ig, $lang_suffix);
+                $result = animaster_party_pve_apply_ability_choice($conn, $actor, $wild, (int) $choice['action_id'], $id_user_ig, $lang_suffix, $id_battle, $round);
             }
             else if ($action_type === 'switch')
             {
@@ -2024,7 +1893,7 @@ function animaster_party_pve_resolve_round($conn, array $battle, $round, $lang_s
                 continue;
             }
 
-            $result = animaster_party_pve_apply_wild_action($conn, $wild, $target, $lang_suffix);
+            $result = animaster_party_pve_apply_wild_action($conn, $wild, $target, $lang_suffix, $id_battle, $round);
 
             if (!$result)
             {
@@ -2072,17 +1941,15 @@ function animaster_party_pve_resolve_round($conn, array $battle, $round, $lang_s
         }
     }
 
-    animaster_party_pve_clear_turn_choices($conn, $id_battle, $round);
-
-    $stmt = $conn->prepare('
-        UPDATE battles_party_pve
-        SET current_turn = :round, dt_round_started = NOW(), dt_m = NOW()
-        WHERE id_battle_party_pve = :id_battle
-    ');
-    $stmt->execute([
-        ':round' => (int) $round,
-        ':id_battle' => $id_battle
-    ]);
+    CombatSession::completePartyPveRound(
+        $conn,
+        $id_battle,
+        $round,
+        function ($resolvedRound) use ($conn, $id_battle)
+        {
+            animaster_party_pve_clear_turn_choices($conn, $id_battle, $resolvedRound);
+        }
+    );
 
     return ['ok' => true, 'round' => $round, 'status' => $battle_status];
 }
@@ -2313,26 +2180,36 @@ function animaster_party_pve_build_meta($conn, array $battle, $id_user_ig, $lang
         ];
     }
 
-    return [
-        'current_turn' => (int) $battle['current_turn'],
-        'round' => $round,
-        'can_act' => $battle_open && $is_eligible,
-        'is_eligible' => $is_eligible,
-        'confirm_required' => $confirm_required,
-        'confirm_done' => $confirm_done,
-        'my_action_type' => $my_choice ? (string) $my_choice['action_type'] : '',
-        'my_action_id' => $my_choice ? (int) $my_choice['action_id'] : 0,
-        'my_confirmed' => $my_choice !== null && trim((string) $my_choice['flg_confirmed']) === 'Y',
-        'party_allies' => $allies,
-        'wild_combatants' => $wild_combatants,
-        'wild_hp' => $wild ? (int) $wild['current_hp'] : 0,
-        'wild_max_hp' => $wild ? (int) $wild['max_hp'] : 0,
-        'battle_finished' => !$battle_open,
-        'is_leader' => (int) $battle['id_user_ig_leader'] === (int) $id_user_ig,
-        'allow_inactivity_vote' => $allow_inactivity_vote,
-        'inactivity_vote_delay_seconds' => $inactivity_vote_delay_seconds,
-        'seconds_since_round_start' => $seconds_since_round_start
-    ];
+    return CombatSession::attachCombatants(
+        [
+            'battle_type' => CombatSession::TYPE_PARTY,
+            'current_turn' => (int) $battle['current_turn'],
+            'round' => $round,
+            'can_act' => $battle_open && $is_eligible,
+            'is_eligible' => $is_eligible,
+            'confirm_required' => $confirm_required,
+            'confirm_done' => $confirm_done,
+            'my_action_type' => $my_choice ? (string) $my_choice['action_type'] : '',
+            'my_action_id' => $my_choice ? (int) $my_choice['action_id'] : 0,
+            'my_confirmed' => $my_choice !== null && trim((string) $my_choice['flg_confirmed']) === 'Y',
+            'party_allies' => $allies,
+            'wild_combatants' => $wild_combatants,
+            'wild_hp' => $wild ? (int) $wild['current_hp'] : 0,
+            'wild_max_hp' => $wild ? (int) $wild['max_hp'] : 0,
+            'battle_finished' => !$battle_open,
+            'is_leader' => (int) $battle['id_user_ig_leader'] === (int) $id_user_ig,
+            'allow_inactivity_vote' => $allow_inactivity_vote,
+            'inactivity_vote_delay_seconds' => $inactivity_vote_delay_seconds,
+            'seconds_since_round_start' => $seconds_since_round_start,
+        ],
+        CombatSession::combatantsFromPartyParticipants($participants),
+        $conn,
+        [
+            'battle_type' => CombatSession::TYPE_PARTY,
+            'id_battle' => $id_battle,
+            'lang' => $lang_suffix,
+        ]
+    );
 }
 
 function animaster_party_pve_start($conn, $id_user_ig, $id_zone, $id_wild_animal, $ref_x, $ref_z, $lang_suffix)
@@ -2623,9 +2500,9 @@ function animaster_party_pve_handle_turn_request(
             return ['error' => 'BATTLE_ENDED'];
         }
 
-        $round = (int) $battle['current_turn'] + 1;
+        $round = CombatSession::planningRoundFromBattle($battle);
 
-        if ((int) $turn !== $round)
+        if (!CombatSession::isPlanningRoundInSync($turn, (int) $battle['current_turn']))
         {
             return ['error' => 'TURN_OUT_OF_SYNC'];
         }
@@ -2790,11 +2667,8 @@ function animaster_party_pve_handle_turn_request(
 
         $confirmed_count = animaster_party_pve_count_confirmed_turn_choices($conn, $id_battle, $round);
         $leader_choice = animaster_party_pve_user_turn_choice($conn, $id_battle, $round, (int) $battle['id_user_ig_leader']);
-        $leader_fled_confirmed = $leader_choice
-            && (string) $leader_choice['action_type'] === 'flee'
-            && trim((string) $leader_choice['flg_confirmed']) === 'Y';
 
-        if ($confirmed_count >= count($alive_party) || $leader_fled_confirmed)
+        if (Permissions::partyPveShouldResolveRound($confirmed_count, count($alive_party), $leader_choice))
         {
             $resolve_result = animaster_party_pve_resolve_round($conn, $battle, $round, $lang_suffix);
 

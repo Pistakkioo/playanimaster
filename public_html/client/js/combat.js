@@ -29,6 +29,7 @@ var AnimasterCombat = (function ()
     var pvpResolvePending = false;
     var pvpResolvedMoveCount = 0;
     var partyPveMeta = null;
+    var soloPveMeta = null;
     var partyPveMetaAnchorMs = 0;
     var partyPvePlaybackHpFinal = null;
     var partyPvePollTimer = null;
@@ -44,6 +45,9 @@ var AnimasterCombat = (function ()
 
     var menuMode = 'main';
     var selectedItemTypeId = 0;
+    var menuSelectedIndex = 0;
+    var lastMenuKeyboardMode = '';
+    var lastUsedAbilityByAnimal = {};
 
     var COMBAT_PRESENTATION = {
         textSpeedMs: 28,
@@ -60,6 +64,22 @@ var AnimasterCombat = (function ()
     var advanceResolver = null;
     var autoAdvanceEl = null;
     var skipAnimationsEl = null;
+    var statPanelsByKey = {};
+    var statPanelOpenOrder = [];
+    var statPanelZIndex = 30;
+
+    var COMBAT_STAT_LABELS = {
+        hp: 'HP',
+        max_hp: 'Max HP',
+        atk: 'ATK',
+        def: 'DEF',
+        matk: 'MATK',
+        mdef: 'MDEF',
+        acc: 'ACC',
+        eva: 'EVA',
+        cr: 'CR',
+        spd: 'SPD'
+    };
 
     function t(tag, vars)
     {
@@ -169,6 +189,435 @@ var AnimasterCombat = (function ()
         slot.appendChild(AnimasterElements.createIcon(elementData, 'element-icon--lg'));
     }
 
+    function getActiveBattleMeta()
+    {
+        if (!battle)
+        {
+            return null;
+        }
+
+        if (battle.type === 'party_pve')
+        {
+            return partyPveMeta;
+        }
+
+        if (battle.type === 'pvp')
+        {
+            return pvpMeta;
+        }
+
+        return soloPveMeta;
+    }
+
+    function combatantLookupKey(combatant)
+    {
+        if (!combatant)
+        {
+            return '';
+        }
+
+        return String(combatant.entity_type || 'animal') + ':' + String(combatant.entity_id || combatant.id_animal || 0);
+    }
+
+    function findCombatantForAnimalId(animalId)
+    {
+        var meta = getActiveBattleMeta();
+        var id = parseInt(animalId, 10) || 0;
+
+        if (!meta || !meta.combatants || !id)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < meta.combatants.length; i++)
+        {
+            var combatant = meta.combatants[i];
+            var combatantAnimalId = parseInt(combatant.id_animal, 10) || 0;
+            var combatantEntityId = parseInt(combatant.entity_id, 10) || 0;
+
+            if (combatantAnimalId === id || combatantEntityId === id)
+            {
+                return combatant;
+            }
+        }
+
+        return null;
+    }
+
+    function formatCombatStatValue(statKey, value)
+    {
+        if (statKey === 'acc' || statKey === 'eva' || statKey === 'cr')
+        {
+            return String(parseInt(value, 10) || 0);
+        }
+
+        var numeric = Number(value);
+
+        if (isNaN(numeric))
+        {
+            return '0';
+        }
+
+        if (Math.abs(numeric - Math.round(numeric)) < 0.001)
+        {
+            return String(Math.round(numeric));
+        }
+
+        return numeric.toFixed(1);
+    }
+
+    function renderCombatStatPanelBody(bodyEl, combatant)
+    {
+        if (!bodyEl || !combatant)
+        {
+            return;
+        }
+
+        var sheet = combatant.combat_stat_sheet || [];
+        bodyEl.innerHTML = '';
+
+        sheet.forEach(function (row)
+        {
+            var statKey = row.stat_key || '';
+            var label = COMBAT_STAT_LABELS[statKey] || statKey;
+            var baseText = formatCombatStatValue(statKey, row.base);
+            var effectiveText = formatCombatStatValue(statKey, row.effective);
+            var line = document.createElement('div');
+            line.className = 'combat-stat-row';
+
+            if (row.is_modified)
+            {
+                line.classList.add('combat-stat-row-modified');
+            }
+
+            var labelEl = document.createElement('span');
+            labelEl.className = 'combat-stat-label';
+            labelEl.textContent = label;
+
+            var valueEl = document.createElement('span');
+            valueEl.className = 'combat-stat-value';
+
+            if (row.is_modified && row.buffs && row.buffs.length)
+            {
+                var buffWrap = document.createElement('span');
+                buffWrap.className = 'combat-stat-row-buffs';
+                renderCombatBuffIcons(buffWrap, row.buffs);
+                valueEl.appendChild(buffWrap);
+            }
+
+            if (row.is_modified)
+            {
+                var baseEl = document.createElement('span');
+                baseEl.className = 'combat-stat-base';
+                baseEl.textContent = baseText;
+
+                var effectiveEl = document.createElement('span');
+                effectiveEl.className = 'combat-stat-effective';
+                effectiveEl.textContent = effectiveText;
+
+                valueEl.appendChild(baseEl);
+                valueEl.appendChild(document.createTextNode(' → '));
+                valueEl.appendChild(effectiveEl);
+            }
+            else
+            {
+                valueEl.textContent = effectiveText;
+            }
+
+            line.appendChild(labelEl);
+            line.appendChild(valueEl);
+            bodyEl.appendChild(line);
+        });
+    }
+
+    function bringCombatStatPanelToFront(panelEl)
+    {
+        if (!panelEl)
+        {
+            return;
+        }
+
+        statPanelZIndex += 1;
+        panelEl.style.zIndex = String(statPanelZIndex);
+    }
+
+    function rememberCombatStatPanelOpen(combatantKey)
+    {
+        var i = statPanelOpenOrder.indexOf(combatantKey);
+
+        if (i !== -1)
+        {
+            statPanelOpenOrder.splice(i, 1);
+        }
+
+        statPanelOpenOrder.push(combatantKey);
+    }
+
+    function forgetCombatStatPanelOpen(combatantKey)
+    {
+        var i = statPanelOpenOrder.indexOf(combatantKey);
+
+        if (i !== -1)
+        {
+            statPanelOpenOrder.splice(i, 1);
+        }
+    }
+
+    function createCombatStatPanel(combatantKey)
+    {
+        if (!overlay || !combatantKey)
+        {
+            return null;
+        }
+
+        var panel = document.createElement('div');
+        panel.className = 'combat-stat-panel side-panel';
+        panel.dataset.combatantKey = combatantKey;
+        panel.hidden = true;
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'false');
+        panel.innerHTML =
+            '<div class="combat-stat-panel-header side-panel-header">' +
+                '<span class="combat-stat-panel-title"></span>' +
+                '<button type="button" class="combat-stat-panel-close" aria-label="Close">&times;</button>' +
+            '</div>' +
+            '<div class="combat-stat-panel-body"></div>';
+
+        var openCount = statPanelOpenOrder.length;
+        panel.style.top = (48 + openCount * 28) + 'px';
+        panel.style.right = (12 + openCount * 28) + 'px';
+        panel.style.left = 'auto';
+
+        var titleEl = panel.querySelector('.combat-stat-panel-title');
+        var bodyEl = panel.querySelector('.combat-stat-panel-body');
+        var closeBtn = panel.querySelector('.combat-stat-panel-close');
+        var headerEl = panel.querySelector('.combat-stat-panel-header');
+
+        if (closeBtn)
+        {
+            closeBtn.addEventListener('click', function (e)
+            {
+                e.preventDefault();
+                e.stopPropagation();
+                closeCombatStatPanel(combatantKey);
+            });
+        }
+
+        if (typeof AnimasterPanelDrag !== 'undefined' && headerEl)
+        {
+            AnimasterPanelDrag.attach(panel, headerEl, overlay);
+        }
+
+        headerEl.addEventListener('mousedown', function ()
+        {
+            bringCombatStatPanelToFront(panel);
+            rememberCombatStatPanelOpen(combatantKey);
+        });
+
+        overlay.appendChild(panel);
+
+        return {
+            el: panel,
+            titleEl: titleEl,
+            bodyEl: bodyEl
+        };
+    }
+
+    function getCombatStatPanel(combatantKey)
+    {
+        if (!combatantKey)
+        {
+            return null;
+        }
+
+        if (!statPanelsByKey[combatantKey])
+        {
+            statPanelsByKey[combatantKey] = createCombatStatPanel(combatantKey);
+        }
+
+        return statPanelsByKey[combatantKey];
+    }
+
+    function closeCombatStatPanel(combatantKey)
+    {
+        if (combatantKey)
+        {
+            var panelState = statPanelsByKey[combatantKey];
+
+            if (!panelState || !panelState.el)
+            {
+                forgetCombatStatPanelOpen(combatantKey);
+                return;
+            }
+
+            panelState.el.hidden = true;
+            panelState.el.setAttribute('aria-hidden', 'true');
+
+            if (panelState.bodyEl)
+            {
+                panelState.bodyEl.innerHTML = '';
+            }
+
+            forgetCombatStatPanelOpen(combatantKey);
+            return;
+        }
+
+        if (!statPanelOpenOrder.length)
+        {
+            return;
+        }
+
+        closeCombatStatPanel(statPanelOpenOrder[statPanelOpenOrder.length - 1]);
+    }
+
+    function closeAllCombatStatPanels()
+    {
+        Object.keys(statPanelsByKey).forEach(function (key)
+        {
+            var panelState = statPanelsByKey[key];
+
+            if (!panelState || !panelState.el)
+            {
+                return;
+            }
+
+            panelState.el.remove();
+        });
+
+        statPanelsByKey = {};
+        statPanelOpenOrder = [];
+    }
+
+    function openCombatStatPanel(combatant)
+    {
+        if (!combatant || !combatant.combat_stat_sheet || !combatant.combat_stat_sheet.length)
+        {
+            return;
+        }
+
+        var combatantKey = combatantLookupKey(combatant);
+        var panelState = getCombatStatPanel(combatantKey);
+
+        if (!panelState || !panelState.el || !panelState.titleEl)
+        {
+            return;
+        }
+
+        var title = combatant.nickname || combatant.species_name || t('team.animal_fallback', { id: combatant.id_animal || '?' });
+        panelState.titleEl.textContent = title + ' ' + t('team.lv_short', { level: combatant.lvl || 1 });
+        renderCombatStatPanelBody(panelState.bodyEl, combatant);
+        panelState.el.hidden = false;
+        panelState.el.removeAttribute('aria-hidden');
+        rememberCombatStatPanelOpen(combatantKey);
+        bringCombatStatPanelToFront(panelState.el);
+    }
+
+    function refreshOpenCombatStatPanels()
+    {
+        var keys = statPanelOpenOrder.slice();
+
+        keys.forEach(function (combatantKey)
+        {
+            var panelState = statPanelsByKey[combatantKey];
+
+            if (!panelState || !panelState.el || panelState.el.hidden)
+            {
+                return;
+            }
+
+            var parts = combatantKey.split(':');
+            var entityId = parseInt(parts[1], 10) || 0;
+            var combatant = findCombatantForAnimalId(entityId);
+
+            if (combatant && combatant.combat_stat_sheet && combatant.combat_stat_sheet.length)
+            {
+                openCombatStatPanel(combatant);
+                return;
+            }
+
+            closeCombatStatPanel(combatantKey);
+        });
+    }
+
+    function hasOpenCombatStatPanel()
+    {
+        return statPanelOpenOrder.length > 0;
+    }
+
+    function attachCombatStatInfoButton(card, animalId)
+    {
+        if (!card || !animalId)
+        {
+            return;
+        }
+
+        var combatant = findCombatantForAnimalId(animalId);
+
+        if (!combatant || !combatant.combat_stat_sheet || !combatant.combat_stat_sheet.length)
+        {
+            return;
+        }
+
+        var row = card.querySelector('.unit-name-row');
+
+        if (!row || row.querySelector('.unit-stat-info-btn'))
+        {
+            return;
+        }
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'unit-stat-info-btn';
+        btn.textContent = 'i';
+        btn.title = 'Stats';
+        btn.setAttribute('aria-label', 'Stats');
+
+        btn.addEventListener('click', function (e)
+        {
+            e.stopPropagation();
+            openCombatStatPanel(findCombatantForAnimalId(animalId) || combatant);
+        });
+
+        row.appendChild(btn);
+    }
+
+    function renderCombatBuffIcons(containerEl, buffsArray)
+    {
+        if (typeof AnimasterBuffDisplay !== 'undefined' && typeof AnimasterBuffDisplay.renderBuffIcons === 'function')
+        {
+            AnimasterBuffDisplay.renderBuffIcons(containerEl, buffsArray);
+            return;
+        }
+
+        if (!containerEl)
+        {
+            return;
+        }
+
+        containerEl.innerHTML = '';
+        containerEl.hidden = true;
+    }
+
+    function appendCombatBuffStrip(card, animalId)
+    {
+        if (!card)
+        {
+            return;
+        }
+
+        var combatant = findCombatantForAnimalId(animalId);
+        var strip = card.querySelector('.combat-buff-strip');
+
+        if (!strip)
+        {
+            strip = document.createElement('div');
+            strip.className = 'combat-buff-strip';
+            card.appendChild(strip);
+        }
+
+        renderCombatBuffIcons(strip, combatant ? combatant.active_combat_buffs : []);
+    }
+
     function init(options)
     {
         overlay = document.getElementById('combat-overlay');
@@ -252,9 +701,31 @@ var AnimasterCombat = (function ()
                 return;
             }
 
-            if (e.code === 'Escape' && overlay && !overlay.hidden && canClose())
+            if (e.code === 'Space' && overlay && !overlay.hidden && canClose() && closeBtn)
             {
-                hide();
+                e.preventDefault();
+                closeBtn.click();
+                return;
+            }
+
+            if (handleCombatMenuKeydown(e))
+            {
+                return;
+            }
+
+            if (e.code === 'Escape' && overlay && !overlay.hidden)
+            {
+                if (hasOpenCombatStatPanel())
+                {
+                    e.preventDefault();
+                    closeCombatStatPanel();
+                    return;
+                }
+
+                if (canClose())
+                {
+                    hide();
+                }
             }
         });
 
@@ -347,6 +818,231 @@ var AnimasterCombat = (function ()
 
         secondaryEl.classList.remove('is-open');
         secondaryEl.innerHTML = '';
+        clearMenuSelectionHighlight();
+    }
+
+    function isSecondaryMenuOpen()
+    {
+        return !!(secondaryEl && secondaryEl.classList.contains('is-open'));
+    }
+
+    function menuKeyboardActive()
+    {
+        if (!overlay || overlay.hidden || playbackRunning || busy || !battle || battle.status !== 'ongoing')
+        {
+            return false;
+        }
+
+        if (!abilitiesEl || !abilitiesEl.classList.contains('is-open'))
+        {
+            return false;
+        }
+
+        if (combatMenuBlocked())
+        {
+            return false;
+        }
+
+        if (isSecondaryMenuOpen() && secondaryEl.querySelector('button.combat-menu-back'))
+        {
+            return true;
+        }
+
+        return getMenuNavButtons().length > 0;
+    }
+
+    function findFightAbilityMenuIndex(id_ability)
+    {
+        id_ability = parseInt(id_ability, 10) || 0;
+
+        if (id_ability <= 0)
+        {
+            return 0;
+        }
+
+        var buttons = getMenuNavButtons();
+
+        for (var i = 0; i < buttons.length; i++)
+        {
+            if (parseInt(buttons[i].getAttribute('data-ability-id'), 10) === id_ability)
+            {
+                return i;
+            }
+        }
+
+        return 0;
+    }
+
+    function rememberedFightAbilityId()
+    {
+        var stats = latestStats();
+        var activeAnimal = resolveActiveAnimalForMenu(stats || {});
+        var animalId = parseInt(activeAnimal.id_animal, 10) || 0;
+
+        if (animalId <= 0)
+        {
+            return 0;
+        }
+
+        return parseInt(lastUsedAbilityByAnimal[String(animalId)], 10) || 0;
+    }
+
+    function getMenuNavContainer()
+    {
+        if (isSecondaryMenuOpen())
+        {
+            return secondaryEl;
+        }
+
+        return abilitiesEl;
+    }
+
+    function getMenuNavButtons()
+    {
+        var container = getMenuNavContainer();
+
+        if (!container)
+        {
+            return [];
+        }
+
+        return Array.prototype.filter.call(
+            container.querySelectorAll('button.combat-menu-btn, button.combat-ability-btn, button.combat-flee-confirm-btn'),
+            function (btn)
+            {
+                return !btn.disabled && !btn.classList.contains('combat-menu-back');
+            }
+        );
+    }
+
+    function clearMenuSelectionHighlight()
+    {
+        if (abilitiesEl)
+        {
+            abilitiesEl.querySelectorAll('button.is-menu-selected').forEach(function (btn)
+            {
+                btn.classList.remove('is-menu-selected');
+            });
+        }
+
+        if (secondaryEl)
+        {
+            secondaryEl.querySelectorAll('button.is-menu-selected').forEach(function (btn)
+            {
+                btn.classList.remove('is-menu-selected');
+            });
+        }
+    }
+
+    function syncMenuKeyboardSelection(forceReset)
+    {
+        if (forceReset || lastMenuKeyboardMode !== menuMode)
+        {
+            menuSelectedIndex = 0;
+            lastMenuKeyboardMode = menuMode;
+        }
+
+        var buttons = getMenuNavButtons();
+
+        if (!buttons.length)
+        {
+            clearMenuSelectionHighlight();
+            return;
+        }
+
+        if (menuSelectedIndex >= buttons.length)
+        {
+            menuSelectedIndex = buttons.length - 1;
+        }
+
+        if (menuSelectedIndex < 0)
+        {
+            menuSelectedIndex = 0;
+        }
+
+        clearMenuSelectionHighlight();
+        buttons[menuSelectedIndex].classList.add('is-menu-selected');
+
+        if (typeof buttons[menuSelectedIndex].scrollIntoView === 'function')
+        {
+            buttons[menuSelectedIndex].scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    function moveMenuSelection(delta)
+    {
+        var buttons = getMenuNavButtons();
+
+        if (!buttons.length)
+        {
+            return;
+        }
+
+        menuSelectedIndex = (menuSelectedIndex + delta + buttons.length) % buttons.length;
+        syncMenuKeyboardSelection(false);
+    }
+
+    function activateMenuSelection()
+    {
+        var buttons = getMenuNavButtons();
+
+        if (!buttons.length)
+        {
+            return;
+        }
+
+        var btn = buttons[menuSelectedIndex];
+
+        if (btn && !btn.disabled)
+        {
+            btn.click();
+        }
+    }
+
+    function triggerMenuBack()
+    {
+        if (!isSecondaryMenuOpen() || !secondaryEl)
+        {
+            return;
+        }
+
+        var backBtn = secondaryEl.querySelector('button.combat-menu-back');
+
+        if (backBtn && !backBtn.disabled)
+        {
+            backBtn.click();
+        }
+    }
+
+    function handleCombatMenuKeydown(e)
+    {
+        if (!menuKeyboardActive())
+        {
+            return false;
+        }
+
+        if (e.code === 'ArrowUp' || e.code === 'ArrowDown')
+        {
+            e.preventDefault();
+            moveMenuSelection(e.code === 'ArrowUp' ? -1 : 1);
+            return true;
+        }
+
+        if (e.code === 'Space' || e.code === 'ArrowLeft')
+        {
+            e.preventDefault();
+            activateMenuSelection();
+            return true;
+        }
+
+        if (e.code === 'ArrowRight' && isSecondaryMenuOpen())
+        {
+            e.preventDefault();
+            triggerMenuBack();
+            return true;
+        }
+
+        return false;
     }
 
     function openPrimaryMenu()
@@ -369,6 +1065,8 @@ var AnimasterCombat = (function ()
     {
         closePrimaryMenu();
         hideSecondaryMenu();
+        menuSelectedIndex = 0;
+        lastMenuKeyboardMode = '';
 
         if (abilitiesEl)
         {
@@ -1107,6 +1805,7 @@ var AnimasterCombat = (function ()
         {
             pvpMeta = result.meta || {};
             syncPvpTurnFromMeta();
+            refreshOpenCombatStatPanels();
             return result.moves;
         }
 
@@ -1115,6 +1814,7 @@ var AnimasterCombat = (function ()
             partyPveMeta = result.meta || {};
             partyPveMetaAnchorMs = Date.now();
             syncPartyPveTurnFromMeta();
+            refreshOpenCombatStatPanels();
 
             if (Array.isArray(result.moves) && result.moves.length)
             {
@@ -1124,7 +1824,20 @@ var AnimasterCombat = (function ()
             return moves;
         }
 
+        if (battle && battle.type === 'solo_pve' && result && result.moves !== undefined)
+        {
+            soloPveMeta = result.meta || {};
+            refreshOpenCombatStatPanels();
+            return result.moves;
+        }
+
+        if (result && result.moves)
+        {
+            return result.moves;
+        }
+
         pvpMeta = null;
+        soloPveMeta = null;
         return result || [];
     }
 
@@ -1495,6 +2208,7 @@ var AnimasterCombat = (function ()
                 }
 
                 row.appendChild(nameWrapEl);
+
                 row.appendChild(statusEl);
                 partyActionsListEl.appendChild(row);
 
@@ -1759,6 +2473,7 @@ var AnimasterCombat = (function ()
         stopPvpPoll();
         stopPartyPvePoll();
         cancelPresentation();
+        closeAllCombatStatPanels();
         overlay.hidden = true;
         overlay.setAttribute('aria-hidden', 'true');
         setPvpOverlayMode(false);
@@ -1771,11 +2486,13 @@ var AnimasterCombat = (function ()
         pvpPhase = 'idle';
         pvpMeta = null;
         partyPveMeta = null;
+        soloPveMeta = null;
         partyPvePlaybackHpFinal = null;
         pvpLockedTurn = 0;
         pvpResolvePending = false;
         pvpResolvedMoveCount = 0;
         invalidateAbilityCache();
+        lastUsedAbilityByAnimal = {};
 
         if (partyPlanningEl)
         {
@@ -1805,6 +2522,7 @@ var AnimasterCombat = (function ()
         };
 
         resetMenu();
+        lastUsedAbilityByAnimal = {};
         show();
         setPvpOverlayMode(battle.type === 'pvp');
         loadTurn(0, false);
@@ -1828,6 +2546,7 @@ var AnimasterCombat = (function ()
         };
 
         resetMenu();
+        lastUsedAbilityByAnimal = {};
         show();
         setPvpOverlayMode(battle.type === 'pvp');
         loadTurn(resumeTurn, resumeTurn > 0);
@@ -2285,6 +3004,7 @@ var AnimasterCombat = (function ()
             }
         }
 
+        syncMenuKeyboardSelection(true);
         openPrimaryMenu();
     }
 
@@ -2321,6 +3041,7 @@ var AnimasterCombat = (function ()
         confirmBtn.classList.add('combat-flee-confirm-btn');
 
         appendBackButton();
+        syncMenuKeyboardSelection(true);
     }
 
     function showMainMenu()
@@ -2453,6 +3174,7 @@ var AnimasterCombat = (function ()
                 var btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'combat-ability-btn';
+                btn.setAttribute('data-ability-id', String(ab.id_ability));
                 btn.textContent = ab.ability + ' (' + ab.power + '/' + ab.m_power + ')';
                 btn.title = ab.descrizione || '';
                 btn.disabled = busy;
@@ -2465,6 +3187,9 @@ var AnimasterCombat = (function ()
         }
 
         appendBackButton();
+        menuSelectedIndex = findFightAbilityMenuIndex(rememberedFightAbilityId());
+        lastMenuKeyboardMode = menuMode;
+        syncMenuKeyboardSelection(false);
     }
 
     function combatMenuBlocked()
@@ -2540,6 +3265,7 @@ var AnimasterCombat = (function ()
         }
 
         appendBackButton();
+        syncMenuKeyboardSelection(true);
     }
 
     function showSwitchMenu()
@@ -2620,6 +3346,7 @@ var AnimasterCombat = (function ()
         }
 
         appendBackButton();
+        syncMenuKeyboardSelection(true);
     }
 
     function onItemSelected(item)
@@ -2723,6 +3450,7 @@ var AnimasterCombat = (function ()
         }
 
         appendBackButton(showItemsMenu);
+        syncMenuKeyboardSelection(true);
     }
 
     function performAction(type, id, extra)
@@ -2747,6 +3475,18 @@ var AnimasterCombat = (function ()
         else if (!canActInBattle())
         {
             return;
+        }
+
+        if (type === 'ability')
+        {
+            var abilityId = parseInt(id, 10) || 0;
+            var activeAnimal = resolveActiveAnimalForMenu(latestStats() || {});
+            var animalId = parseInt(activeAnimal.id_animal, 10) || 0;
+
+            if (abilityId > 0 && animalId > 0)
+            {
+                lastUsedAbilityByAnimal[String(animalId)] = abilityId;
+            }
         }
 
         if (battle.type === 'pvp' && pvpPhase !== 'input')
@@ -3812,6 +4552,8 @@ var AnimasterCombat = (function ()
             '<div class="hp-text">' + escapeHtml(t('stats.hp_value', { current: hpVal, max: maxVal })) + '</div>';
 
         setUnitElementIcon(card, elementData || {});
+        attachCombatStatInfoButton(card, animalId);
+        appendCombatBuffStrip(card, animalId);
 
         return card;
     }

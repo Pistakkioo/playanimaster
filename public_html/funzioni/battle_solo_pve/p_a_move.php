@@ -10,95 +10,64 @@ if($p_a_res_hp>0)
             where id_ability = \"$id\"
         ");
         $row_PA_action = $result_PA_action->fetch();
-                
-        $PA_AB_acc = $p_a_res_acc*$row_PA_action['accuracy']/100;
-        $WA_EVA = (100-$w_a_res_eva)/100;
-        $PA_AB_acc*=$WA_EVA;// if w_a has 10 evasion, p_a accuracy is multiplied by 0.9 
-        $PA_num = rand(1,100);
-        $PA_AB_HIT = "N";$PA_CRIT=1;$PA_TYPE_ABILITY = 1;
-        if($PA_num<=$PA_AB_acc)
-        {
-            $PA_AB_HIT = "S";
-        }
-        if($PA_AB_HIT=="S")
-        {
-            $PA_crit_num = rand(1,100);
-            if($PA_crit_num<=$p_a_res_cr)
-            {
-                $PA_CRIT = 1.5;
-            }
-            if($row_PA_action['id_element']==$p_a_id_element)
-            {
-                $PA_TYPE_ABILITY=1.5;
-            }
-            $PA_AB_DMG = (intval($p_a_lvl)*.5*intval($row_PA_action['power'])*floatval($p_a_res_atk)/floatval($w_a_res_def))+(intval($p_a_lvl)*.5*intval($row_PA_action['m_power'])*floatval($p_a_res_matk)/floatval($w_a_res_mdef));
-            //error_log("PA DMG: $p_a_lvl*.5*$row_PA_action[power]*$p_a_res_atk/$w_a_res_def+$p_a_lvl*.5*$row_PA_action[m_power]*$p_a_res_matk/$w_a_res_mdef");
-            //error_log("USER ANIMAL BASE DAMAGE:$PA_AB_DMG");
-            $PA_AB_DMG/=40;
-            //error_log("USER ANIMAL DAMAGE AFTER /40:$PA_AB_DMG");
-            if(intval($row_PA_action['power'])>0||intval($row_PA_action['m_power'])>0){$PA_AB_DMG+=3;}
-            //error_log("USER ANIMAL DAMAGE AFTER +3:$PA_AB_DMG");
-            $PA_AB_DMG*=$PA_CRIT;
-            //error_log("USER ANIMAL DAMAGE AFTER *CRIT:$PA_AB_DMG");
-            $PA_AB_DMG*=$PA_TYPE_ABILITY;
-            //error_log("USER ANIMAL DAMAGE AFTER *TYPE:$PA_AB_DMG");
-            
-            $ELEMENT_BONUS = FUNZIONI::element_bonus($row_PA_action['id_element'],$w_a_id_element);
-            $PA_AB_DMG*=$ELEMENT_BONUS;
-            //error_log("USER ANIMAL DAMAGE AFTER *LMNT BONUS:$PA_AB_DMG");
-            $PA_AB_DMG=intval($PA_AB_DMG);
-            //error_log("USER ANIMAL DAMAGE:$PA_AB_DMG");
-            $w_a_res_hp-=$PA_AB_DMG;
-            if($w_a_res_hp<=0)
-            {   
-                $w_a_res_hp=0;
-            }
-            else if($row_PA_action['effect']!="none")
-            {
-                $PA_effect_num = rand(1,100);
-                if($PA_effect_num<$row_PA_action['effect_chance'])
-                {
-                    $effect = explode('_',$row_PA_action['effect']);
-                    //lower_target_atk_10_%
-                    $effect_direction = $effect[0];
-                    $effect_target = $effect[1];
-                    $effect_stat = $effect[2];
-                    $effect_mult = $effect[3];
-                    $effect_unit = $effect[4];
-                    $effect_multiplier = 1;
-                    if($effect_unit=="%")
-                    {
-                        if($effect_direction=="lower")
-                        {
-                            $effect_multiplier-=floatval($effect_mult/100);
-                        }
-                        else if($effect_direction=="increase")
-                        {
-                            $effect_multiplier+=floatval($effect_mult/100);
-                        }
-                    }
-                    
-                    $STR_EFFECT = "";    
-                    if($effect_target=="target")
-                    {// WILL ALTER A STAT TO THE WILD ANIMAL
-                        $STR_EFFECT.="w_a_res_$effect_stat";
-                    }
-                    else if($effect_target=="self")
-                    {// WILL ALTER A STAT TO THE PLAYER ANIMAL ITSELF
-                        $STR_EFFECT.="p_a_res_$effect_stat";
-                    }
-                    $$STR_EFFECT*=$effect_multiplier;
-                }
-            }
-                
-            
-        }
-             
-        $PA_MOVE_DESCR = $p_a_nickname." used ".$row_PA_action['ability'];
-        if($LANG=="_it"){$PA_MOVE_DESCR = $p_a_nickname." ha usato ".$row_PA_action['ability'];}
-        if($LANG=="_pt"){$PA_MOVE_DESCR = $p_a_nickname." usou ".$row_PA_action['ability'];}
-        
-        $PA_id_ab = $row_PA_action['id_ability'];
+
+        require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/combat/MoveResolver.php';
+
+        $attacker = [
+            'lvl' => (int) $p_a_lvl,
+            'acc' => (int) $p_a_res_acc,
+            'cr' => (int) $p_a_res_cr,
+            'atk' => (float) $p_a_res_atk,
+            'def' => (float) $p_a_res_def,
+            'matk' => (float) $p_a_res_matk,
+            'mdef' => (float) $p_a_res_mdef,
+            'eva' => (int) $p_a_res_eva,
+            'spd' => (int) $p_a_res_spd,
+            'current_hp' => (int) $p_a_res_hp,
+            'max_hp' => (int) $p_a_res_max_hp,
+            'id_element' => (int) $p_a_id_element,
+            'nickname' => (string) $p_a_nickname,
+        ];
+        $defender = [
+            'lvl' => (int) $w_a_lvl,
+            'acc' => (int) $w_a_res_acc,
+            'cr' => (int) $w_a_res_cr,
+            'atk' => (float) $w_a_res_atk,
+            'def' => (float) $w_a_res_def,
+            'matk' => (float) $w_a_res_matk,
+            'mdef' => (float) $w_a_res_mdef,
+            'eva' => (int) $w_a_res_eva,
+            'spd' => (int) $w_a_res_spd,
+            'current_hp' => (int) $w_a_res_hp,
+            'max_hp' => (int) $w_a_res_max_hp,
+            'id_element' => (int) $w_a_id_element,
+            'nickname' => (string) $w_a_species,
+        ];
+
+        $move_result = MoveResolver::resolveAbility($row_PA_action, $attacker, $defender, [
+            'lang_suffix' => (string) $LANG,
+            'conn' => $conn,
+            'battle_type' => 'solo_pve',
+            'id_battle' => (int) $id_battle,
+            'applied_at_turn' => (int) $turn,
+            'attacker_entity' => [
+                'entity_type' => 'animal',
+                'id_entity' => (int) $p_a_id,
+                'id_user_ig' => (int) $id_user_ig,
+            ],
+            'defender_entity' => [
+                'entity_type' => 'wild',
+                'id_entity' => (int) $w_a_id,
+                'id_user_ig' => null,
+            ],
+        ]);
+
+        $p_a_res_hp = (int) $move_result['attacker']['current_hp'];
+        $w_a_res_hp = (int) $move_result['defender']['current_hp'];
+
+        $PA_AB_HIT = $move_result['move_hit'];
+        $PA_MOVE_DESCR = $move_result['move_description'];
+        $PA_id_ab = $move_result['id_ability'];
         
         
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -128,16 +97,12 @@ if($p_a_res_hp>0)
         // END IF WILD ANIMAL FAINTS!!!
         ///////////////////////////////////////////////////////////////////////////////////////
         
-        
-        if($PA_CRIT>1)
+        if (!class_exists('BUFFS'))
         {
-            $PA_AB_HIT = "C";
+            require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/buffs.php';
         }
-        
-        $result_hp = $conn->query("
-            update animals set current_hp = \"$p_a_res_hp\", max_hp = \"$p_a_res_max_hp\"
-            where id_animal = \"$p_a_id\"
-        ");
+
+        BUFFS::persistAnimalHpAfterBattle($conn, (int) $p_a_id, (int) $p_a_res_hp);
         
         $b_status = "ongoing";
         if($w_a_res_hp<=0){$b_status = "win";}
@@ -177,12 +142,12 @@ if($p_a_res_hp>0)
                 where id_battle_solo_pve = \"$id_battle\"
             ");
 
-            if (!class_exists('BUFFS'))
+            if (!class_exists('CombatSession'))
             {
-                require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/buffs.php';
+                require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/combat/CombatSession.php';
             }
 
-            BUFFS::onSoloPveBattleEnd($conn, $id_battle);
+            CombatSession::onBattleEnd($conn, CombatSession::TYPE_SOLO, $id_battle);
         }
     
 }// END IF $p_a_res_hp>0
