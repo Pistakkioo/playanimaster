@@ -261,6 +261,20 @@ var AnimasterApi = (function ()
         });
     }
 
+    function fetchWorldTiles(idZone)
+    {
+        return postJson(BASE + 'get_world_tiles.php', {
+            id_zone: idZone,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            unwrap(envelope);
+            var result = JSON.parse(envelope.response || '{}');
+            apiLog('fetchWorldTiles', '[AnimasterApi] fetchWorldTiles', result);
+            return result;
+        });
+    }
+
     function getConversationConsequences(player, idConversation, idOption)
     {
         return postJson(BASE + 'get_conversation_consequences.php', {
@@ -318,21 +332,26 @@ var AnimasterApi = (function ()
         });
     }
 
-    function parsePartyPveMeta(envelope)
+    /**
+     * Unified battle_meta envelope (005c Phase 4): every battle_type
+     * (solo_pve, pvp, party_pve, ...) is served by its own endpoint but they
+     * all emit a single `battle_meta` key with the same envelope shape.
+     */
+    function parseBattleMeta(envelope)
     {
         var meta = {};
 
-        if (envelope && envelope.party_pve_meta)
+        if (envelope && envelope.battle_meta)
         {
-            if (typeof envelope.party_pve_meta === 'object')
+            if (typeof envelope.battle_meta === 'object')
             {
-                meta = envelope.party_pve_meta;
+                meta = envelope.battle_meta;
             }
             else
             {
                 try
                 {
-                    meta = JSON.parse(envelope.party_pve_meta);
+                    meta = JSON.parse(envelope.battle_meta);
                 }
                 catch (e)
                 {
@@ -359,70 +378,14 @@ var AnimasterApi = (function ()
 
         return postJson(BASE + endpoint, params).then(function (envelope)
         {
-            if (params.battle_type === 'party_pve' && envelope && envelope.msg === 'WAITING')
-            {
-                var waitingMeta = parsePartyPveMeta(envelope);
-                apiLog('getBattleInfo', '[AnimasterApi] getBattleInfo waiting', waitingMeta);
-
-                return {
-                    moves: [],
-                    meta: waitingMeta,
-                    waiting: true
-                };
-            }
-
             unwrap(envelope);
             var moves = parseHashResponse(envelope.response);
-            apiLog('getBattleInfo', '[AnimasterApi] getBattleInfo', moves);
-
-            if (params.battle_type === 'pvp')
-            {
-                var meta = {};
-
-                if (envelope.pvp_meta)
-                {
-                    try
-                    {
-                        meta = JSON.parse(envelope.pvp_meta);
-                    }
-                    catch (e)
-                    {
-                        meta = {};
-                    }
-                }
-
-                return {
-                    moves: moves,
-                    meta: meta
-                };
-            }
-
-            if (params.battle_type === 'party_pve')
-            {
-                return {
-                    moves: moves,
-                    meta: parsePartyPveMeta(envelope),
-                    waiting: false
-                };
-            }
-
-            var soloMeta = {};
-
-            if (envelope.solo_pve_meta)
-            {
-                try
-                {
-                    soloMeta = JSON.parse(envelope.solo_pve_meta);
-                }
-                catch (e)
-                {
-                    soloMeta = {};
-                }
-            }
+            var meta = parseBattleMeta(envelope);
+            apiLog('getBattleInfo', '[AnimasterApi] getBattleInfo', moves, meta);
 
             return {
                 moves: moves,
-                meta: soloMeta
+                meta: meta
             };
         });
     }
@@ -917,6 +880,7 @@ var AnimasterApi = (function ()
         getSpawnPoints: getSpawnPoints,
         checkSpawn: checkSpawn,
         fetchNpcs: fetchNpcs,
+        fetchWorldTiles: fetchWorldTiles,
         getConversationConsequences: getConversationConsequences,
         startBattle: startBattle,
         startPartyBattle: startPartyBattle,

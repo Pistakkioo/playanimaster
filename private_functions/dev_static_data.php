@@ -8,6 +8,7 @@ function dev_static_runtime_excludes()
     return [
         'log',
         'wild_animals',
+        'battles_solo_pve',
         'battles_solo_pve_moves',
         'storico_battles_solo_pve_moves',
         'alliances',
@@ -23,6 +24,11 @@ function dev_static_runtime_excludes()
         'battles_party_pve',
         'battles_party_pve_inactivity_votes',
         'battles_party_pve_moves',
+        'battles',
+        'battle_participants',
+        'battle_round_choices',
+        'battle_moves',
+        'battle_inactivity_votes',
         'parties',
         'party_invites',
     ];

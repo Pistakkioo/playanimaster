@@ -638,5 +638,238 @@ ALTER TABLE playanimaster_db.buff_definitions
     ADD COLUMN icon VARCHAR(50) NULL DEFAULT NULL COMMENT 'HUD/combat badge glyph' AFTER tier;
 
 
--- LAUNCHED ON PRODUCTION UP TO HERE 
+
+-- 005c: unified combat schema. One battles row per fight (any battle_type),
+-- N participants per alliance on battle_participants, planning choices on
+-- battle_round_choices, append-only execution log on battle_moves.
+-- Replaces battles_solo_pve*, battles_pvp*, battles_party_pve* (dropped in
+-- Phase 6 of docs/modules/005c_full_combat_unification.md after cutover).
+CREATE TABLE IF NOT EXISTS playanimaster_db.battles (
+    id_battle INT(11) NOT NULL AUTO_INCREMENT,
+    battle_type VARCHAR(32) NOT NULL COMMENT 'solo_pve | party_pve | pvp_duel | party_vs_party | dungeon | raid | pk_zone',
+    planning_mode VARCHAR(24) NOT NULL COMMENT 'instant | simultaneous_submit | simultaneous_confirm',
+    flg_status CHAR(1) NOT NULL DEFAULT 'O' COMMENT 'O=ongoing, F=finished, X=cancelled',
+    current_round INT(11) NOT NULL DEFAULT 0,
+    id_zone INT(11) DEFAULT NULL,
+    id_user_ig_initiator INT(11) DEFAULT NULL,
+    id_party_a INT(11) DEFAULT NULL,
+    id_party_b INT(11) DEFAULT NULL,
+    id_duel_request INT(11) DEFAULT NULL,
+    id_winner_alliance CHAR(1) DEFAULT NULL COMMENT 'A | B | NULL',
+    end_reason VARCHAR(50) DEFAULT NULL,
+    dt_round_started DATETIME DEFAULT NULL,
+    dt_created TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_finished TIMESTAMP NULL DEFAULT NULL,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    context_json JSON DEFAULT NULL COMMENT 'Mode-specific extras: dungeon_run_id, encounter_id, pk_flag, reward_split, etc.',
+    PRIMARY KEY (id_battle),
+    KEY idx_battles_type_status (battle_type, flg_status),
+    KEY idx_battles_party_a (id_party_a, flg_status),
+    KEY idx_battles_party_b (id_party_b, flg_status),
+    KEY idx_battles_zone (id_zone, flg_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battle_participants (
+    id_battle_participant INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle INT(11) NOT NULL,
+    side CHAR(1) NOT NULL COMMENT 'A | B (alliance)',
+    participant_kind VARCHAR(20) NOT NULL COMMENT 'player_animal | wild | scripted',
+    id_user_ig INT(11) DEFAULT NULL COMMENT 'owner, when participant_kind = player_animal',
+    id_animal INT(11) DEFAULT NULL COMMENT 'animals.id_animal, when participant_kind = player_animal',
+    id_wild_animal INT(11) DEFAULT NULL COMMENT 'overworld wild lock, when participant_kind = wild',
+    id_species INT(11) DEFAULT NULL,
+    id_element INT(11) DEFAULT NULL,
+    entity_type VARCHAR(16) NOT NULL COMMENT 'animal | wild | user_ig (for battle_turn_buffs / MoveResolver)',
+    id_entity INT(11) NOT NULL COMMENT 'id_animal, id_wild_animal, or id_user_ig depending on entity_type',
+    team_position TINYINT(3) UNSIGNED DEFAULT NULL,
+    slot_label VARCHAR(32) DEFAULT NULL COMMENT 'active | bench | boss_part',
+    flg_active CHAR(1) NOT NULL DEFAULT 'S',
+    flg_fainted CHAR(1) NOT NULL DEFAULT 'N',
+    current_hp INT(11) NOT NULL,
+    max_hp INT(11) NOT NULL COMMENT 'battle snapshot; buffed values allowed in-fight',
+    atk INT(11) NOT NULL,
+    def INT(11) NOT NULL,
+    matk INT(11) NOT NULL,
+    mdef INT(11) NOT NULL,
+    acc INT(11) NOT NULL,
+    eva INT(11) NOT NULL,
+    cr INT(11) NOT NULL,
+    spd INT(11) NOT NULL,
+    lvl INT(11) NOT NULL,
+    nickname VARCHAR(100) DEFAULT NULL,
+    species_name VARCHAR(100) DEFAULT NULL,
+    experience INT(11) NOT NULL DEFAULT 0 COMMENT 'player_animal exp snapshot for rewards',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_participant),
+    KEY idx_bp_battle_side (id_battle, side, flg_active),
+    KEY idx_bp_battle_entity (id_battle, entity_type, id_entity),
+    KEY idx_bp_user (id_user_ig, id_battle),
+    CONSTRAINT fk_bp_battle FOREIGN KEY (id_battle) REFERENCES battles (id_battle)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battle_round_choices (
+    id_battle_round_choice INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle INT(11) NOT NULL,
+    round INT(11) NOT NULL,
+    id_user_ig INT(11) NOT NULL,
+    id_battle_participant INT(11) NOT NULL COMMENT 'acting fighter',
+    action_type VARCHAR(20) NOT NULL COMMENT 'ability | switch | item | flee',
+    action_id INT(11) NOT NULL DEFAULT 0,
+    id_item_type_selected INT(11) DEFAULT NULL,
+    flg_confirmed CHAR(1) NOT NULL DEFAULT 'N',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_round_choice),
+    UNIQUE KEY uq_brc_battle_round_actor (id_battle, round, id_battle_participant),
+    KEY idx_brc_battle_round (id_battle, round),
+    CONSTRAINT fk_brc_battle FOREIGN KEY (id_battle) REFERENCES battles (id_battle),
+    CONSTRAINT fk_brc_participant FOREIGN KEY (id_battle_participant) REFERENCES battle_participants (id_battle_participant)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battle_moves (
+    id_battle_move INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle INT(11) NOT NULL,
+    round INT(11) NOT NULL,
+    order_in_turn INT(11) NOT NULL,
+    id_actor_participant INT(11) NOT NULL,
+    id_target_participant INT(11) DEFAULT NULL,
+    id_user_ig_actor INT(11) DEFAULT NULL,
+    move_type VARCHAR(100) NOT NULL,
+    id_rif INT(11) DEFAULT NULL,
+    move_speed DECIMAL(10,2) DEFAULT NULL,
+    move_description VARCHAR(255) DEFAULT NULL,
+    move_hit CHAR(1) DEFAULT NULL,
+    actor_hp_after INT(11) DEFAULT NULL,
+    target_hp_after INT(11) DEFAULT NULL,
+    resulting_battle_status VARCHAR(16) DEFAULT NULL COMMENT 'ongoing | win | defeat | fled | pvp_end | ...',
+    meta_json JSON DEFAULT NULL,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_move),
+    KEY idx_bm_battle_round (id_battle, round, order_in_turn),
+    CONSTRAINT fk_bm_battle FOREIGN KEY (id_battle) REFERENCES battles (id_battle)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battle_inactivity_votes (
+    id_battle_inactivity_vote INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle INT(11) NOT NULL,
+    round INT(11) NOT NULL,
+    id_user_ig_target INT(11) NOT NULL,
+    id_user_ig_voter INT(11) NOT NULL,
+    vote_choice CHAR(1) NOT NULL DEFAULT 'Y' COMMENT 'Y=force random action, N=keep waiting',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_inactivity_vote),
+    UNIQUE KEY uq_biv (id_battle, round, id_user_ig_target, id_user_ig_voter),
+    CONSTRAINT fk_biv_battle FOREIGN KEY (id_battle) REFERENCES battles (id_battle)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+-- Overworld tile & terrain system (sidequest): DB-driven ground/landmark
+-- images + difficult terrain (move_speed_mult) + barriers (is_walkable),
+-- optionally mixed within a single tile via collision_mask (e.g. a round
+-- ruin structure blocking only the middle of an otherwise-walkable tile).
+-- tile_definitions is the catalog (image + gameplay properties); world_tiles
+-- is a sparse per-zone grid placement table. Empty cells are filled
+-- client-side by a deterministic hash pick among is_base_pack='S' rows for
+-- that zone (or NULL id_zone) -- no DB row needed for plain ground.
+--
+-- Layers (tile_layers): a fixed, SQL-seeded set (no admin CRUD) that lets a
+-- cell stack several tiles -- a ground tile plus any number of overlay
+-- tiles (props/structures/canopy) drawn above it. Only the ground layer
+-- (is_ground='S') gets deterministic base-pack fill; overlay layers are
+-- sparse/explicit-only. Terrain composes cumulatively across layers: a
+-- cell is blocked if the ground OR any placed overlay says blocked (per its
+-- own is_walkable/collision_mask), and move_speed_mult multiplies across
+-- every layer present -- layers can only add restrictions, never remove
+-- the ground's.
+CREATE TABLE IF NOT EXISTS playanimaster_db.tile_layers (
+    id_tile_layer INT(11) NOT NULL AUTO_INCREMENT,
+    code VARCHAR(50) NOT NULL COMMENT 'unique human key, e.g. ground, props',
+    name VARCHAR(100) NOT NULL COMMENT 'display label for the admin editor layer list',
+    z_order INT(11) NOT NULL DEFAULT 0 COMMENT 'render/paint order, lower drawn first (below)',
+    is_ground CHAR(1) NOT NULL DEFAULT 'N' COMMENT 'S = the base ground layer (exactly one row): always covers every cell via explicit placement or deterministic base-pack fill',
+    sort_order INT(11) NOT NULL DEFAULT 0,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_tile_layer),
+    UNIQUE KEY uq_tile_layers_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.tile_definitions (
+    id_tile_definition INT(11) NOT NULL AUTO_INCREMENT,
+    code VARCHAR(50) NOT NULL COMMENT 'unique human key, e.g. grass_1',
+    image_file VARCHAR(150) NOT NULL COMMENT 'PNG filename under client/img/tiles/',
+    category VARCHAR(20) NOT NULL DEFAULT 'base_pack' COMMENT 'base_pack | landmark | terrain (admin palette grouping only)',
+    id_zone INT(11) DEFAULT NULL COMMENT 'NULL = usable as base-pack filler in any zone',
+    id_tile_layer INT(11) DEFAULT NULL COMMENT 'NULL = usable on any layer; set to scope this definition to one layer in the admin palette',
+    is_base_pack CHAR(1) NOT NULL DEFAULT 'N' COMMENT 'S = eligible for deterministic random fill of empty cells (ground layer only)',
+    is_walkable CHAR(1) NOT NULL DEFAULT 'S' COMMENT 'N = barrier, blocks movement; whole-tile default when collision_mask is NULL',
+    move_speed_mult DECIMAL(4,2) NOT NULL DEFAULT 1.00 COMMENT 'applied to move_speed while standing on this tile; <1 = difficult terrain; multiplies across layers present on a cell',
+    collision_mask VARCHAR(80) DEFAULT NULL COMMENT 'optional 8x8 row-major walkable(1)/blocked(0) grid (64 chars) for sub-tile barrier shapes; overrides is_walkable per sub-cell when set, NULL = whole tile uses is_walkable',
+    sort_order INT(11) NOT NULL DEFAULT 0,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_tile_definition),
+    UNIQUE KEY uq_tile_definitions_code (code),
+    KEY idx_tile_definitions_zone_pack (id_zone, is_base_pack),
+    CONSTRAINT fk_td_tile_layer FOREIGN KEY (id_tile_layer) REFERENCES tile_layers (id_tile_layer)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.world_tiles (
+    id_world_tile INT(11) NOT NULL AUTO_INCREMENT,
+    id_zone INT(11) NOT NULL,
+    grid_x INT(11) NOT NULL COMMENT 'floor(world_x / TILE_WORLD_SIZE)',
+    grid_z INT(11) NOT NULL COMMENT 'floor(world_z / TILE_WORLD_SIZE)',
+    id_tile_layer INT(11) NOT NULL COMMENT 'which layer this placement occupies; one placement per (zone, cell, layer)',
+    id_tile_definition INT(11) NOT NULL,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_world_tile),
+    UNIQUE KEY uq_world_tiles_cell (id_zone, grid_x, grid_z, id_tile_layer),
+    KEY idx_world_tiles_zone (id_zone),
+    CONSTRAINT fk_wt_tile_definition FOREIGN KEY (id_tile_definition) REFERENCES tile_definitions (id_tile_definition),
+    CONSTRAINT fk_wt_tile_layer FOREIGN KEY (id_tile_layer) REFERENCES tile_layers (id_tile_layer)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Large multi-cell objects (e.g. a house): unlike tile_definitions (always
+-- exactly one grid cell), an object has its own world-unit footprint
+-- (width_world/height_world) so it renders at its intended size regardless
+-- of the source PNG's native pixel resolution -- same "canvas stretches to
+-- destination size" approach tiles already use. anchor_x/anchor_y (0..1
+-- fraction of the image) locate which point of the image sits on the
+-- placement's grid cell -- default 0.5/1.0 = bottom-center, so the object
+-- "stands" on its origin cell. v1 collision is a simple bounding rectangle
+-- (no per-object mask).
+CREATE TABLE IF NOT EXISTS playanimaster_db.object_definitions (
+    id_object_definition INT(11) NOT NULL AUTO_INCREMENT,
+    code VARCHAR(50) NOT NULL COMMENT 'unique human key, e.g. house_1',
+    image_file VARCHAR(150) NOT NULL COMMENT 'PNG filename under client/img/objects/',
+    width_world DECIMAL(6,2) NOT NULL DEFAULT 25.00 COMMENT 'rendered footprint width in world units (TILE_WORLD_SIZE=25 per cell)',
+    height_world DECIMAL(6,2) NOT NULL DEFAULT 25.00 COMMENT 'rendered footprint height in world units',
+    anchor_x DECIMAL(3,2) NOT NULL DEFAULT 0.50 COMMENT 'fraction (0..1) of image width aligned to the placement grid cell',
+    anchor_y DECIMAL(3,2) NOT NULL DEFAULT 1.00 COMMENT 'fraction (0..1) of image height aligned to the placement grid cell',
+    is_walkable CHAR(1) NOT NULL DEFAULT 'N' COMMENT 'N = the whole footprint rectangle blocks movement (v1: no sub-object mask)',
+    sort_order INT(11) NOT NULL DEFAULT 0,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_object_definition),
+    UNIQUE KEY uq_object_definitions_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.world_objects (
+    id_world_object INT(11) NOT NULL AUTO_INCREMENT,
+    id_zone INT(11) NOT NULL,
+    grid_x INT(11) NOT NULL COMMENT 'anchor cell (see object_definitions.anchor_x/anchor_y)',
+    grid_z INT(11) NOT NULL,
+    id_object_definition INT(11) NOT NULL,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_world_object),
+    KEY idx_world_objects_zone (id_zone),
+    CONSTRAINT fk_wo_object_definition FOREIGN KEY (id_object_definition) REFERENCES object_definitions (id_object_definition)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 -- ... 
+-- LAUNCHED ON PRODUCTION UP TO HERE 
+-- ...
+

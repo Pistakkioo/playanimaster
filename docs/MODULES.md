@@ -51,9 +51,10 @@ After code + SQL: test local → commit → deploy → run new SQL tail on produ
 | Done | PvP 1v1 | [modules/001_PVP_1v1.md](modules/001_PVP_1v1.md) |
 | Done | Buff / debuff | [modules/001a_BUFF_SYSTEM.md](modules/001a_BUFF_SYSTEM.md) |
 | **Next** | Party system | [modules/002_PARTY_SYSTEM.md](modules/002_PARTY_SYSTEM.md) | Phase A implemented |
-| Then | Party PvE | [modules/002b_PARTY_PVE.md](modules/002b_PARTY_PVE.md) | Tables ready; combat engine next |
-| Then | Combat engine refactor | [modules/005_COMBAT_ENGINE.md](modules/005_COMBAT_ENGINE.md) (after party PvE proves multi-actor turns) |
-| Then | Combat buff/debuff visibility + live stat layers | [modules/005b_COMBAT_BUFF_VISIBILITY.md](modules/005b_COMBAT_BUFF_VISIBILITY.md) (planned; builds on the unified engine from 005 so buffs are wired once, not three times) |
+| Then | Combat engine refactor | [modules/005_COMBAT_ENGINE.md](modules/005_COMBAT_ENGINE.md) (shared resolver — largely done) |
+| **Next** | **Full combat unification** | [modules/005c_full_combat_unification.md](modules/005c_full_combat_unification.md) — single `battles` + `battle_participants` schema (**blocking dungeons**) |
+| Then | Combat buff/debuff visibility + live stat layers | [modules/005b_COMBAT_BUFF_VISIBILITY.md](modules/005b_COMBAT_BUFF_VISIBILITY.md) (done) |
+| Then | Dungeons | [modules/006_DUNGEONS.md](modules/006_DUNGEONS.md) (after 005c) |
 
 See [MMORPG_ROADMAP.md](MMORPG_ROADMAP.md) for the full phase list (quests, dungeons, raids, …).
 
@@ -70,8 +71,11 @@ Schema for these modules is already in `00_tables.sql` (greenfield). Incremental
 | Word filter | — | `chat_word_filter.php` | `chat_word_replacements` in `00` / `02` | — |
 | Target UI | — | `target.js`, `world.js`, `game.css` | `language_texts` in `02` | yes |
 | Trade | — | `trade.php`, `trade.js`, `open_actions/*trade*` | `trade_*` tables in `00` | yes |
-| PvP 1v1 | [001_PVP_1v1.md](modules/001_PVP_1v1.md) | `pvp.php`, `duel.js`, `private_functions/pvp.php`, `pvp_*` open_actions | `pvp_*`, `battles_pvp*` in `00`; UI strings in `02` | yes |
-| Buff / debuff | [001a_BUFF_SYSTEM.md](modules/001a_BUFF_SYSTEM.md) | `buffs.php`, battle start hooks, `get_team_info.php`, `team.js` | `buff_*` tables in `00`; definitions + team UI strings in `02` | yes |
+| PvP 1v1 | [001_PVP_1v1.md](modules/001_PVP_1v1.md) | `pvp.php`, `duel.js`, `private_functions/pvp.php`, `pvp_*` open_actions | `pvp_*`, `battles_pvp*` in `00` → **migrating to unified `battles*` (005c)** | yes |
+| Buff / debuff | [001a_BUFF_SYSTEM.md](modules/001a_BUFF_SYSTEM.md) | `buffs.php`, battle hooks, `get_team_info.php`, `team.js` | `buff_*` tables in `00`; definitions in `02` | yes |
+| Party PvE | [002b_PARTY_PVE.md](modules/002b_PARTY_PVE.md) | `party_pve.php`, `party_pve_*` | `battles_party_pve*` in `00` → **migrating to unified `battles*` (005c)** | yes |
+| Combat engine | [005_COMBAT_ENGINE.md](modules/005_COMBAT_ENGINE.md) | `private_functions/combat/*` | — | yes |
+| Combat buff UI | [005b_COMBAT_BUFF_VISIBILITY.md](modules/005b_COMBAT_BUFF_VISIBILITY.md) | `buffs.php`, `buff-display.js`, `combat.js` | `buff_*`, `battle_turn_buffs` in `00`/`01` | yes |
 | Team panel & reorder | — | `team.js`, `save_team_order.php`, `get_team_*` | `language_texts` in `02` (no schema) | yes |
 | Player classes (001b) | [001b_PLAYER_CLASSES.md](modules/001b_PLAYER_CLASSES.md) | `player_class.php`, `create_character.php`, `character_select.php` | `player_classes*` in `00`/`01`; seeds in `02` | yes |
 | Party system | [002_PARTY_SYSTEM.md](modules/002_PARTY_SYSTEM.md) | `party.php`, `party_*.php` open_actions, `party.js` | `parties`, `party_members`, `party_invites` in `01`/`00` | yes |

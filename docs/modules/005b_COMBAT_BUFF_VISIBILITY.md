@@ -221,6 +221,14 @@ Either way, the per-combatant buff list shape is the same (already pre-grouped/s
 - Whether wild animals can ever be **granted** a buff by their own moves (schema already allows it via `entity_type='wild'`); no current wild ability targets `self`, so this is inert until wild AI gets self-buff moves — no extra work needed now, just confirming the schema already supports it.
 - If 005's `CombatSession` ends up modeling dungeon/raid combatants (multiple wilds, or multiple enemy sides) before this module lands, extend `battle_turn_buffs.battle_type`'s enum accordingly in `01_alters_structure.sql` at that time.
 
+## Follow-up: 005c schema unification
+
+[005c_full_combat_unification.md](005c_full_combat_unification.md) will:
+
+- Scope `battle_turn_buffs` by `id_battle` FK only (drop redundant `battle_type` column after cutover).
+- Key buff layers to `battle_participants.entity_type` / `id_entity` (unchanged conceptually).
+- Expose buffs via unified `battle_meta.combatants[]` — retire separate `solo_pve_meta` / `pvp_meta` / `party_pve_meta` keys.
+
 ## Test plan (once implemented)
 
 - [ ] Migrated ability (e.g. `Growl`) grants a real `battle_turn_buffs` row instead of mutating persisted stats; the combatant's base stat snapshot is unchanged after the debuff lands.

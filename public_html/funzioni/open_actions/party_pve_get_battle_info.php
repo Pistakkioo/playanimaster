@@ -66,5 +66,5 @@ echo json_encode([
     'stato' => 'OK',
     'msg' => 'OK',
     'response' => $stringone,
-    'party_pve_meta' => json_encode($meta)
+    'battle_meta' => json_encode($meta)
 ]);

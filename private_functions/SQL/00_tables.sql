@@ -1626,3 +1626,129 @@ CREATE TABLE IF NOT EXISTS playanimaster_db.user_quest_objective_progress (
     PRIMARY KEY (id_user_quest_objective_progress),
     UNIQUE KEY uniq_user_quest_objective_progress (id_user_ig, id_quest_objective)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- 005c: unified combat schema (see private_functions/SQL/01_alters_structure.sql
+-- for rollout notes). Replaces battles_solo_pve*, battles_pvp*, battles_party_pve*.
+CREATE TABLE IF NOT EXISTS playanimaster_db.battles (
+    id_battle INT(11) NOT NULL AUTO_INCREMENT,
+    battle_type VARCHAR(32) NOT NULL COMMENT 'solo_pve | party_pve | pvp_duel | party_vs_party | dungeon | raid | pk_zone',
+    planning_mode VARCHAR(24) NOT NULL COMMENT 'instant | simultaneous_submit | simultaneous_confirm',
+    flg_status CHAR(1) NOT NULL DEFAULT 'O' COMMENT 'O=ongoing, F=finished, X=cancelled',
+    current_round INT(11) NOT NULL DEFAULT 0,
+    id_zone INT(11) DEFAULT NULL,
+    id_user_ig_initiator INT(11) DEFAULT NULL,
+    id_party_a INT(11) DEFAULT NULL,
+    id_party_b INT(11) DEFAULT NULL,
+    id_duel_request INT(11) DEFAULT NULL,
+    id_winner_alliance CHAR(1) DEFAULT NULL COMMENT 'A | B | NULL',
+    end_reason VARCHAR(50) DEFAULT NULL,
+    dt_round_started DATETIME DEFAULT NULL,
+    dt_created TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_finished TIMESTAMP NULL DEFAULT NULL,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    context_json JSON DEFAULT NULL COMMENT 'Mode-specific extras: dungeon_run_id, encounter_id, pk_flag, reward_split, etc.',
+    PRIMARY KEY (id_battle),
+    KEY idx_battles_type_status (battle_type, flg_status),
+    KEY idx_battles_party_a (id_party_a, flg_status),
+    KEY idx_battles_party_b (id_party_b, flg_status),
+    KEY idx_battles_zone (id_zone, flg_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battle_participants (
+    id_battle_participant INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle INT(11) NOT NULL,
+    side CHAR(1) NOT NULL COMMENT 'A | B (alliance)',
+    participant_kind VARCHAR(20) NOT NULL COMMENT 'player_animal | wild | scripted',
+    id_user_ig INT(11) DEFAULT NULL COMMENT 'owner, when participant_kind = player_animal',
+    id_animal INT(11) DEFAULT NULL COMMENT 'animals.id_animal, when participant_kind = player_animal',
+    id_wild_animal INT(11) DEFAULT NULL COMMENT 'overworld wild lock, when participant_kind = wild',
+    id_species INT(11) DEFAULT NULL,
+    id_element INT(11) DEFAULT NULL,
+    entity_type VARCHAR(16) NOT NULL COMMENT 'animal | wild | user_ig (for battle_turn_buffs / MoveResolver)',
+    id_entity INT(11) NOT NULL COMMENT 'id_animal, id_wild_animal, or id_user_ig depending on entity_type',
+    team_position TINYINT(3) UNSIGNED DEFAULT NULL,
+    slot_label VARCHAR(32) DEFAULT NULL COMMENT 'active | bench | boss_part',
+    flg_active CHAR(1) NOT NULL DEFAULT 'S',
+    flg_fainted CHAR(1) NOT NULL DEFAULT 'N',
+    current_hp INT(11) NOT NULL,
+    max_hp INT(11) NOT NULL COMMENT 'battle snapshot; buffed values allowed in-fight',
+    atk INT(11) NOT NULL,
+    def INT(11) NOT NULL,
+    matk INT(11) NOT NULL,
+    mdef INT(11) NOT NULL,
+    acc INT(11) NOT NULL,
+    eva INT(11) NOT NULL,
+    cr INT(11) NOT NULL,
+    spd INT(11) NOT NULL,
+    lvl INT(11) NOT NULL,
+    nickname VARCHAR(100) DEFAULT NULL,
+    species_name VARCHAR(100) DEFAULT NULL,
+    experience INT(11) NOT NULL DEFAULT 0 COMMENT 'player_animal exp snapshot for rewards',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_participant),
+    KEY idx_bp_battle_side (id_battle, side, flg_active),
+    KEY idx_bp_battle_entity (id_battle, entity_type, id_entity),
+    KEY idx_bp_user (id_user_ig, id_battle),
+    CONSTRAINT fk_bp_battle FOREIGN KEY (id_battle) REFERENCES battles (id_battle)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battle_round_choices (
+    id_battle_round_choice INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle INT(11) NOT NULL,
+    round INT(11) NOT NULL,
+    id_user_ig INT(11) NOT NULL,
+    id_battle_participant INT(11) NOT NULL COMMENT 'acting fighter',
+    action_type VARCHAR(20) NOT NULL COMMENT 'ability | switch | item | flee',
+    action_id INT(11) NOT NULL DEFAULT 0,
+    id_item_type_selected INT(11) DEFAULT NULL,
+    flg_confirmed CHAR(1) NOT NULL DEFAULT 'N',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_round_choice),
+    UNIQUE KEY uq_brc_battle_round_actor (id_battle, round, id_battle_participant),
+    KEY idx_brc_battle_round (id_battle, round),
+    CONSTRAINT fk_brc_battle FOREIGN KEY (id_battle) REFERENCES battles (id_battle),
+    CONSTRAINT fk_brc_participant FOREIGN KEY (id_battle_participant) REFERENCES battle_participants (id_battle_participant)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battle_moves (
+    id_battle_move INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle INT(11) NOT NULL,
+    round INT(11) NOT NULL,
+    order_in_turn INT(11) NOT NULL,
+    id_actor_participant INT(11) NOT NULL,
+    id_target_participant INT(11) DEFAULT NULL,
+    id_user_ig_actor INT(11) DEFAULT NULL,
+    move_type VARCHAR(100) NOT NULL,
+    id_rif INT(11) DEFAULT NULL,
+    move_speed DECIMAL(10,2) DEFAULT NULL,
+    move_description VARCHAR(255) DEFAULT NULL,
+    move_hit CHAR(1) DEFAULT NULL,
+    actor_hp_after INT(11) DEFAULT NULL,
+    target_hp_after INT(11) DEFAULT NULL,
+    resulting_battle_status VARCHAR(16) DEFAULT NULL COMMENT 'ongoing | win | defeat | fled | pvp_end | ...',
+    meta_json JSON DEFAULT NULL,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_move),
+    KEY idx_bm_battle_round (id_battle, round, order_in_turn),
+    CONSTRAINT fk_bm_battle FOREIGN KEY (id_battle) REFERENCES battles (id_battle)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.battle_inactivity_votes (
+    id_battle_inactivity_vote INT(11) NOT NULL AUTO_INCREMENT,
+    id_battle INT(11) NOT NULL,
+    round INT(11) NOT NULL,
+    id_user_ig_target INT(11) NOT NULL,
+    id_user_ig_voter INT(11) NOT NULL,
+    vote_choice CHAR(1) NOT NULL DEFAULT 'Y' COMMENT 'Y=force random action, N=keep waiting',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_battle_inactivity_vote),
+    UNIQUE KEY uq_biv (id_battle, round, id_user_ig_target, id_user_ig_voter),
+    CONSTRAINT fk_biv_battle FOREIGN KEY (id_battle) REFERENCES battles (id_battle)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

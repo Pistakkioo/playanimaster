@@ -382,6 +382,7 @@
         };
 
         syncPlayerToModules();
+        AnimasterWorldTiles.loadZone(player.id_zone);
         AnimasterSpawn.loadSpawnPoints().then(function ()
         {
             AnimasterSpawn.tick(true);
@@ -543,6 +544,7 @@
         player.y = parseFloat(player.position_y_last_recover) || 0;
         player.z = parseFloat(player.position_z_last_recover) || 0;
         syncPlayerToModules();
+        AnimasterWorldTiles.loadZone(player.id_zone);
     }
 
     function handleBlackout()

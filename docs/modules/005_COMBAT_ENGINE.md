@@ -115,16 +115,18 @@ Party wrappers `animaster_party_pve_fetch_random_wild_ability` / `animaster_part
 3. ✅ `AiWild`; wired party wild slots + solo `w_a_move.php`
 4. ✅ Solo PvE thin controller (`SoloPveController` + `TurnQueue::orderSoloTurnSlots`)
 5. ✅ Participant snapshot + unified `combatants[]` meta (all three modes)
-6. Dungeon/raid slot builders on same `TurnQueue`; buff tick hook (`005b`)
+6. **Unified battle schema** — [005c_full_combat_unification.md](005c_full_combat_unification.md): `battles` + `battle_participants`; retire parallel `battles_*` tables; dungeon/raid slot builders on same `TurnQueue`
 
 ---
 
-## Done when
+## Done when (005 engine layer)
 
 - All battle types use `MoveResolver` for ability math ✅
-- Planning + resolution contracts live in `combat/` with no duplicated speed-sort or quorum logic
-- Solo PvE regression passes
-- Party PvE + PvP regression passes (staging/confirm/submit flows unchanged for clients)
-- Full module: shared session serialization + `TurnQueue` round advance + buff tick hook for `005b`
+- Planning + resolution contracts live in `combat/` with no duplicated speed-sort or quorum logic ✅ (party + pvp + solo)
+- Solo PvE regression passes ✅
+- Party PvE + PvP regression passes ✅
+- Buff tick hook + combatant meta (`005b`) ✅
 
-**Current milestone:** `005b` buff-aware resolver + stat panel UI; optional inline solo move includes into controller.
+**Current milestone:** [005c_full_combat_unification.md](005c_full_combat_unification.md) — schema + `BattleService` cutover before dungeons.
+
+**Superseded by 005c:** inline solo move includes (`battle_solo_pve/*`), three parallel battle table families, triple `*_meta` client keys.

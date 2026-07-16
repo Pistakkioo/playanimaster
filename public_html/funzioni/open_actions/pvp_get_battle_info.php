@@ -31,7 +31,7 @@ catch (Throwable $e)
         'stato' => 'KO',
         'msg' => 'SERVER_ERROR',
         'response' => '',
-        'pvp_meta' => '{}'
+        'battle_meta' => '{}'
     ]);
     exit;
 }
@@ -56,7 +56,7 @@ if (!empty($result['ok']))
         'stato' => 'OK',
         'msg' => 'OK',
         'response' => $stringone,
-        'pvp_meta' => json_encode($result['meta'], JSON_UNESCAPED_UNICODE)
+        'battle_meta' => json_encode($result['meta'], JSON_UNESCAPED_UNICODE)
     ]);
     exit;
 }
@@ -65,5 +65,5 @@ echo json_encode([
     'stato' => 'KO',
     'msg' => isset($result['error']) ? $result['error'] : 'PVP_BATTLE_FAILED',
     'response' => '',
-    'pvp_meta' => '{}'
+    'battle_meta' => '{}'
 ]);

@@ -647,14 +647,114 @@ class BUFFS
         ];
     }
 
+    /**
+     * Time-based buffs don't stack per stat_key: an active buff sharing the
+     * new one's stat_key is replaced when the new buff's tier is >= the old
+     * one's tier; otherwise the (stronger) old buff is kept and the new one
+     * is rejected. Buffs on different stat_keys are unaffected (still layer).
+     * Battle-scoped turn buffs (grantBattleTurnBuff) are untouched by this and
+     * keep stacking freely.
+     *
+     * @param array<string, mixed> $new_def stat_key, tier (from buff_definitions)
+     * @return bool true if the caller may proceed to insert the new buff
+     */
+    private static function reserveTimeBuffSlot($conn, $entity_type, $id_entity, array $new_def)
+    {
+        $new_stat_key = self::statKeySignature((string) ($new_def['stat_key'] ?? ''));
+
+        if ($new_stat_key === '')
+        {
+            return true;
+        }
+
+        $new_tier = self::normalizeBuffTier($new_def['tier'] ?? 0);
+
+        self::purgeExpired($conn);
+
+        $stmt = $conn->prepare('
+            SELECT EB.id_entity_buff, BD.stat_key, BD.tier
+            FROM entity_buffs EB
+            INNER JOIN buff_definitions BD ON BD.id_buff_definition = EB.id_buff_definition
+            WHERE EB.entity_type = :entity_type
+              AND EB.id_entity = :id_entity
+              AND EB.dt_expires_utc > :now_utc
+              AND BD.flg_active = \'S\'
+        ');
+        $stmt->execute([
+            ':entity_type' => (string) $entity_type,
+            ':id_entity' => (int) $id_entity,
+            ':now_utc' => self::nowUtc(),
+        ]);
+
+        $superseded_ids = [];
+
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row)
+        {
+            if (self::statKeySignature((string) ($row['stat_key'] ?? '')) !== $new_stat_key)
+            {
+                continue;
+            }
+
+            if (self::normalizeBuffTier($row['tier'] ?? 0) > $new_tier)
+            {
+                return false;
+            }
+
+            $superseded_ids[] = (int) $row['id_entity_buff'];
+        }
+
+        if ($superseded_ids)
+        {
+            $placeholders = implode(',', array_fill(0, count($superseded_ids), '?'));
+            $delete_stmt = $conn->prepare('DELETE FROM entity_buffs WHERE id_entity_buff IN (' . $placeholders . ')');
+            $delete_stmt->execute($superseded_ids);
+        }
+
+        return true;
+    }
+
+    /**
+     * Order/case/whitespace-insensitive signature for a (possibly CSV) stat_key,
+     * so "atk,def" and "def, ATK" are treated as the same stat group.
+     */
+    private static function statKeySignature($stat_key)
+    {
+        $keys = array_filter(array_map('trim', explode(',', strtolower((string) $stat_key))));
+        sort($keys);
+
+        return implode(',', $keys);
+    }
+
     public static function grantTimeBuff($conn, $id_buff_definition, $entity_type, $id_entity, $duration_seconds, $source_type = null, $source_id = null)
     {
         $id_buff_definition = (int) $id_buff_definition;
+        $entity_type = (string) $entity_type;
         $id_entity = (int) $id_entity;
         $duration_seconds = max(1, (int) $duration_seconds);
 
         if ($id_buff_definition <= 0 || $id_entity <= 0)
         {
+            return false;
+        }
+
+        $stmt = $conn->prepare('
+            SELECT stat_key, tier
+            FROM buff_definitions
+            WHERE id_buff_definition = :id_buff_definition
+            LIMIT 1
+        ');
+        $stmt->execute([':id_buff_definition' => $id_buff_definition]);
+        $new_def = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$new_def)
+        {
+            return false;
+        }
+
+        if (!self::reserveTimeBuffSlot($conn, $entity_type, $id_entity, $new_def))
+        {
+            // An active buff with the same stat_key and a strictly higher tier
+            // already covers this entity; the new (weaker) buff doesn't stick.
             return false;
         }
 

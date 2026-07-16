@@ -1,6 +1,6 @@
 # Module 12 — Raid bosses (turn-based)
 
-**Depends on:** Combat engine (05), Dungeons (06), Party system (03)
+**Depends on:** [005c_full_combat_unification.md](005c_full_combat_unification.md), [006_DUNGEONS.md](006_DUNGEONS.md), Party system (02)
 
 ## Core rule
 
@@ -12,7 +12,7 @@
 
 - 1 raid instance per party/alliance (8–24 players design target)
 - Each player brings active team; all non-fainted animals enter global speed queue
-- Boss may have **multiple parts** (head, claws) as separate entities in queue
+- Boss may have **multiple parts** (head, claws) as separate `battle_participants` on alliance B (`slot_label = boss_part`)
 
 ---
 

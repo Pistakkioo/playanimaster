@@ -537,7 +537,7 @@ var AnimasterWorld = (function ()
 
     function keyboardStep(dt)
     {
-        var step = (parseFloat(player.move_speed) || 5) * dt * 0.35;
+        var step = (parseFloat(player.move_speed) || 5) * dt * 0.35 * AnimasterWorldTiles.getSpeedMultiplierAt(player.x, player.z);
         var dirX = 0;
         var dirZ = 0;
 
@@ -581,7 +581,7 @@ var AnimasterWorld = (function ()
             return { dx: 0, dz: 0 };
         }
 
-        var step = (parseFloat(player.move_speed) || 5) * dt * 0.35;
+        var step = (parseFloat(player.move_speed) || 5) * dt * 0.35 * AnimasterWorldTiles.getSpeedMultiplierAt(player.x, player.z);
         var toX = holdTargetWorld.x - player.x;
         var toZ = holdTargetWorld.z - player.z;
         var dist = Math.sqrt((toX * toX) + (toZ * toZ));
@@ -629,8 +629,18 @@ var AnimasterWorld = (function ()
             return;
         }
 
-        player.x += dx;
-        player.z += dz;
+        // Barrier tiles block movement; each axis is resolved independently
+        // so the player slides along a wall instead of stopping dead.
+        if (dx !== 0 && AnimasterWorldTiles.isWalkable(player.x + dx, player.z))
+        {
+            player.x += dx;
+        }
+
+        if (dz !== 0 && AnimasterWorldTiles.isWalkable(player.x, player.z + dz))
+        {
+            player.z += dz;
+        }
+
         player.facingAngle = Math.atan2(dz, dx);
 
         if (Math.abs(dx) >= Math.abs(dz))
@@ -975,6 +985,7 @@ var AnimasterWorld = (function ()
         }
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        AnimasterWorldTiles.draw(ctx, player, canvas, worldToScreen);
         drawGrid();
 
         npcs.forEach(function (npc)

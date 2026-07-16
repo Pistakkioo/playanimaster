@@ -13,6 +13,8 @@ if (!defined('ANIMASTER_DUEL_COOLDOWN_SECONDS'))
 require_once __DIR__ . '/combat/CombatSession.php';
 require_once __DIR__ . '/combat/TurnQueue.php';
 require_once __DIR__ . '/combat/Permissions.php';
+require_once __DIR__ . '/combat/BattleRepository.php';
+require_once __DIR__ . '/combat/BattleParticipantFactory.php';
 
 function animaster_pvp_expire_requests($conn)
 {
@@ -73,26 +75,33 @@ function animaster_pvp_has_team_animal($conn, $id_user_ig)
 function animaster_pvp_get_open_battle_id($conn, $id_user_ig)
 {
     $stmt = $conn->prepare('
-        SELECT id_battle_pvp
-        FROM battles_pvp
-        WHERE flg_status = \'O\'
-          AND (id_user_ig_a = :id_user_ig OR id_user_ig_b = :id_user_ig)
-        ORDER BY id_battle_pvp DESC
+        SELECT b.id_battle
+        FROM battles b
+        INNER JOIN battle_participants p
+            ON p.id_battle = b.id_battle
+           AND p.id_user_ig = :id_user_ig
+        WHERE b.battle_type = \'pvp_duel\'
+          AND b.flg_status = \'O\'
+        ORDER BY b.id_battle DESC
         LIMIT 1
     ');
     $stmt->execute(['id_user_ig' => (int) $id_user_ig]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    return $row ? (int) $row['id_battle_pvp'] : 0;
+    return $row ? (int) $row['id_battle'] : 0;
 }
 
 function animaster_pvp_has_solo_battle($conn, $id_user_ig)
 {
     $stmt = $conn->prepare('
-        SELECT id_battle_solo_pve
-        FROM battles_solo_pve
-        WHERE id_user_ig = :id_user_ig
-          AND (finished IS NULL OR finished != \'S\')
+        SELECT b.id_battle
+        FROM battles b
+        INNER JOIN battle_participants p
+            ON p.id_battle = b.id_battle
+           AND p.id_user_ig = :id_user_ig
+           AND p.side = \'A\'
+        WHERE b.battle_type = \'solo_pve\'
+          AND b.flg_status = \'O\'
         LIMIT 1
     ');
     $stmt->execute(['id_user_ig' => (int) $id_user_ig]);
@@ -134,23 +143,24 @@ function animaster_pvp_is_user_busy($conn, $id_user_ig)
 
 function animaster_pvp_cooldown_active($conn, $id_a, $id_b)
 {
+    // Two participants of a just-finished duel share the same id_battle; a
+    // cooldown match is a finished pvp_duel battle that both users fought in.
     $stmt = $conn->prepare('
-        SELECT id_battle_pvp
-        FROM battles_pvp
-        WHERE flg_status = \'F\'
-          AND dt_finished >= DATE_SUB(NOW(), INTERVAL :seconds SECOND)
-          AND (
-              (id_user_ig_a = :a AND id_user_ig_b = :b)
-              OR (id_user_ig_a = :a2 AND id_user_ig_b = :b2)
-          )
+        SELECT b.id_battle
+        FROM battles b
+        INNER JOIN battle_participants pa
+            ON pa.id_battle = b.id_battle AND pa.id_user_ig = :a
+        INNER JOIN battle_participants pb
+            ON pb.id_battle = b.id_battle AND pb.id_user_ig = :b
+        WHERE b.battle_type = \'pvp_duel\'
+          AND b.flg_status = \'F\'
+          AND b.dt_finished >= DATE_SUB(NOW(), INTERVAL :seconds SECOND)
         LIMIT 1
     ');
     $stmt->execute([
         'seconds' => ANIMASTER_DUEL_COOLDOWN_SECONDS,
         'a' => (int) $id_a,
-        'b' => (int) $id_b,
-        'a2' => (int) $id_b,
-        'b2' => (int) $id_a
+        'b' => (int) $id_b
     ]);
 
     return (bool) $stmt->fetch(PDO::FETCH_ASSOC);
@@ -558,66 +568,37 @@ function animaster_pvp_snapshot_to_move_fields($snap, $prefix)
     ];
 }
 
-function animaster_pvp_insert_turn0($conn, $id_battle, $snap_a, $snap_b)
+/**
+ * Round-0 "start" move for a freshly snapshotted duel. State (p_a_* = side A,
+ * w_a_* = side B) is derived from the two participants and packed in meta_json.
+ */
+function animaster_pvp_insert_turn0($conn, $id_battle, $lang_suffix = '')
 {
-    $stmt = $conn->prepare('
-        INSERT INTO battles_pvp_moves (
-            id_battle_pvp, id_user_ig_actor, dt_creazione, turn, move_type, id_rif,
-            move_speed, order_in_turn, protagonist_type, id_protagonist, target_type, id_target,
-            p_a_res_atk, p_a_res_def, p_a_res_matk, p_a_res_mdef, p_a_res_hp,
-            p_a_res_acc, p_a_res_eva, p_a_res_cr, p_a_res_spd, p_a_res_max_hp,
-            w_a_res_atk, w_a_res_def, w_a_res_matk, w_a_res_mdef, w_a_res_hp,
-            w_a_res_acc, w_a_res_eva, w_a_res_cr, w_a_res_spd, w_a_res_max_hp,
-            p_a_id, p_a_id_element, p_a_id_species, p_a_species, p_a_lvl, p_a_nickname, p_a_cur_exp,
-            w_a_id, w_a_id_element, w_a_id_species, w_a_species, w_a_lvl,
-            move_description, resulting_battle_status
-        ) VALUES (
-            :id_battle, NULL, NOW(), 0, \'start\', 0,
-            0, 0, \'start\', 0, \'start\', 0,
-            :p_atk, :p_def, :p_matk, :p_mdef, :p_hp,
-            :p_acc, :p_eva, :p_cr, :p_spd, :p_max_hp,
-            :w_atk, :w_def, :w_matk, :w_mdef, :w_hp,
-            :w_acc, :w_eva, :w_cr, :w_spd, :w_max_hp,
-            :p_id, :p_elem, :p_species_id, :p_species, :p_lvl, :p_nick, :p_exp,
-            :w_id, :w_elem, :w_species_id, :w_species, :w_lvl,
-            \'start\', \'ongoing\'
-        )
-    ');
+    $state = animaster_pvp_current_state($conn, $id_battle);
 
-    $stmt->execute([
+    if (!$state)
+    {
+        return;
+    }
+
+    $meta = animaster_pvp_move_meta($conn, $state, $lang_suffix, 'start', 0, 'start', 0);
+
+    BattleRepository::insertMove($conn, [
         'id_battle' => (int) $id_battle,
-        'p_atk' => $snap_a['atk'],
-        'p_def' => $snap_a['def'],
-        'p_matk' => $snap_a['matk'],
-        'p_mdef' => $snap_a['mdef'],
-        'p_hp' => $snap_a['current_hp'],
-        'p_acc' => $snap_a['acc'],
-        'p_eva' => $snap_a['eva'],
-        'p_cr' => $snap_a['cr'],
-        'p_spd' => $snap_a['spd'],
-        'p_max_hp' => $snap_a['max_hp'],
-        'w_atk' => $snap_b['atk'],
-        'w_def' => $snap_b['def'],
-        'w_matk' => $snap_b['matk'],
-        'w_mdef' => $snap_b['mdef'],
-        'w_hp' => $snap_b['current_hp'],
-        'w_acc' => $snap_b['acc'],
-        'w_eva' => $snap_b['eva'],
-        'w_cr' => $snap_b['cr'],
-        'w_spd' => $snap_b['spd'],
-        'w_max_hp' => $snap_b['max_hp'],
-        'p_id' => $snap_a['id_animal'],
-        'p_elem' => $snap_a['id_element'],
-        'p_species_id' => $snap_a['id_species'],
-        'p_species' => $snap_a['species'],
-        'p_lvl' => $snap_a['lvl'],
-        'p_nick' => $snap_a['nickname'],
-        'p_exp' => $snap_a['experience'],
-        'w_id' => $snap_b['id_animal'],
-        'w_elem' => $snap_b['id_element'],
-        'w_species_id' => $snap_b['id_species'],
-        'w_species' => $snap_b['species'],
-        'w_lvl' => $snap_b['lvl']
+        'round' => 0,
+        'order_in_turn' => 0,
+        'id_actor_participant' => (int) $state['p_a_participant'],
+        'id_target_participant' => (int) $state['w_a_participant'],
+        'id_user_ig_actor' => null,
+        'move_type' => 'start',
+        'id_rif' => 0,
+        'move_speed' => 0,
+        'move_description' => 'start',
+        'move_hit' => null,
+        'actor_hp_after' => (int) $state['p_a_res_hp'],
+        'target_hp_after' => (int) $state['w_a_res_hp'],
+        'resulting_battle_status' => 'ongoing',
+        'meta' => $meta
     ]);
 }
 
@@ -661,34 +642,29 @@ function animaster_pvp_start_battle($conn, $id_duel_request, $id_challenger, $id
 
     try
     {
-        $stmt = $conn->prepare('
-            INSERT INTO battles_pvp (
-                id_duel_request, id_user_ig_a, id_user_ig_b, id_zone,
-                flg_status, current_turn, dt_c
-            ) VALUES (
-                :id_duel_request, :id_a, :id_b, :id_zone,
-                \'O\', 0, NOW()
-            )
-        ');
-        $stmt->execute([
-            'id_duel_request' => (int) $id_duel_request,
-            'id_a' => (int) $id_challenger,
-            'id_b' => (int) $id_target,
-            'id_zone' => (int) $id_zone
+        $id_battle = BattleRepository::createBattle($conn, [
+            'battle_type' => 'pvp_duel',
+            'planning_mode' => 'simultaneous_submit',
+            'id_zone' => (int) $id_zone,
+            'id_user_ig_initiator' => (int) $id_challenger,
+            'id_duel_request' => (int) $id_duel_request
         ]);
 
-        $id_battle = (int) $conn->lastInsertId();
+        BattleRepository::insertParticipant(
+            $conn,
+            $id_battle,
+            BattleParticipantFactory::playerAnimal($snap_a, BattleRepository::SIDE_A, (int) $id_challenger, 1)
+        );
+        BattleRepository::insertParticipant(
+            $conn,
+            $id_battle,
+            BattleParticipantFactory::playerAnimal($snap_b, BattleRepository::SIDE_B, (int) $id_target, 1)
+        );
 
-        animaster_pvp_insert_turn0($conn, $id_battle, $snap_a, $snap_b);
+        animaster_pvp_insert_turn0($conn, $id_battle, $lang_suffix);
 
-        $stmt = $conn->prepare('
-            UPDATE battles_pvp
-            SET awaiting_user_ig = NULL, current_turn = 1
-            WHERE id_battle_pvp = :id_battle
-        ');
-        $stmt->execute([
-            'id_battle' => $id_battle
-        ]);
+        // Duel planning turns start at 1 (current_turn semantics: open turn).
+        BattleRepository::updateBattle($conn, $id_battle, ['current_round' => 1]);
 
         animaster_pvp_set_user_flags($conn, $id_challenger);
         animaster_pvp_set_user_flags($conn, $id_target);
@@ -828,91 +804,250 @@ function animaster_pvp_respond_request($conn, $id_user_ig, $id_duel_request, $ac
     }
 }
 
+/**
+ * Legacy-shaped duel row over the unified `battles` table: exposes
+ * id_battle_pvp, current_turn, id_user_ig_a/b (from side A/B participants) and
+ * a derived id_winner_user_ig so the rest of this file reads unchanged.
+ */
 function animaster_pvp_fetch_battle_row($conn, $id_battle)
 {
     $stmt = $conn->prepare('
-        SELECT *
-        FROM battles_pvp
-        WHERE id_battle_pvp = :id_battle
+        SELECT b.*,
+               b.id_battle AS id_battle_pvp,
+               b.current_round AS current_turn,
+               pa.id_user_ig AS id_user_ig_a,
+               pb.id_user_ig AS id_user_ig_b
+        FROM battles b
+        LEFT JOIN battle_participants pa ON pa.id_battle = b.id_battle AND pa.side = \'A\'
+        LEFT JOIN battle_participants pb ON pb.id_battle = b.id_battle AND pb.side = \'B\'
+        WHERE b.id_battle = :id_battle
+          AND b.battle_type = \'pvp_duel\'
         LIMIT 1
     ');
     $stmt->execute(['id_battle' => (int) $id_battle]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    if (!$row)
+    {
+        return null;
+    }
+
+    $winner_alliance = trim((string) ($row['id_winner_alliance'] ?? ''));
+
+    if ($winner_alliance === 'A')
+    {
+        $row['id_winner_user_ig'] = (int) $row['id_user_ig_a'];
+    }
+    else if ($winner_alliance === 'B')
+    {
+        $row['id_winner_user_ig'] = (int) $row['id_user_ig_b'];
+    }
+    else
+    {
+        $row['id_winner_user_ig'] = null;
+    }
+
+    $row['awaiting_user_ig'] = null;
+
+    return $row;
+}
+
+/**
+ * @return array{0: array<string,mixed>|null, 1: array<string,mixed>|null} [sideA, sideB]
+ */
+function animaster_pvp_fetch_participants_ab($conn, $id_battle)
+{
+    $a = BattleRepository::fetchParticipantsBySide($conn, (int) $id_battle, BattleRepository::SIDE_A);
+    $b = BattleRepository::fetchParticipantsBySide($conn, (int) $id_battle, BattleRepository::SIDE_B);
+
+    return [$a ? $a[0] : null, $b ? $b[0] : null];
+}
+
+function animaster_pvp_participant_id_for_user($conn, $id_battle, $id_user_ig)
+{
+    $stmt = $conn->prepare('
+        SELECT id_battle_participant
+        FROM battle_participants
+        WHERE id_battle = :id_battle
+          AND id_user_ig = :id_user_ig
+        LIMIT 1
+    ');
+    $stmt->execute([
+        'id_battle' => (int) $id_battle,
+        'id_user_ig' => (int) $id_user_ig
+    ]);
+
+    return (int) $stmt->fetchColumn();
+}
+
+function animaster_pvp_element_info($conn, $id_element, $lang_suffix)
+{
+    static $cache = [];
+
+    $id_element = (int) $id_element;
+    $lang_suffix_safe = preg_replace('/[^_a-z]/i', '', (string) $lang_suffix);
+    $key = $id_element . '|' . $lang_suffix_safe;
+
+    if (isset($cache[$key]))
+    {
+        return $cache[$key];
+    }
+
+    $stmt = $conn->prepare('SELECT element' . $lang_suffix_safe . ' AS element, color FROM elements WHERE id_element = :id LIMIT 1');
+    $stmt->execute(['id' => $id_element]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $info = [
+        'element' => $row ? (string) $row['element'] : '',
+        'color' => $row ? (string) $row['color'] : ''
+    ];
+    $cache[$key] = $info;
+
+    return $info;
+}
+
+/**
+ * Battle state (p_a_* = side A, w_a_* = side B) from the authoritative
+ * participant rows. Replaces reconstructing state from the last move row.
+ *
+ * @param array<string,mixed> $pa side A participant
+ * @param array<string,mixed> $pb side B participant
+ */
+function animaster_pvp_state_from_participants(array $pa, array $pb)
+{
+    return [
+        'p_a_res_hp' => (int) $pa['current_hp'],
+        'w_a_res_hp' => (int) $pb['current_hp'],
+        'p_a_res_max_hp' => (int) $pa['max_hp'],
+        'w_a_res_max_hp' => (int) $pb['max_hp'],
+        'p_a_res_atk' => (float) $pa['atk'],
+        'p_a_res_def' => (float) $pa['def'],
+        'p_a_res_matk' => (float) $pa['matk'],
+        'p_a_res_mdef' => (float) $pa['mdef'],
+        'p_a_res_acc' => (int) $pa['acc'],
+        'p_a_res_eva' => (int) $pa['eva'],
+        'p_a_res_cr' => (int) $pa['cr'],
+        'p_a_res_spd' => (float) $pa['spd'],
+        'w_a_res_atk' => (float) $pb['atk'],
+        'w_a_res_def' => (float) $pb['def'],
+        'w_a_res_matk' => (float) $pb['matk'],
+        'w_a_res_mdef' => (float) $pb['mdef'],
+        'w_a_res_acc' => (int) $pb['acc'],
+        'w_a_res_eva' => (int) $pb['eva'],
+        'w_a_res_cr' => (int) $pb['cr'],
+        'w_a_res_spd' => (float) $pb['spd'],
+        'p_a_id' => (int) $pa['id_entity'],
+        'w_a_id' => (int) $pb['id_entity'],
+        'p_a_id_element' => (int) $pa['id_element'],
+        'w_a_id_element' => (int) $pb['id_element'],
+        'p_a_id_species' => (int) $pa['id_species'],
+        'w_a_id_species' => (int) $pb['id_species'],
+        'p_a_species' => (string) $pa['species_name'],
+        'w_a_species' => (string) $pb['species_name'],
+        'p_a_lvl' => (int) $pa['lvl'],
+        'w_a_lvl' => (int) $pb['lvl'],
+        'p_a_nickname' => (string) $pa['nickname'],
+        'p_a_cur_exp' => (int) $pa['experience'],
+        'p_a_participant' => (int) $pa['id_battle_participant'],
+        'w_a_participant' => (int) $pb['id_battle_participant']
+    ];
+}
+
+/**
+ * Current authoritative state from the two participants of a duel.
+ */
+function animaster_pvp_current_state($conn, $id_battle)
+{
+    list($pa, $pb) = animaster_pvp_fetch_participants_ab($conn, $id_battle);
+
+    if (!$pa || !$pb)
+    {
+        return null;
+    }
+
+    return animaster_pvp_state_from_participants($pa, $pb);
+}
+
+/**
+ * Flatten a battle_moves row (+ meta_json) into the legacy p_a_ / w_a_ shape
+ * the client combat log consumes.
+ */
+function animaster_pvp_flatten_move(array $row)
+{
+    $meta = !empty($row['meta_json']) ? json_decode($row['meta_json'], true) : [];
+    $flat = array_merge($row, is_array($meta) ? $meta : []);
+    $flat['turn'] = (int) $row['round'];
+    $flat['id_battle_pvp'] = (int) $row['id_battle'];
+    $flat['id_battle_pvp_move'] = (int) $row['id_battle_move'];
+
+    return $flat;
+}
+
+/**
+ * Display block (p_a_ / w_a_ + element names) packed into a move's meta_json.
+ */
+function animaster_pvp_move_meta($conn, array $state, $lang_suffix, $protagonist_type, $id_protagonist, $target_type, $id_target)
+{
+    $pe = animaster_pvp_element_info($conn, (int) $state['p_a_id_element'], $lang_suffix);
+    $we = animaster_pvp_element_info($conn, (int) $state['w_a_id_element'], $lang_suffix);
+
+    return array_merge($state, [
+        'p_a_element' => $pe['element'],
+        'p_a_element_color' => $pe['color'],
+        'w_a_element' => $we['element'],
+        'w_a_element_color' => $we['color'],
+        'protagonist_type' => (string) $protagonist_type,
+        'id_protagonist' => (int) $id_protagonist,
+        'target_type' => (string) $target_type,
+        'id_target' => (int) $id_target
+    ]);
 }
 
 function animaster_pvp_fetch_moves_for_turn($conn, $id_battle, $turn, $lang_suffix)
 {
-    $lang_suffix = preg_replace('/[^_a-z]/i', '', (string) $lang_suffix);
-
-    $sql = '
-        SELECT M.*,
-               WE.element' . $lang_suffix . ' AS w_a_element,
-               PE.element' . $lang_suffix . ' AS p_a_element,
-               WE.color AS w_a_element_color,
-               PE.color AS p_a_element_color,
-               WL.species' . $lang_suffix . ' AS w_a_species_i18n,
-               PL.species' . $lang_suffix . ' AS p_a_species_i18n
-        FROM battles_pvp_moves M
-        LEFT JOIN elements WE ON WE.id_element = M.w_a_id_element
-        LEFT JOIN elements PE ON PE.id_element = M.p_a_id_element
-        LEFT JOIN species WL ON WL.id_species = M.w_a_id_species
-        LEFT JOIN species PL ON PL.id_species = M.p_a_id_species
-        WHERE M.id_battle_pvp = :id_battle
-          AND M.turn = :turn
-        ORDER BY M.order_in_turn ASC, M.id_battle_pvp_move ASC
-    ';
-
-    $stmt = $conn->prepare($sql);
+    $stmt = $conn->prepare('
+        SELECT *
+        FROM battle_moves
+        WHERE id_battle = :id_battle
+          AND round = :turn
+        ORDER BY order_in_turn ASC, id_battle_move ASC
+    ');
     $stmt->execute([
         'id_battle' => (int) $id_battle,
         'turn' => (int) $turn
     ]);
 
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    return array_map('animaster_pvp_flatten_move', $stmt->fetchAll(PDO::FETCH_ASSOC));
 }
 
 function animaster_pvp_fetch_all_moves($conn, $id_battle, $lang_suffix)
 {
-    $lang_suffix = preg_replace('/[^_a-z]/i', '', (string) $lang_suffix);
-
-    $sql = '
-        SELECT M.*,
-               WE.element' . $lang_suffix . ' AS w_a_element,
-               PE.element' . $lang_suffix . ' AS p_a_element,
-               WE.color AS w_a_element_color,
-               PE.color AS p_a_element_color,
-               WL.species' . $lang_suffix . ' AS w_a_species_i18n,
-               PL.species' . $lang_suffix . ' AS p_a_species_i18n
-        FROM battles_pvp_moves M
-        LEFT JOIN elements WE ON WE.id_element = M.w_a_id_element
-        LEFT JOIN elements PE ON PE.id_element = M.p_a_id_element
-        LEFT JOIN species WL ON WL.id_species = M.w_a_id_species
-        LEFT JOIN species PL ON PL.id_species = M.p_a_id_species
-        WHERE M.id_battle_pvp = :id_battle
-        ORDER BY M.turn ASC, M.order_in_turn ASC, M.id_battle_pvp_move ASC
-    ';
-
-    $stmt = $conn->prepare($sql);
+    $stmt = $conn->prepare('
+        SELECT *
+        FROM battle_moves
+        WHERE id_battle = :id_battle
+        ORDER BY round ASC, order_in_turn ASC, id_battle_move ASC
+    ');
     $stmt->execute([
         'id_battle' => (int) $id_battle
     ]);
 
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    return array_map('animaster_pvp_flatten_move', $stmt->fetchAll(PDO::FETCH_ASSOC));
 }
 
 function animaster_pvp_fetch_latest_move($conn, $id_battle)
 {
     $stmt = $conn->prepare('
         SELECT *
-        FROM battles_pvp_moves
-        WHERE id_battle_pvp = :id_battle
-        ORDER BY turn DESC, order_in_turn DESC, id_battle_pvp_move DESC
+        FROM battle_moves
+        WHERE id_battle = :id_battle
+        ORDER BY round DESC, order_in_turn DESC, id_battle_move DESC
         LIMIT 1
     ');
     $stmt->execute(['id_battle' => (int) $id_battle]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    return $row ? animaster_pvp_flatten_move($row) : null;
 }
 
 function animaster_pvp_team_has_hp($conn, $id_user_ig)
@@ -934,22 +1069,18 @@ function animaster_pvp_finish_battle($conn, $battle_row, $winner_id, $end_reason
     $id_battle = (int) $battle_row['id_battle_pvp'];
     $winner_id = (int) $winner_id;
 
-    $stmt = $conn->prepare('
-        UPDATE battles_pvp
-        SET flg_status = \'F\',
-            id_winner_user_ig = :winner,
-            end_reason = :reason,
-            awaiting_user_ig = NULL,
-            dt_finished = NOW(),
-            dt_m = NOW()
-        WHERE id_battle_pvp = :id_battle
-          AND flg_status = \'O\'
-    ');
-    $stmt->execute([
-        'winner' => $winner_id > 0 ? $winner_id : null,
-        'reason' => $end_reason,
-        'id_battle' => $id_battle
-    ]);
+    $winner_alliance = null;
+
+    if ($winner_id > 0 && $winner_id === (int) $battle_row['id_user_ig_a'])
+    {
+        $winner_alliance = BattleRepository::SIDE_A;
+    }
+    else if ($winner_id > 0 && $winner_id === (int) $battle_row['id_user_ig_b'])
+    {
+        $winner_alliance = BattleRepository::SIDE_B;
+    }
+
+    BattleRepository::finishBattle($conn, $id_battle, (string) $end_reason, $winner_alliance);
 
     animaster_pvp_clear_user_flags($conn, (int) $battle_row['id_user_ig_a']);
     animaster_pvp_clear_user_flags($conn, (int) $battle_row['id_user_ig_b']);
@@ -1033,134 +1164,49 @@ function animaster_pvp_swap_move_for_viewer($move, $viewer_side)
     return $swapped;
 }
 
-function animaster_pvp_ensure_turn_choices_table($conn)
-{
-    static $ready = false;
-
-    if ($ready)
-    {
-        return;
-    }
-
-    $conn->exec('
-        CREATE TABLE IF NOT EXISTS pvp_turn_choices (
-            id_turn_choice INT(11) NOT NULL AUTO_INCREMENT,
-            id_battle_pvp INT(11) NOT NULL,
-            turn INT(11) NOT NULL,
-            id_user_ig INT(11) NOT NULL,
-            action_type VARCHAR(50) NOT NULL,
-            action_id INT(11) NOT NULL DEFAULT 0,
-            dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id_turn_choice),
-            UNIQUE KEY uniq_pvp_turn_choice (id_battle_pvp, turn, id_user_ig),
-            KEY idx_pvp_turn_choice_battle (id_battle_pvp, turn)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ');
-
-    $ready = true;
-}
-
 function animaster_pvp_count_turn_choices($conn, $id_battle, $turn)
 {
-    animaster_pvp_ensure_turn_choices_table($conn);
-
-    $stmt = $conn->prepare('
-        SELECT COUNT(*) AS cnt
-        FROM pvp_turn_choices
-        WHERE id_battle_pvp = :id_battle
-          AND turn = :turn
-    ');
-    $stmt->execute([
-        'id_battle' => (int) $id_battle,
-        'turn' => (int) $turn
-    ]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    return $row ? (int) $row['cnt'] : 0;
+    return count(BattleRepository::fetchChoices($conn, (int) $id_battle, (int) $turn));
 }
 
 function animaster_pvp_user_has_turn_choice($conn, $id_battle, $turn, $id_user_ig)
 {
-    animaster_pvp_ensure_turn_choices_table($conn);
-
-    $stmt = $conn->prepare('
-        SELECT id_turn_choice
-        FROM pvp_turn_choices
-        WHERE id_battle_pvp = :id_battle
-          AND turn = :turn
-          AND id_user_ig = :id_user_ig
-        LIMIT 1
-    ');
-    $stmt->execute([
-        'id_battle' => (int) $id_battle,
-        'turn' => (int) $turn,
-        'id_user_ig' => (int) $id_user_ig
-    ]);
-
-    return (bool) $stmt->fetch(PDO::FETCH_ASSOC);
+    return BattleRepository::fetchChoiceByUser($conn, (int) $id_battle, (int) $turn, (int) $id_user_ig) !== null;
 }
 
 function animaster_pvp_save_turn_choice($conn, $id_battle, $turn, $id_user_ig, $type, $id)
 {
-    animaster_pvp_ensure_turn_choices_table($conn);
+    $id_participant = animaster_pvp_participant_id_for_user($conn, (int) $id_battle, (int) $id_user_ig);
 
-    $stmt = $conn->prepare('
-        INSERT INTO pvp_turn_choices (
-            id_battle_pvp, turn, id_user_ig, action_type, action_id, dt_c
-        ) VALUES (
-            :id_battle, :turn, :id_user_ig, :action_type, :action_id, NOW()
-        )
-    ');
-    $stmt->execute([
-        'id_battle' => (int) $id_battle,
-        'turn' => (int) $turn,
-        'id_user_ig' => (int) $id_user_ig,
-        'action_type' => (string) $type,
-        'action_id' => (int) $id
-    ]);
+    BattleRepository::saveChoice(
+        $conn,
+        (int) $id_battle,
+        (int) $turn,
+        (int) $id_user_ig,
+        $id_participant,
+        (string) $type,
+        (int) $id,
+        0
+    );
 }
 
 function animaster_pvp_fetch_turn_choices($conn, $id_battle, $turn)
 {
-    animaster_pvp_ensure_turn_choices_table($conn);
-
-    $stmt = $conn->prepare('
-        SELECT *
-        FROM pvp_turn_choices
-        WHERE id_battle_pvp = :id_battle
-          AND turn = :turn
-        ORDER BY id_turn_choice ASC
-    ');
-    $stmt->execute([
-        'id_battle' => (int) $id_battle,
-        'turn' => (int) $turn
-    ]);
-
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    return BattleRepository::fetchChoices($conn, (int) $id_battle, (int) $turn);
 }
 
 function animaster_pvp_clear_turn_choices($conn, $id_battle, $turn)
 {
-    animaster_pvp_ensure_turn_choices_table($conn);
-
-    $stmt = $conn->prepare('
-        DELETE FROM pvp_turn_choices
-        WHERE id_battle_pvp = :id_battle
-          AND turn = :turn
-    ');
-    $stmt->execute([
-        'id_battle' => (int) $id_battle,
-        'turn' => (int) $turn
-    ]);
+    BattleRepository::clearChoices($conn, (int) $id_battle, (int) $turn);
 }
 
 function animaster_pvp_count_resolved_turn_moves($conn, $id_battle, $turn)
 {
     $stmt = $conn->prepare('
         SELECT COUNT(*) AS cnt
-        FROM battles_pvp_moves
-        WHERE id_battle_pvp = :id_battle
-          AND turn = :turn
+        FROM battle_moves
+        WHERE id_battle = :id_battle
+          AND round = :turn
           AND move_type <> \'start\'
     ');
     $stmt->execute([
@@ -1210,83 +1256,38 @@ function animaster_pvp_state_from_move($move)
     ];
 }
 
-function animaster_pvp_record_move($conn, $battle_row, $turn, $order, $id_user_ig, $state, $move_result)
+function animaster_pvp_record_move($conn, $battle_row, $turn, $order, $id_user_ig, $state, $move_result, $lang_suffix = '')
 {
     $actor_side = ($id_user_ig === (int) $battle_row['id_user_ig_a']) ? 'a' : 'b';
     $protagonist_id = $actor_side === 'a' ? $state['p_a_id'] : $state['w_a_id'];
     $target_id = $actor_side === 'a' ? $state['w_a_id'] : $state['p_a_id'];
 
-    $stmt = $conn->prepare('
-        INSERT INTO battles_pvp_moves (
-            id_battle_pvp, id_user_ig_actor, dt_creazione, turn, move_type, id_rif,
-            move_speed, order_in_turn, protagonist_type, id_protagonist, target_type, id_target,
-            p_a_res_atk, p_a_res_def, p_a_res_matk, p_a_res_mdef, p_a_res_hp,
-            p_a_res_acc, p_a_res_eva, p_a_res_cr, p_a_res_spd, p_a_res_max_hp,
-            w_a_res_atk, w_a_res_def, w_a_res_matk, w_a_res_mdef, w_a_res_hp,
-            w_a_res_acc, w_a_res_eva, w_a_res_cr, w_a_res_spd, w_a_res_max_hp,
-            p_a_id, p_a_id_element, p_a_id_species, p_a_species, p_a_lvl, p_a_nickname, p_a_cur_exp,
-            w_a_id, w_a_id_element, w_a_id_species, w_a_species, w_a_lvl,
-            move_description, move_hit, resulting_battle_status
-        ) VALUES (
-            :id_battle, :actor, NOW(), :turn, :move_type, :id_rif,
-            :move_speed, :order_in_turn, :protagonist_type, :id_protagonist, :target_type, :id_target,
-            :p_atk, :p_def, :p_matk, :p_mdef, :p_hp,
-            :p_acc, :p_eva, :p_cr, :p_spd, :p_max_hp,
-            :w_atk, :w_def, :w_matk, :w_mdef, :w_hp,
-            :w_acc, :w_eva, :w_cr, :w_spd, :w_max_hp,
-            :p_id, :p_elem, :p_species_id, :p_species, :p_lvl, :p_nick, :p_exp,
-            :w_id, :w_elem, :w_species_id, :w_species, :w_lvl,
-            :descr, :move_hit, :b_status
-        )
-    ');
+    $meta = animaster_pvp_move_meta(
+        $conn,
+        $state,
+        $lang_suffix,
+        'user_animal',
+        $protagonist_id,
+        'user_animal',
+        $target_id
+    );
 
-    $stmt->execute([
+    BattleRepository::insertMove($conn, [
         'id_battle' => (int) $battle_row['id_battle_pvp'],
-        'actor' => (int) $id_user_ig,
-        'turn' => (int) $turn,
-        'move_type' => $move_result['move_type'],
+        'round' => (int) $turn,
+        'order_in_turn' => (int) $order,
+        'id_actor_participant' => $actor_side === 'a' ? (int) $state['p_a_participant'] : (int) $state['w_a_participant'],
+        'id_target_participant' => $actor_side === 'a' ? (int) $state['w_a_participant'] : (int) $state['p_a_participant'],
+        'id_user_ig_actor' => (int) $id_user_ig,
+        'move_type' => (string) $move_result['move_type'],
         'id_rif' => (int) $move_result['id_rif'],
         'move_speed' => (float) $move_result['move_speed'],
-        'order_in_turn' => (int) $order,
-        'protagonist_type' => 'user_animal',
-        'id_protagonist' => $protagonist_id,
-        'target_type' => 'user_animal',
-        'id_target' => $target_id,
-        'p_atk' => $state['p_a_res_atk'],
-        'p_def' => $state['p_a_res_def'],
-        'p_matk' => $state['p_a_res_matk'],
-        'p_mdef' => $state['p_a_res_mdef'],
-        'p_hp' => $state['p_a_res_hp'],
-        'p_acc' => $state['p_a_res_acc'],
-        'p_eva' => $state['p_a_res_eva'],
-        'p_cr' => $state['p_a_res_cr'],
-        'p_spd' => $state['p_a_res_spd'],
-        'p_max_hp' => $state['p_a_res_max_hp'],
-        'w_atk' => $state['w_a_res_atk'],
-        'w_def' => $state['w_a_res_def'],
-        'w_matk' => $state['w_a_res_matk'],
-        'w_mdef' => $state['w_a_res_mdef'],
-        'w_hp' => $state['w_a_res_hp'],
-        'w_acc' => $state['w_a_res_acc'],
-        'w_eva' => $state['w_a_res_eva'],
-        'w_cr' => $state['w_a_res_cr'],
-        'w_spd' => $state['w_a_res_spd'],
-        'w_max_hp' => $state['w_a_res_max_hp'],
-        'p_id' => $state['p_a_id'],
-        'p_elem' => $state['p_a_id_element'],
-        'p_species_id' => $state['p_a_id_species'],
-        'p_species' => $state['p_a_species'],
-        'p_lvl' => $state['p_a_lvl'],
-        'p_nick' => $state['p_a_nickname'],
-        'p_exp' => $state['p_a_cur_exp'],
-        'w_id' => $state['w_a_id'],
-        'w_elem' => $state['w_a_id_element'],
-        'w_species_id' => $state['w_a_id_species'],
-        'w_species' => $state['w_a_species'],
-        'w_lvl' => $state['w_a_lvl'],
-        'descr' => $move_result['move_description'],
-        'move_hit' => $move_result['move_hit'],
-        'b_status' => $move_result['b_status']
+        'move_description' => (string) $move_result['move_description'],
+        'move_hit' => (string) $move_result['move_hit'],
+        'actor_hp_after' => $actor_side === 'a' ? (int) $state['p_a_res_hp'] : (int) $state['w_a_res_hp'],
+        'target_hp_after' => $actor_side === 'a' ? (int) $state['w_a_res_hp'] : (int) $state['p_a_res_hp'],
+        'resulting_battle_status' => (string) $move_result['b_status'],
+        'meta' => $meta
     ]);
 }
 
@@ -1503,6 +1504,23 @@ function animaster_pvp_execute_action($conn, &$battle_row, $state, $id_user_ig, 
         BUFFS::persistAnimalHpAfterBattle($conn, (int) $state['p_a_id'], (int) $state['p_a_res_hp']);
         BUFFS::persistAnimalHpAfterBattle($conn, (int) $state['w_a_id'], (int) $state['w_a_res_hp']);
 
+        // Participant rows are the authoritative live state for the next turn.
+        if (!empty($state['p_a_participant']))
+        {
+            BattleRepository::updateParticipant($conn, (int) $state['p_a_participant'], [
+                'current_hp' => (int) $state['p_a_res_hp'],
+                'flg_fainted' => (int) $state['p_a_res_hp'] <= 0 ? 'S' : 'N'
+            ]);
+        }
+
+        if (!empty($state['w_a_participant']))
+        {
+            BattleRepository::updateParticipant($conn, (int) $state['w_a_participant'], [
+                'current_hp' => (int) $state['w_a_res_hp'],
+                'flg_fainted' => (int) $state['w_a_res_hp'] <= 0 ? 'S' : 'N'
+            ]);
+        }
+
         if ($state['w_a_res_hp'] <= 0)
         {
             if (!animaster_pvp_team_has_hp($conn, (int) $battle_row['id_user_ig_b']))
@@ -1552,14 +1570,13 @@ function animaster_pvp_resolve_turn_choices($conn, &$battle_row, $turn, $lang_su
         return ['error' => 'WAITING_OPPONENT'];
     }
 
-    $state_move = animaster_pvp_fetch_latest_move($conn, $id_battle);
+    $state = animaster_pvp_current_state($conn, $id_battle);
 
-    if (!$state_move)
+    if (!$state)
     {
         return ['error' => 'NO_STATE'];
     }
 
-    $state = animaster_pvp_state_from_move($state_move);
     $first_user = animaster_pvp_first_actor_user_id($battle_row, $state['p_a_res_spd'], $state['w_a_res_spd']);
     $second_user = animaster_pvp_second_actor_user_id($battle_row, $state['p_a_res_spd'], $state['w_a_res_spd']);
     $ordered_users = TurnQueue::orderPvpActorUserIds(
@@ -1613,7 +1630,7 @@ function animaster_pvp_resolve_turn_choices($conn, &$battle_row, $turn, $lang_su
         }
 
         $state = $result['state'];
-        animaster_pvp_record_move($conn, $battle_row, $turn, $order, $actor_id, $state, $result);
+        animaster_pvp_record_move($conn, $battle_row, $turn, $order, $actor_id, $state, $result, $lang_suffix);
 
         if ($result['b_status'] !== 'ongoing')
         {
@@ -1661,8 +1678,13 @@ function animaster_pvp_build_meta($conn, $battle_row, $id_user_ig, $turn_moves, 
     }
 
     $combatants = [];
+    $state = animaster_pvp_current_state($conn, $id_battle);
 
-    if ($turn_moves)
+    if ($state)
+    {
+        $combatants = CombatSession::combatantsFromPvpState($state, $battle_row);
+    }
+    else if ($turn_moves)
     {
         $last_move = $turn_moves[count($turn_moves) - 1];
         $combatants = CombatSession::combatantsFromPvpState(animaster_pvp_state_from_move($last_move), $battle_row);

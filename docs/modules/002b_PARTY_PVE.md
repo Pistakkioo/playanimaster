@@ -1,6 +1,6 @@
 # Module 02 — Party PvE
 
-**Status:** Implemented (simultaneous-action turn system + opt-in inactivity vote, live in `private_functions/party_pve.php`)
+**Status:** Implemented — **schema migrates to unified `battles*` in [005c_full_combat_unification.md](005c_full_combat_unification.md)**  
 **Depends on:** minimal **Party system** (roster + leader) — see Phase A below
 **Builds on:** Solo PvE combat, wild spawn, team system
 
@@ -253,4 +253,18 @@ Waiting indefinitely (see player-flow point 9) is the default, but it can soft-l
 
 ## Path to dungeons (module 06)
 
-Party PvE wild fights prove the **simultaneous multi-human round system**. Dungeons would replace `id_wild_animal` with **encounter scripts** (fixed teams, phases, no overworld entity), reusing the same staging/confirm/resolve engine.
+Party PvE wild fights prove the **simultaneous multi-human round system**. Dungeons plug into the unified `battles` shell ([005c_full_combat_unification.md](005c_full_combat_unification.md)): replace overworld wild with **scripted `battle_participants`** on alliance B, same staging/confirm/resolve engine.
+
+### Migration note (005c)
+
+Current tables `battles_party_pve*` map directly to:
+
+| Legacy | Unified |
+|--------|---------|
+| `battles_party_pve` | `battles` (`battle_type=party_pve`) |
+| `battles_party_pve_participants` | `battle_participants` (`side` A/B) |
+| `battles_party_pve_turn_choices` | `battle_round_choices` |
+| `battles_party_pve_moves` | `battle_moves` (log only) |
+| `battles_party_pve_inactivity_votes` | `battle_inactivity_votes` |
+
+Behavior in this doc is preserved; only persistence and PHP entrypoints change.

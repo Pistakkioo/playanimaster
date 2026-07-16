@@ -501,6 +501,7 @@ $bootstrap = [
     }
     ?>
     <script src="<?php echo animaster_h(animaster_asset_url(animaster_wild_sprites_script())); ?>"></script>
+    <script src="<?php echo animaster_h(animaster_asset_url('js/world_tiles.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/world.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/spawn.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/dialog.js')); ?>"></script>

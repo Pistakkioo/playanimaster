@@ -7,20 +7,21 @@
 class CombatantSnapshot
 {
     /**
-     * @param array<string, mixed> $partyRow battles_party_pve_participants row
+     * @param array<string, mixed> $partyRow battle_participants row (side 'A' = party, 'B' = wild)
      * @return array<string, mixed>
      */
     public static function fromPartyParticipant(array $partyRow)
     {
-        $side = (string) ($partyRow['side'] ?? 'party');
+        $side = (string) ($partyRow['side'] ?? 'A');
+        $isWild = $side === 'B' || $side === 'wild';
         $fainted = trim((string) ($partyRow['flg_fainted'] ?? 'N')) === 'S'
             || (int) ($partyRow['current_hp'] ?? 0) <= 0;
 
         return self::normalize([
-            'battle_role' => $side === 'wild' ? 'wild' : 'ally',
-            'entity_type' => $side === 'wild' ? 'wild' : 'animal',
-            'entity_id' => (int) ($partyRow['id_animal'] ?? 0),
-            'id_animal' => (int) ($partyRow['id_animal'] ?? 0),
+            'battle_role' => $isWild ? 'wild' : 'ally',
+            'entity_type' => $isWild ? 'wild' : 'animal',
+            'entity_id' => (int) ($partyRow['id_entity'] ?? $partyRow['id_animal'] ?? 0),
+            'id_animal' => (int) ($partyRow['id_animal'] ?? $partyRow['id_wild_animal'] ?? $partyRow['id_entity'] ?? 0),
             'id_user_ig' => $partyRow['id_user_ig'] !== null ? (int) $partyRow['id_user_ig'] : null,
             'id_species' => (int) ($partyRow['id_species'] ?? 0),
             'id_element' => (int) ($partyRow['id_element'] ?? 0),

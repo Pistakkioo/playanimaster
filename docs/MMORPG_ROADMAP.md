@@ -44,7 +44,7 @@ Turn-based creature MMORPG. **All combat stays turn-based** — solo wild fights
 - **Server authoritative** — PHP + MariaDB resolve combat, loot, and state.
 - **Poll-based sync** — presence ~150 ms, entities ~300 ms; WebSocket optional later.
 - **Combat = state machine** — session row + move log; client is view + input.
-- **Refactor direction** — extract shared turn engine from `battle_solo_pve/*` into `private_functions/combat/` before PvP and party scale up.
+- **Refactor direction** — shared engine in `private_functions/combat/` is done; **next:** unified `battles` schema ([005c](modules/005c_full_combat_unification.md)) before dungeons/raids.
 
 ---
 
@@ -69,14 +69,15 @@ Phases are ordered by dependency and player value. **Start with 001, then 001b, 
 | **02** | **Party PvE** | [modules/002_PARTY_PVE.md](modules/002_PARTY_PVE.md) | 001b, 03 (party) | Group up and fight wilds together |
 | 03 | Party system | [modules/003_PARTY_SYSTEM.md](modules/003_PARTY_SYSTEM.md) | — | Invites, roster, leader, # chat works |
 | 04 | Quest system | [modules/004_QUESTS.md](modules/004_QUESTS.md) | NPC/dialog | Track objectives, rewards, chains |
-| 05 | Combat engine refactor | [modules/005_COMBAT_ENGINE.md](modules/005_COMBAT_ENGINE.md) | 01–02 | Shared turn resolver for all modes |
-| 06 | Dungeons (instanced party PvE) | [modules/006_DUNGEONS.md](modules/006_DUNGEONS.md) | 02, 03 | Fixed encounters, chests, daily lockout |
+| 05 | Combat engine refactor | [modules/005_COMBAT_ENGINE.md](modules/005_COMBAT_ENGINE.md) | 01–02 | Shared turn resolver ✅ |
+| **05c** | **Full combat unification** | [modules/005c_full_combat_unification.md](modules/005c_full_combat_unification.md) | 05, 005b | Single `battles` + N participants (**before dungeons**) |
+| 06 | Dungeons (instanced party PvE) | [modules/006_DUNGEONS.md](modules/006_DUNGEONS.md) | 02, 03, **05c** | Fixed encounters, chests, daily lockout |
 | 07 | Evolution & DNA | [modules/007_EVOLUTION.md](modules/007_EVOLUTION.md) | Solo PvE drops | Grow and evolve team |
 | 08 | PK & PvP zones | [modules/008_PK_PVP_ZONES.md](modules/008_PK_PVP_ZONES.md) | 01 | Opt-in hostile areas, karma/law |
 | 09 | Clan & alliance | [modules/009_CLAN_ALLIANCE.md](modules/009_CLAN_ALLIANCE.md) | Social | Player orgs, `$` `%` chat, stash |
 | 10 | Economy & shops | [modules/010_ECONOMY.md](modules/010_ECONOMY.md) | Items, gold | NPC vendors, repair, sinks |
 | 11 | Mail & auction | [modules/011_MAIL_AUCTION.md](modules/011_MAIL_AUCTION.md) | 10 | Async trade, listings |
-| 12 | Raid bosses | [modules/012_RAID_BOSSES.md](modules/012_RAID_BOSSES.md) | 05, 06 | Turn-based raids, rhythm mechanics |
+| 12 | Raid bosses | [modules/012_RAID_BOSSES.md](modules/012_RAID_BOSSES.md) | **05c**, 06 | Turn-based raids, rhythm mechanics |
 | 13 | World expansion | [modules/013_WORLD_ZONES.md](modules/013_WORLD_ZONES.md) | Spawn, NPC tools | Multiple maps, travel, zone rules |
 | 14 | Progression meta | [modules/014_PROGRESSION.md](modules/014_PROGRESSION.md) | Quests, raids | Titles, achievements, seasons |
 | 15 | Ops & anti-abuse | [modules/015_OPS_SECURITY.md](modules/015_OPS_SECURITY.md) | All | Rate limits, logging, GM tools |
@@ -91,8 +92,9 @@ Phases are ordered by dependency and player value. **Start with 001, then 001b, 
 Now     → 01 PvP 1v1          (reuse solo combat UX, 2 human sides)
 Next    → 01b Player classes   (nerd/stud, Lv25/50 quest promotions, class skills)
         → 03 Party system      (minimal: create, invite, leave, leader)
-Then    → 02 Party PvE        (multi-player turn queue + class synergy)
-        → 05 Combat engine     (refactor before raids)
+Then    → 02 Party PvE        (multi-player turn queue + class synergy) ✅
+        → 05 Combat engine     (shared resolver) ✅
+        → 05c Unified battles  (single battles + participants — **do before dungeons**)
         → 04 Quests
         → 06 Dungeons
         → 07 Evolution

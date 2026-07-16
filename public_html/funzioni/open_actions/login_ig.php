@@ -142,51 +142,23 @@ else
 
             $stringone_is_battling = "";
 
-            $result_battle = $conn->query("
+            require_once dirname($_SERVER['DOCUMENT_ROOT']) . '/private_functions/solo_pve.php';
 
-                select id_battle_solo_pve from battles_solo_pve
+            $solo_battle = animaster_solo_pve_active_for_user($conn, $id_user_ig);
 
-                where id_user_ig = \"$id_user_ig\"
-
-                and (finished is null or finished !='S') 
-
-            ");
-
-            if($result_battle->rowCount()>0)
+            if ($solo_battle)
 
             {
 
-                $row_battle = $result_battle->fetch();
-
-                $id_battle = $row_battle['id_battle_solo_pve'];
-
-                $isBattling = true;
-
-                $battle_type = "solo_pve";
-
-                $current_battle_turn = 0;
-
-                $result_turn = $conn->query("
-
-                    select max(turn) from battles_solo_pve_moves where id_battle_solo_pve = \"$id_battle\"
-
-                ");
-
-                $row_turn = $result_turn->fetch();
-
-                $current_battle_turn = intval($row_turn[0]);
-
-
-
                 $riga_battle = array(
 
-                    "isBattling"=>$isBattling,
+                    "isBattling"=>true,
 
-                    "id_battle"=>$id_battle,
+                    "id_battle"=>(int) $solo_battle['id_battle'],
 
-                    "battle_type"=>$battle_type,
+                    "battle_type"=>'solo_pve',
 
-                    "current_battle_turn"=>$current_battle_turn
+                    "current_battle_turn"=>(int) $solo_battle['current_battle_turn']
 
                 );
 

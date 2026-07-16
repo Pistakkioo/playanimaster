@@ -66,11 +66,11 @@ class CombatSession{
         $clearChoices($resolvedRound);
 
         $stmt = $conn->prepare('
-            UPDATE battles_party_pve
-            SET current_turn = :round,
+            UPDATE battles
+            SET current_round = :round,
                 dt_round_started = NOW(),
                 dt_m = NOW()
-            WHERE id_battle_party_pve = :id_battle
+            WHERE id_battle = :id_battle
         ');
         $stmt->execute([
             ':round' => $resolvedRound,
@@ -104,11 +104,11 @@ class CombatSession{
             $nextTurn = $resolvedTurn + 1;
 
             $stmt = $conn->prepare('
-                UPDATE battles_pvp
-                SET awaiting_user_ig = NULL,
-                    current_turn = :turn,
+                UPDATE battles
+                SET current_round = :turn,
+                    dt_round_started = NOW(),
                     dt_m = NOW()
-                WHERE id_battle_pvp = :id_battle
+                WHERE id_battle = :id_battle
             ');
             $stmt->execute([
                 ':turn' => $nextTurn,
@@ -122,10 +122,9 @@ class CombatSession{
         }
 
         $stmt = $conn->prepare('
-            UPDATE battles_pvp
-            SET awaiting_user_ig = NULL,
-                dt_m = NOW()
-            WHERE id_battle_pvp = :id_battle
+            UPDATE battles
+            SET dt_m = NOW()
+            WHERE id_battle = :id_battle
         ');
         $stmt->execute([
             ':id_battle' => $idBattle,
