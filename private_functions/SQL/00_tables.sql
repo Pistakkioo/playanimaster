@@ -1752,3 +1752,52 @@ CREATE TABLE IF NOT EXISTS playanimaster_db.battle_inactivity_votes (
     UNIQUE KEY uq_biv (id_battle, round, id_user_ig_target, id_user_ig_voter),
     CONSTRAINT fk_biv_battle FOREIGN KEY (id_battle) REFERENCES battles (id_battle)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- Economy & Shops (module 010_ECONOMY)
+CREATE TABLE IF NOT EXISTS playanimaster_db.shops (
+    id_shop INT(11) NOT NULL AUTO_INCREMENT,
+    shop_key VARCHAR(50) DEFAULT NULL COMMENT 'optional unique human key for dev/debug reference',
+    name VARCHAR(100) NOT NULL,
+    name_it VARCHAR(100) DEFAULT NULL,
+    name_pt VARCHAR(100) DEFAULT NULL,
+    shop_type VARCHAR(30) NOT NULL DEFAULT 'general' COMMENT 'flavor/filter only: general | potion | tackle | ...',
+    flg_buys_from_player CHAR(1) NOT NULL DEFAULT 'S' COMMENT 'S = this vendor buys sellable items from the player (enables Sell tab)',
+    flg_active CHAR(1) NOT NULL DEFAULT 'S',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_shop),
+    UNIQUE KEY uq_shops_shop_key (shop_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.shop_items (
+    id_shop_item INT(11) NOT NULL AUTO_INCREMENT,
+    id_shop INT(11) NOT NULL,
+    id_item_type INT(11) NOT NULL,
+    price_override INT(11) DEFAULT NULL COMMENT 'NULL = use item_types.price for this shop',
+    sell_price_override INT(11) DEFAULT NULL COMMENT 'NULL = use item_types.sell_price for this shop',
+    stock_qty INT(11) DEFAULT NULL COMMENT 'NULL = unlimited stock; else decremented on buy',
+    flg_active CHAR(1) NOT NULL DEFAULT 'S',
+    sort_order INT(11) NOT NULL DEFAULT 0,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_shop_item),
+    UNIQUE KEY uq_shop_items_shop_item_type (id_shop, id_item_type),
+    KEY idx_shop_items_item_type (id_item_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.shop_transactions (
+    id_shop_transaction INT(11) NOT NULL AUTO_INCREMENT,
+    id_shop INT(11) NOT NULL,
+    id_user_ig INT(11) NOT NULL,
+    id_item_type INT(11) NOT NULL,
+    direction VARCHAR(4) NOT NULL COMMENT 'BUY | SELL',
+    quantity INT(11) NOT NULL,
+    unit_price INT(11) NOT NULL,
+    total_gold INT(11) NOT NULL,
+    gold_after INT(11) NOT NULL,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_shop_transaction),
+    KEY idx_shop_tx_user (id_user_ig, dt_c),
+    KEY idx_shop_tx_shop (id_shop, dt_c)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

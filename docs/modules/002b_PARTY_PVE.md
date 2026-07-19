@@ -8,7 +8,7 @@
 
 ## Goal
 
-Up to **4 players** in a party fight **one shared wild encounter**. Combat is **round-based, not single-actor-turn-based**: every round, all alive party members plan and confirm their action **simultaneously** ("strategy team play"), then the whole round resolves at once in a single speed-sorted pass. Players only ever control their own animal.
+Up to **`costanti.party_max_members` players** (currently **7**) in a party fight **one shared wild encounter**. Combat is **round-based, not single-actor-turn-based**: every round, all alive party members plan and confirm their action **simultaneously** ("strategy team play"), then the whole round resolves at once in a single speed-sorted pass. Players only ever control their own animal.
 
 Non-goals for v1: dungeon instances, need/greed loot rolling, cross-zone party, "intelligent" wild targeting (wild currently targets a random alive party member).
 
@@ -37,7 +37,7 @@ parties (
   id_party PK AI,
   id_user_ig_leader,
   id_zone,              -- optional: last leader zone
-  max_members TINYINT DEFAULT 4,
+  max_members TINYINT DEFAULT 7,  -- written from costanti.party_max_members on create; capacity checks always read the live constant
   flg_allow_inactivity_vote CHAR(1) DEFAULT 'N',  -- leader-only opt-in, see Inactivity vote below
   dt_created
 );

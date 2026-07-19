@@ -441,6 +441,26 @@ $bootstrap = [
         </div>
     </div>
 
+    <div id="shop-overlay" class="shop-overlay" hidden aria-hidden="true">
+        <div class="shop-panel" role="dialog" aria-labelledby="shop-title">
+            <header class="shop-header">
+                <h2 id="shop-title" class="shop-title"></h2>
+                <button type="button" id="shop-close" class="shop-close" title="Close" data-i18n-title="ui.close">&times;</button>
+            </header>
+            <div class="shop-gold-row">
+                <span class="shop-gold-icon" aria-hidden="true">&#x1FA99;</span>
+                <span id="shop-gold-balance" class="shop-gold-balance"></span>
+            </div>
+            <div class="shop-tabs" role="tablist">
+                <button type="button" id="shop-tab-buy" class="shop-tab is-active" data-i18n="shop.tab_buy">Buy</button>
+                <button type="button" id="shop-tab-sell" class="shop-tab" data-i18n="shop.tab_sell">Sell</button>
+            </div>
+            <div id="shop-list-buy" class="shop-list"></div>
+            <div id="shop-list-sell" class="shop-list" hidden></div>
+            <p id="shop-status" class="shop-status"></p>
+        </div>
+    </div>
+
     <div id="trade-pick-overlay" class="trade-pick-overlay" hidden aria-hidden="true">
         <div class="trade-pick-panel">
             <h3 class="trade-pick-title" data-i18n="trade.pick_item_title">Add to trade</h3>
@@ -516,6 +536,7 @@ $bootstrap = [
     <script src="<?php echo animaster_h(animaster_asset_url('js/player_chat_bubbles.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/target.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/trade.js')); ?>"></script>
+    <script src="<?php echo animaster_h(animaster_asset_url('js/shop.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/party.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/self-hud.js')); ?>"></script>
     <script src="<?php echo animaster_h(animaster_asset_url('js/quests.js')); ?>"></script>

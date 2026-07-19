@@ -52,7 +52,8 @@ After code + SQL: test local → commit → deploy → run new SQL tail on produ
 | Done | Buff / debuff | [modules/001a_BUFF_SYSTEM.md](modules/001a_BUFF_SYSTEM.md) |
 | **Next** | Party system | [modules/002_PARTY_SYSTEM.md](modules/002_PARTY_SYSTEM.md) | Phase A implemented |
 | Then | Combat engine refactor | [modules/005_COMBAT_ENGINE.md](modules/005_COMBAT_ENGINE.md) (shared resolver — largely done) |
-| **Next** | **Full combat unification** | [modules/005c_full_combat_unification.md](modules/005c_full_combat_unification.md) — single `battles` + `battle_participants` schema (**blocking dungeons**) |
+| **Next** | **Full combat unification** | [modules/005c_full_combat_unification.md](modules/005c_full_combat_unification.md) — single `battles` + `battle_participants` schema (**blocking dungeons**); Phase 5 party-vs-party = 1 animal/member |
+| Later | Multi-fighter control (005d) | Documented in [005c § Deferred](modules/005c_full_combat_unification.md#deferred-multi-fighter-control-005d) — rekey planning to participant; party-vs-party equalize + solo packs |
 | Then | Combat buff/debuff visibility + live stat layers | [modules/005b_COMBAT_BUFF_VISIBILITY.md](modules/005b_COMBAT_BUFF_VISIBILITY.md) (done) |
 | Then | Dungeons | [modules/006_DUNGEONS.md](modules/006_DUNGEONS.md) (after 005c) |
 

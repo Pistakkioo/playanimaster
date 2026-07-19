@@ -9,6 +9,7 @@ class TurnQueue
     const SLOT_PARTY = 'party';
     const SLOT_WILD = 'wild';
     const SLOT_PVP = 'pvp';
+    const SLOT_FIGHTER = 'fighter';
 
     /**
      * Sort execution slots by speed descending; ties by original insertion index.
@@ -100,6 +101,37 @@ class TurnQueue
         }
 
         return [(int) $secondUserId, (int) $firstUserId];
+    }
+
+    /**
+     * Party vs party: one slot per confirmed fighter on either side (no wilds).
+     *
+     * @param array<int, array<string, mixed>> $confirmedByUser id_user_ig => choice
+     * @param array<int, array<string, mixed>> $fightersByUser id_user_ig => participant
+     * @return array<int, array<string, mixed>>
+     */
+    public static function buildPartyVsPartyExecutionSlots(array $confirmedByUser, array $fightersByUser)
+    {
+        $slots = [];
+        $idx = 0;
+
+        foreach ($confirmedByUser as $id_user_ig => $choice)
+        {
+            if (!isset($fightersByUser[$id_user_ig]))
+            {
+                continue;
+            }
+
+            $slots[] = [
+                'kind' => self::SLOT_FIGHTER,
+                'id_user_ig' => (int) $id_user_ig,
+                'spd' => (float) $fightersByUser[$id_user_ig]['spd'],
+                'choice' => $choice,
+                'idx' => $idx++
+            ];
+        }
+
+        return self::sortBySpeedDesc($slots);
     }
 
     /**

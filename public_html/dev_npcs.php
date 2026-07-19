@@ -54,6 +54,7 @@ $flat_dialogues = dev_npc_flat_dialogues($tree);
 $flat_options = dev_npc_flat_options($tree);
 $flat_quests = dev_npc_flat_quests($tree);
 $item_types = dev_npc_fetch_item_types($conn);
+$shops = dev_npc_fetch_shops($conn);
 $player_classes = dev_npc_fetch_player_classes($conn);
 $buff_definitions = dev_npc_fetch_buff_definitions($conn);
 $species_list = dev_npc_fetch_species($conn);
@@ -251,7 +252,8 @@ $cons_ref_field_ctx = [
     'item_types' => $item_types,
     'player_classes' => $player_classes,
     'buff_definitions' => $buff_definitions,
-    'flat_quests' => $flat_quests
+    'flat_quests' => $flat_quests,
+    'shops' => $shops
 ];
 ?>
 <!DOCTYPE html>
@@ -356,6 +358,7 @@ $cons_ref_field_ctx = [
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_species.php')); ?>">Species / abilities</a>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_npc.php')); ?>">NPC interactions</a>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_quest.php')); ?>">Quest flow</a>
+            <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_shops.php')); ?>">Shops editor</a>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_static_data.php')); ?>">Static data</a>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_url()); ?>">Refresh</a>
         </div>
@@ -1436,7 +1439,8 @@ $cons_ref_field_ctx = [
             '[set player_class]': 'PLAYER_CLASS',
             'grant_team_buff': 'buff_definitions',
             '[start quest]': 'QUEST',
-            '[complete quest]': 'QUEST'
+            '[complete quest]': 'QUEST',
+            '[open shop]': 'shops'
         };
 
         if (map[consType] !== undefined)
@@ -1603,7 +1607,8 @@ $cons_ref_field_ctx = [
             '[set player_class]': 'PLAYER_CLASS',
             'grant_team_buff': 'buff_definitions',
             '[start quest]': 'QUEST',
-            '[complete quest]': 'QUEST'
+            '[complete quest]': 'QUEST',
+            '[open shop]': 'shops'
         };
 
         if (map[consType] !== undefined)

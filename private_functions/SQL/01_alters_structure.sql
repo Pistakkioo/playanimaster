@@ -869,7 +869,92 @@ CREATE TABLE IF NOT EXISTS playanimaster_db.world_objects (
     KEY idx_world_objects_zone (id_zone),
     CONSTRAINT fk_wo_object_definition FOREIGN KEY (id_object_definition) REFERENCES object_definitions (id_object_definition)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Party max size driven by costanti.party_max_members (currently 7; raise the
+-- costanti row later without a code deploy). Capacity checks read the live
+-- constant; parties.max_members is written on create and bumped here so
+-- existing parties are not stuck at the old default of 4.
+INSERT INTO costanti (costante, valore)
+SELECT 'party_max_members', 7
+WHERE NOT EXISTS (
+    SELECT 1 FROM costanti WHERE costante = 'party_max_members'
+);
+
+UPDATE parties SET max_members = 7 WHERE max_members < 7;
+
+ALTER TABLE parties
+    MODIFY COLUMN max_members TINYINT(3) UNSIGNED NOT NULL DEFAULT 7;
+
+
+
+
+-- Tile catalog pack tag: groups imported tilesets in the admin palette filter.
+-- Empty string = unassigned / legacy rows. Run once on live/testing.
+ALTER TABLE playanimaster_db.tile_definitions
+    ADD COLUMN pack VARCHAR(50) NOT NULL DEFAULT ''
+        COMMENT 'tileset/pack key for admin palette filtering (e.g. forest, dungeon_a)'
+        AFTER category,
+    ADD KEY idx_tile_definitions_pack (pack);
+
+-- Economy & Shops (module 010_ECONOMY): new tables for live/testing DBs
+-- that already exist (mirrors CREATE TABLE blocks added to 00_tables.sql).
+CREATE TABLE IF NOT EXISTS playanimaster_db.shops (
+    id_shop INT(11) NOT NULL AUTO_INCREMENT,
+    shop_key VARCHAR(50) DEFAULT NULL COMMENT 'optional unique human key for dev/debug reference',
+    name VARCHAR(100) NOT NULL,
+    name_it VARCHAR(100) DEFAULT NULL,
+    name_pt VARCHAR(100) DEFAULT NULL,
+    shop_type VARCHAR(30) NOT NULL DEFAULT 'general' COMMENT 'flavor/filter only: general | potion | tackle | ...',
+    flg_buys_from_player CHAR(1) NOT NULL DEFAULT 'S' COMMENT 'S = this vendor buys sellable items from the player (enables Sell tab)',
+    flg_active CHAR(1) NOT NULL DEFAULT 'S',
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_shop),
+    UNIQUE KEY uq_shops_shop_key (shop_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.shop_items (
+    id_shop_item INT(11) NOT NULL AUTO_INCREMENT,
+    id_shop INT(11) NOT NULL,
+    id_item_type INT(11) NOT NULL,
+    price_override INT(11) DEFAULT NULL COMMENT 'NULL = use item_types.price for this shop',
+    sell_price_override INT(11) DEFAULT NULL COMMENT 'NULL = use item_types.sell_price for this shop',
+    stock_qty INT(11) DEFAULT NULL COMMENT 'NULL = unlimited stock; else decremented on buy',
+    flg_active CHAR(1) NOT NULL DEFAULT 'S',
+    sort_order INT(11) NOT NULL DEFAULT 0,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    dt_m TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_shop_item),
+    UNIQUE KEY uq_shop_items_shop_item_type (id_shop, id_item_type),
+    KEY idx_shop_items_item_type (id_item_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS playanimaster_db.shop_transactions (
+    id_shop_transaction INT(11) NOT NULL AUTO_INCREMENT,
+    id_shop INT(11) NOT NULL,
+    id_user_ig INT(11) NOT NULL,
+    id_item_type INT(11) NOT NULL,
+    direction VARCHAR(4) NOT NULL COMMENT 'BUY | SELL',
+    quantity INT(11) NOT NULL,
+    unit_price INT(11) NOT NULL,
+    total_gold INT(11) NOT NULL,
+    gold_after INT(11) NOT NULL,
+    dt_c TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_shop_transaction),
+    KEY idx_shop_tx_user (id_user_ig, dt_c),
+    KEY idx_shop_tx_shop (id_shop, dt_c)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- item_types.flg_buyable: independent of flg_sellable, gates the Buy tab in
+-- shop.js / animaster_shop_fetch. Backfill sets it to 'N' for any item with
+-- no usable price so existing free/quest-material rows don't show as buyable.
+ALTER TABLE playanimaster_db.item_types
+    ADD COLUMN flg_buyable CHAR(1) NOT NULL DEFAULT 'S'
+    COMMENT 'S = purchasable from vendors (independent of flg_sellable); NULL/0 price still blocks a buy regardless' AFTER flg_sellable;
+
+UPDATE playanimaster_db.item_types SET flg_buyable = 'N' WHERE price IS NULL OR price <= 0;
+
 -- ... 
 -- LAUNCHED ON PRODUCTION UP TO HERE 
 -- ...
-
+ 

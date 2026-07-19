@@ -83,6 +83,7 @@
     AnimasterChat.init();
     AnimasterTarget.init();
     AnimasterTrade.init();
+    AnimasterShop.init();
     AnimasterParty.init();
     AnimasterSelfHud.init();
     AnimasterQuests.init();
@@ -300,6 +301,30 @@
             });
         }
 
+        if (envelope && envelope.response2 && envelope.response2.indexOf('[open shop]') !== -1 && player)
+        {
+            var shopRows = (envelope.response || '').split('#').map(function (s)
+            {
+                try
+                {
+                    return JSON.parse(s);
+                }
+                catch (e)
+                {
+                    return null;
+                }
+            });
+            var shopRow = shopRows.filter(function (r)
+            {
+                return r && r.consequence_type === '[open shop]';
+            })[0];
+
+            if (shopRow && shopRow.id_ref)
+            {
+                AnimasterShop.open(parseInt(shopRow.id_ref, 10), player);
+            }
+        }
+
         refreshChain.finally(function ()
         {
             syncWorldEntities(true);
@@ -431,6 +456,7 @@
         AnimasterNotifications.setPlayer(player);
         AnimasterChat.setPlayer(player);
         AnimasterTrade.setPlayer(player);
+        AnimasterShop.setPlayer(player);
         AnimasterParty.setPlayer(player);
         AnimasterQuests.setPlayer(player);
         AnimasterDuel.setPlayer(player);

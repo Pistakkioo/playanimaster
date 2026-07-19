@@ -100,6 +100,7 @@ $pageUrl = dev_admin_page_url('dev_static_data.php');
         </div>
         <div class="d-flex gap-2">
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_npcs.php')); ?>">NPC editor</a>
+            <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h(dev_admin_page_url('dev_shops.php')); ?>">Shops editor</a>
             <a class="btn btn-outline-secondary btn-sm" href="<?php echo dev_admin_h($pageUrl); ?>">Refresh</a>
         </div>
     </div>

@@ -5,9 +5,23 @@ if (!defined('ANIMASTER_PARTY_INVITE_SECONDS'))
     define('ANIMASTER_PARTY_INVITE_SECONDS', 30);
 }
 
-if (!defined('ANIMASTER_PARTY_MAX_MEMBERS'))
+/**
+ * Max party size from costanti.party_max_members (loaded as a PHP define by
+ * c_variabili.php). Fallback 7 if the row is missing.
+ */
+function animaster_party_max_members()
 {
-    define('ANIMASTER_PARTY_MAX_MEMBERS', 4);
+    if (defined('party_max_members'))
+    {
+        $n = (int) constant('party_max_members');
+
+        if ($n > 0)
+        {
+            return $n;
+        }
+    }
+
+    return 7;
 }
 
 function animaster_party_expire_invites($conn)
@@ -471,7 +485,7 @@ function animaster_party_build_state($conn, $id_user_ig)
         'id_party' => $id_party,
         'id_leader' => (int) $party['id_user_ig_leader'],
         'is_leader' => (int) $party['id_user_ig_leader'] === $id_user_ig,
-        'max_members' => (int) $party['max_members'],
+        'max_members' => animaster_party_max_members(),
         'member_count' => count($members),
         'members' => $members,
         'allow_inactivity_vote' => trim((string) ($party['flg_allow_inactivity_vote'] ?? 'N')) === 'S'
@@ -548,7 +562,7 @@ function animaster_party_create($conn, $id_user_ig)
         $stmt->execute([
             ':leader' => $id_user_ig,
             ':id_zone' => (int) $user['id_zone'],
-            ':max_members' => ANIMASTER_PARTY_MAX_MEMBERS
+            ':max_members' => animaster_party_max_members()
         ]);
         $id_party = (int) $conn->lastInsertId();
 
@@ -609,7 +623,7 @@ function animaster_party_invite($conn, $id_sender, $id_target)
         return ['error' => 'NOT_LEADER'];
     }
 
-    if (animaster_party_member_count($conn, $id_party) >= ANIMASTER_PARTY_MAX_MEMBERS)
+    if (animaster_party_member_count($conn, $id_party) >= animaster_party_max_members())
     {
         return ['error' => 'PARTY_FULL'];
     }
@@ -769,7 +783,7 @@ function animaster_party_respond($conn, $id_user_ig, $id_party_invite, $accept)
         return ['error' => 'ALREADY_IN_PARTY'];
     }
 
-    if (animaster_party_member_count($conn, $id_party) >= (int) $party['max_members'])
+    if (animaster_party_member_count($conn, $id_party) >= animaster_party_max_members())
     {
         return ['error' => 'PARTY_FULL'];
     }
@@ -1028,6 +1042,20 @@ function animaster_party_poll($conn, $id_user_ig)
     if ($active_battle)
     {
         $party_pve_battle = $active_battle;
+    }
+    else
+    {
+        if (!function_exists('animaster_party_vs_party_active_for_user'))
+        {
+            require_once __DIR__ . '/party_vs_party.php';
+        }
+
+        $active_battle = animaster_party_vs_party_active_for_user($conn, $id_user_ig);
+
+        if ($active_battle)
+        {
+            $party_pve_battle = $active_battle;
+        }
     }
 
     $party = animaster_party_build_state($conn, $id_user_ig);

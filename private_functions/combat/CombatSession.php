@@ -10,6 +10,7 @@ class CombatSession{
     const TYPE_SOLO = 'solo_pve';
     const TYPE_PVP = 'pvp';
     const TYPE_PARTY = 'party_pve';
+    const TYPE_PARTY_VS_PARTY = 'party_vs_party';
 
     /**
      * Party PvE: last resolved round number stored in current_turn (0 at start).
@@ -52,17 +53,17 @@ class CombatSession{
     }
 
     /**
-     * Party PvE: after a planning round resolves, clear its choices and mark the
-     * round as resolved (current_turn = resolved round, reset inactivity clock).
+     * Party PvE / party-vs-party: after a planning round resolves, clear its
+     * choices and mark the round as resolved (current_round = resolved round).
      *
      * @param callable $clearChoices fn(int $resolvedRound): void
      */
-    public static function completePartyPveRound($conn, $idBattle, $resolvedRound, callable $clearChoices)
+    public static function completePartyConfirmRound($conn, $idBattle, $resolvedRound, $battleType, callable $clearChoices)
     {
         $idBattle = (int) $idBattle;
         $resolvedRound = (int) $resolvedRound;
 
-        self::tickRoundBuffs($conn, self::TYPE_PARTY, $idBattle);
+        self::tickRoundBuffs($conn, (string) $battleType, $idBattle);
         $clearChoices($resolvedRound);
 
         $stmt = $conn->prepare('
@@ -76,6 +77,14 @@ class CombatSession{
             ':round' => $resolvedRound,
             ':id_battle' => $idBattle,
         ]);
+    }
+
+    /**
+     * @param callable $clearChoices fn(int $resolvedRound): void
+     */
+    public static function completePartyPveRound($conn, $idBattle, $resolvedRound, callable $clearChoices)
+    {
+        self::completePartyConfirmRound($conn, $idBattle, $resolvedRound, self::TYPE_PARTY, $clearChoices);
     }
 
     /**

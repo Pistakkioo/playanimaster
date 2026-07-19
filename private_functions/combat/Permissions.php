@@ -8,13 +8,16 @@ class Permissions
     const MODE_SOLO = CombatSession::TYPE_SOLO;
     const MODE_PVP = CombatSession::TYPE_PVP;
     const MODE_PARTY = CombatSession::TYPE_PARTY;
+    const MODE_PARTY_VS_PARTY = CombatSession::TYPE_PARTY_VS_PARTY;
 
     /**
-     * Party PvE uses an explicit confirm step after staging.
+     * Party PvE and party-vs-party use an explicit confirm step after staging.
      */
     public static function requiresConfirmStep($mode)
     {
-        return (string) $mode === self::MODE_PARTY;
+        $mode = (string) $mode;
+
+        return $mode === self::MODE_PARTY || $mode === self::MODE_PARTY_VS_PARTY;
     }
 
     /**
@@ -22,7 +25,7 @@ class Permissions
      */
     public static function stagedChangeInvalidatesOthers($mode, $hadPreviousChoice, $choiceChanged)
     {
-        return (string) $mode === self::MODE_PARTY
+        return self::requiresConfirmStep($mode)
             && $hadPreviousChoice
             && $choiceChanged;
     }
@@ -79,5 +82,36 @@ class Permissions
         return $leaderChoice
             && (string) ($leaderChoice['action_type'] ?? '') === 'flee'
             && trim((string) ($leaderChoice['flg_confirmed'] ?? 'N')) === 'Y';
+    }
+
+    /**
+     * Party vs party: resolve when both sides have full confirm quorum,
+     * or either side's leader has confirmed flee.
+     *
+     * @param array<string, mixed>|null $leaderChoiceA
+     * @param array<string, mixed>|null $leaderChoiceB
+     */
+    public static function partyVsPartyShouldResolveRound(
+        $confirmedA,
+        $aliveA,
+        $confirmedB,
+        $aliveB,
+        $leaderChoiceA,
+        $leaderChoiceB
+    )
+    {
+        if (self::partyPveLeaderFleeConfirmed($leaderChoiceA)
+            || self::partyPveLeaderFleeConfirmed($leaderChoiceB))
+        {
+            return true;
+        }
+
+        if ((int) $aliveA <= 0 || (int) $aliveB <= 0)
+        {
+            return false;
+        }
+
+        return (int) $confirmedA >= (int) $aliveA
+            && (int) $confirmedB >= (int) $aliveB;
     }
 }

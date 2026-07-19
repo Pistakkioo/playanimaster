@@ -690,7 +690,8 @@ function animaster_party_pve_save_participant($conn, array $participant)
         'flg_fainted' => $flg_fainted
     ]);
 
-    if ((string) $participant['side'] === 'A' && !empty($participant['id_user_ig']))
+    // Any player-owned animal (party PvE side A, or either side in party_vs_party).
+    if (!empty($participant['id_user_ig']) && (int) ($participant['id_animal'] ?? 0) > 0)
     {
         if (!class_exists('BUFFS'))
         {

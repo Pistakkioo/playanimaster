@@ -21,6 +21,7 @@ class CONSEQUENCES
             'grant_team_buff' => [self::class, 'handleGrantTeamBuff'],
             '[start quest]' => [self::class, 'handleStartQuest'],
             '[complete quest]' => [self::class, 'handleCompleteQuest'],
+            '[open shop]' => [self::class, 'handleOpenShop'],
         ];
     }
 
@@ -688,6 +689,21 @@ class CONSEQUENCES
         }
 
         return QUESTS::completeQuest($conn, $id_user_ig, $id_quest, $LANG);
+    }
+
+    /**
+     * Pure client signal — no server-side mutation. id_ref (the id_shop) is
+     * read back from the get_conversation_consequences.php response/response2
+     * envelope by game.js, which then calls AnimasterShop.open(id_shop).
+     * The dialog option that triggers this should normally NOT register as
+     * finished (or should be flg_repeatable) so the shop reopens every visit.
+     *
+     * @param array<string, mixed> $row
+     * @param array<string, mixed> $params
+     */
+    private static function handleOpenShop($conn, $id_user_ig, $row, $params, $LANG)
+    {
+        return true;
     }
 
     private static function normalizeLangSuffix($LANG)

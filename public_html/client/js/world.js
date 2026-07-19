@@ -1056,6 +1056,13 @@ var AnimasterWorld = (function ()
 
         drawLabel(player.x, player.z, player.display_name || t('hud.default_you'), null, selfFarFromParty);
 
+        // Canopy sits above avatars so foliage can cover players walking under it.
+        if (typeof AnimasterWorldTiles !== 'undefined'
+            && typeof AnimasterWorldTiles.drawCanopy === 'function')
+        {
+            AnimasterWorldTiles.drawCanopy(ctx, player, canvas, worldToScreen);
+        }
+
         if (typeof AnimasterParty !== 'undefined' && typeof AnimasterParty.getFarPartyBearings === 'function')
         {
             AnimasterParty.getFarPartyBearings().forEach(function (far)

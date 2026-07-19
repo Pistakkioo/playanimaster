@@ -65,6 +65,17 @@ function dev_npc_fetch_item_types(PDO $conn)
     return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
 }
 
+function dev_npc_fetch_shops(PDO $conn)
+{
+    $stmt = $conn->query('
+        SELECT id_shop, shop_key, name
+        FROM shops
+        ORDER BY id_shop
+    ');
+
+    return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+}
+
 function dev_npc_fetch_player_classes(PDO $conn)
 {
     $stmt = $conn->query('
@@ -232,6 +243,7 @@ function dev_npc_consequence_ref_tables()
         ['value' => 'PLAYER_CLASS', 'label' => 'PLAYER_CLASS'],
         ['value' => 'buff_definitions', 'label' => 'buff_definitions'],
         ['value' => 'QUEST', 'label' => 'QUEST (quest lifecycle, id_ref = id_quest)'],
+        ['value' => 'shops', 'label' => 'shops (id_ref = id_shop)'],
     ];
 }
 
@@ -247,6 +259,7 @@ function dev_npc_consequence_types()
         ['value' => 'grant_team_buff', 'label' => 'grant_team_buff'],
         ['value' => '[start quest]', 'label' => '[start quest]'],
         ['value' => '[complete quest]', 'label' => '[complete quest]'],
+        ['value' => '[open shop]', 'label' => '[open shop]'],
     ];
 }
 
@@ -826,6 +839,11 @@ function dev_npc_consequence_link_ref_fields(array $ctx)
                 <?php foreach (($ctx['flat_quests'] ?? []) as $q): ?>
                 <option value="<?php echo (int) $q['id_quest']; ?>" data-ref-table="QUEST"<?php echo $ref_table === 'QUEST' && $id_ref === (int) $q['id_quest'] ? ' selected' : ''; ?>>
                     #<?php echo (int) $q['id_quest']; ?> <?php echo dev_admin_h($q['quest']); ?>
+                </option>
+                <?php endforeach; ?>
+                <?php foreach (($ctx['shops'] ?? []) as $shop_row): ?>
+                <option value="<?php echo (int) $shop_row['id_shop']; ?>" data-ref-table="shops"<?php echo $ref_table === 'shops' && $id_ref === (int) $shop_row['id_shop'] ? ' selected' : ''; ?>>
+                    #<?php echo (int) $shop_row['id_shop']; ?> <?php echo dev_admin_h($shop_row['name']); ?>
                 </option>
                 <?php endforeach; ?>
             </select>

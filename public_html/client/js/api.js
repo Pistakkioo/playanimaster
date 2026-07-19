@@ -333,6 +333,33 @@ var AnimasterApi = (function ()
     }
 
     /**
+     * Dev/smoke: party A leader challenges party B leader (005c Phase 5).
+     */
+    function startPartyVsPartyBattle(player, idTargetUserIg)
+    {
+        return postJson(BASE + 'party_vs_party_start_battle.php', {
+            id_user_ig: player.id_user_ig || 0,
+            id_target_user_ig: idTargetUserIg || 0,
+            id_zone: player.id_zone,
+            position_x: player.x,
+            position_z: player.z,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            unwrap(envelope);
+            var rows = parseHashResponse(envelope.response);
+            var result = rows[0] || {};
+            apiLog('startPartyVsPartyBattle', '[AnimasterApi] startPartyVsPartyBattle', result);
+
+            return {
+                id_battle: result.id_battle,
+                battle_type: result.battle_type || 'party_vs_party',
+                current_battle_turn: result.current_battle_turn || 0
+            };
+        });
+    }
+
+    /**
      * Unified battle_meta envelope (005c Phase 4): every battle_type
      * (solo_pve, pvp, party_pve, ...) is served by its own endpoint but they
      * all emit a single `battle_meta` key with the same envelope shape.
@@ -374,6 +401,10 @@ var AnimasterApi = (function ()
         else if (params.battle_type === 'party_pve')
         {
             endpoint = 'party_pve_get_battle_info.php';
+        }
+        else if (params.battle_type === 'party_vs_party')
+        {
+            endpoint = 'party_vs_party_get_battle_info.php';
         }
 
         return postJson(BASE + endpoint, params).then(function (envelope)
@@ -872,6 +903,46 @@ var AnimasterApi = (function ()
         });
     }
 
+    function getShop(player, idShop)
+    {
+        return postJson(BASE + 'get_shop.php', {
+            id_user_ig: player.id_user_ig || 0,
+            id_shop: idShop,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            return parseTradeEnvelope(envelope);
+        });
+    }
+
+    function shopBuy(player, idShop, idItemType, quantity)
+    {
+        return postJson(BASE + 'shop_buy.php', {
+            id_user_ig: player.id_user_ig || 0,
+            id_shop: idShop,
+            id_item_type: idItemType,
+            quantity: quantity,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            return parseTradeEnvelope(envelope);
+        });
+    }
+
+    function shopSell(player, idShop, idItemType, quantity)
+    {
+        return postJson(BASE + 'shop_sell.php', {
+            id_user_ig: player.id_user_ig || 0,
+            id_shop: idShop,
+            id_item_type: idItemType,
+            quantity: quantity,
+            lang: LANG
+        }).then(function (envelope)
+        {
+            return parseTradeEnvelope(envelope);
+        });
+    }
+
     return {
         LANG: LANG,
         parseHashResponse: parseHashResponse,
@@ -884,6 +955,7 @@ var AnimasterApi = (function ()
         getConversationConsequences: getConversationConsequences,
         startBattle: startBattle,
         startPartyBattle: startPartyBattle,
+        startPartyVsPartyBattle: startPartyVsPartyBattle,
         getBattleInfo: getBattleInfo,
         getAbilityList: getAbilityList,
         getInventory: getInventory,
@@ -915,6 +987,9 @@ var AnimasterApi = (function ()
         sendDuelRequest: sendDuelRequest,
         pollDuel: pollDuel,
         respondDuelRequest: respondDuelRequest,
-        markCharacterOffline: markCharacterOffline
+        markCharacterOffline: markCharacterOffline,
+        getShop: getShop,
+        shopBuy: shopBuy,
+        shopSell: shopSell
     };
 })();

@@ -66,6 +66,11 @@ var AnimasterCombat = (function ()
     var statPanelOpenOrder = [];
     var statPanelZIndex = 30;
 
+
+    function isPartyConfirmBattle(type)
+    {
+        return type === 'party_pve' || type === 'party_vs_party';
+    }
     var COMBAT_STAT_LABELS = {
         hp: 'HP',
         max_hp: 'Max HP',
@@ -1496,7 +1501,7 @@ var AnimasterCombat = (function ()
 
     function syncPartyPveTurnFromMeta()
     {
-        if (!battle || battle.type !== 'party_pve' || !battleMeta)
+        if (!battle || !isPartyConfirmBattle(battle.type) || !battleMeta)
         {
             return;
         }
@@ -1671,7 +1676,7 @@ var AnimasterCombat = (function ()
 
     function showPartyPveActionMenu()
     {
-        if (!abilitiesEl || !battle || battle.type !== 'party_pve')
+        if (!abilitiesEl || !battle || !isPartyConfirmBattle(battle.type))
         {
             return;
         }
@@ -1797,7 +1802,7 @@ var AnimasterCombat = (function ()
             return result.moves;
         }
 
-        if (battle && battle.type === 'party_pve' && result && result.moves !== undefined)
+        if (battle && isPartyConfirmBattle(battle.type) && result && result.moves !== undefined)
         {
             battleMeta = result.meta || {};
             partyPveMetaAnchorMs = Date.now();
@@ -1840,7 +1845,7 @@ var AnimasterCombat = (function ()
             return !!(battleMeta && battleMeta.can_act);
         }
 
-        if (battle.type === 'party_pve')
+        if (isPartyConfirmBattle(battle.type))
         {
             return partyPveMetaAllowsAct();
         }
@@ -2031,7 +2036,7 @@ var AnimasterCombat = (function ()
      */
     function submitPartyPveInactivityVote(targetId, choice)
     {
-        if (!battle || battle.type !== 'party_pve' || battle.status !== 'ongoing' || busy || !battleMeta)
+        if (!battle || !isPartyConfirmBattle(battle.type) || battle.status !== 'ongoing' || busy || !battleMeta)
         {
             return;
         }
@@ -2088,7 +2093,7 @@ var AnimasterCombat = (function ()
         }
 
         if (!battle
-            || battle.type !== 'party_pve'
+            || !isPartyConfirmBattle(battle.type)
             || !battleMeta
             || battle.status !== 'ongoing'
             || battleMeta.battle_finished)
@@ -2304,7 +2309,7 @@ var AnimasterCombat = (function ()
      */
     function pollPartyPveTurn()
     {
-        if (!battle || battle.type !== 'party_pve' || battle.status !== 'ongoing' || busy || !player)
+        if (!battle || !isPartyConfirmBattle(battle.type) || battle.status !== 'ongoing' || busy || !player)
         {
             return;
         }
@@ -2320,7 +2325,7 @@ var AnimasterCombat = (function ()
             lang: AnimasterApi.LANG
         }).then(function (result)
         {
-            if (!battle || battle.type !== 'party_pve' || busy)
+            if (!battle || !isPartyConfirmBattle(battle.type) || busy)
             {
                 return;
             }
@@ -2357,7 +2362,7 @@ var AnimasterCombat = (function ()
     {
         stopPartyPvePoll();
 
-        if (!battle || battle.type !== 'party_pve' || battle.status !== 'ongoing')
+        if (!battle || !isPartyConfirmBattle(battle.type) || battle.status !== 'ongoing')
         {
             return;
         }
@@ -2379,7 +2384,7 @@ var AnimasterCombat = (function ()
      */
     function submitPartyPveConfirm(confirmed)
     {
-        if (!battle || battle.type !== 'party_pve' || battle.status !== 'ongoing' || busy || !battleMeta)
+        if (!battle || !isPartyConfirmBattle(battle.type) || battle.status !== 'ongoing' || busy || !battleMeta)
         {
             return;
         }
@@ -2605,7 +2610,7 @@ var AnimasterCombat = (function ()
                 return;
             }
 
-            if (battle.type === 'party_pve')
+            if (isPartyConfirmBattle(battle.type))
             {
                 presentTurn(null, true);
                 return;
@@ -2623,12 +2628,12 @@ var AnimasterCombat = (function ()
             abortFailedResume(err && err.message ? err.message : t('combat.load_failed'));
         }).finally(function ()
         {
-            if (!blackoutHandled && !playbackRunning && battle && battle.type === 'party_pve' && busy)
+            if (!blackoutHandled && !playbackRunning && battle && isPartyConfirmBattle(battle.type) && busy)
             {
                 busy = false;
                 enterPartyPveInputPhase();
             }
-            else if (!blackoutHandled && !playbackRunning && battle && battle.type !== 'pvp' && battle.type !== 'party_pve')
+            else if (!blackoutHandled && !playbackRunning && battle && battle.type !== 'pvp' && !isPartyConfirmBattle(battle.type))
             {
                 busy = false;
                 refreshActionMenu();
@@ -2659,9 +2664,15 @@ var AnimasterCombat = (function ()
         var last = moves[moves.length - 1];
         battle.status = last.resulting_battle_status || 'ongoing';
 
-        if (battle.type === 'party_pve')
+        if (isPartyConfirmBattle(battle.type))
         {
             syncPartyPveTurnFromMeta();
+
+            // party_vs_party stores win_a / win_b on moves; map to the viewer's result.
+            if (battleMeta && battleMeta.viewer_result)
+            {
+                battle.status = battleMeta.viewer_result;
+            }
         }
         else
         {
@@ -2702,6 +2713,11 @@ var AnimasterCombat = (function ()
             {
                 return;
             }
+        }
+        else if (battle && battle.type === 'party_vs_party')
+        {
+            // Scaffold: no overworld blackout / nurse trip after party PvP.
+            return;
         }
         else if (battle.status !== 'defeat')
         {
@@ -2797,7 +2813,7 @@ var AnimasterCombat = (function ()
             return;
         }
 
-        if (battle.type === 'party_pve')
+        if (isPartyConfirmBattle(battle.type))
         {
             if (!partyPveMetaAllowsAct())
             {
@@ -2944,7 +2960,7 @@ var AnimasterCombat = (function ()
 
         abilitiesEl.innerHTML = '';
 
-        var isPartyPve = battle.type === 'party_pve';
+        var isPartyPve = isPartyConfirmBattle(battle.type);
         var fainted = isPartyPve ? isPartyActorFainted() : isActiveAnimalFainted();
         var fleeDisabled = isPartyPve ? !partyPveCanFleeNow() : false;
 
@@ -3016,7 +3032,7 @@ var AnimasterCombat = (function ()
         prompt.textContent = t('combat.flee_confirm_prompt');
         secondaryEl.appendChild(prompt);
 
-        var isPartyPve = battle.type === 'party_pve';
+        var isPartyPve = isPartyConfirmBattle(battle.type);
         var fleeDisabled = isPartyPve ? !partyPveCanFleeNow() : false;
 
         var confirmBtn = appendMenuButton(secondaryEl, t('combat.flee_confirm_button'), '', function ()
@@ -3044,7 +3060,7 @@ var AnimasterCombat = (function ()
 
     function resolveActiveAnimalForMenu(stats)
     {
-        if (battle && battle.type === 'party_pve')
+        if (battle && isPartyConfirmBattle(battle.type))
         {
             var actor = partyPveSelfAlly();
 
@@ -3096,7 +3112,7 @@ var AnimasterCombat = (function ()
                 return;
             }
 
-            if (battle.type === 'party_pve' && !partyPveMetaAllowsAct())
+            if (isPartyConfirmBattle(battle.type) && !partyPveMetaAllowsAct())
             {
                 return;
             }
@@ -3121,7 +3137,7 @@ var AnimasterCombat = (function ()
                 return;
             }
 
-            if (battle.type === 'party_pve' && !partyPveMetaAllowsAct())
+            if (isPartyConfirmBattle(battle.type) && !partyPveMetaAllowsAct())
             {
                 return;
             }
@@ -3138,7 +3154,7 @@ var AnimasterCombat = (function ()
             return;
         }
 
-        if (battle.type === 'party_pve' && !partyPveMetaAllowsAct())
+        if (isPartyConfirmBattle(battle.type) && !partyPveMetaAllowsAct())
         {
             return;
         }
@@ -3184,7 +3200,7 @@ var AnimasterCombat = (function ()
             return true;
         }
 
-        if (battle.type === 'party_pve' && !partyPveMetaAllowsAct())
+        if (isPartyConfirmBattle(battle.type) && !partyPveMetaAllowsAct())
         {
             return true;
         }
@@ -3445,10 +3461,10 @@ var AnimasterCombat = (function ()
             return;
         }
 
-        var isPartyFlee = battle.type === 'party_pve'
+        var isPartyFlee = isPartyConfirmBattle(battle.type)
             && type === 'action'
             && parseInt(id, 10) === 4;
-        var isPartyPve = battle.type === 'party_pve';
+        var isPartyPve = isPartyConfirmBattle(battle.type);
 
         if (isPartyFlee)
         {
@@ -4216,7 +4232,7 @@ var AnimasterCombat = (function ()
             return Promise.resolve();
         }
 
-        if (battle && battle.type === 'party_pve' && battleMeta)
+        if (battle && isPartyConfirmBattle(battle.type) && battleMeta)
         {
             return delay(40).then(function ()
             {
@@ -4273,7 +4289,7 @@ var AnimasterCombat = (function ()
         playbackRunning = false;
         advanceResolver = null;
 
-        if (battle && battle.type === 'party_pve' && partyPvePlaybackHpFinal)
+        if (battle && isPartyConfirmBattle(battle.type) && partyPvePlaybackHpFinal)
         {
             applyPartyPveHpSnapshot(battleMeta, partyPvePlaybackHpFinal);
             partyPvePlaybackHpFinal = null;
@@ -4341,10 +4357,17 @@ var AnimasterCombat = (function ()
             return;
         }
 
-        if (battle.type === 'party_pve')
+        if (isPartyConfirmBattle(battle.type))
         {
             if (battleMeta && battleMeta.battle_finished)
             {
+                if (battleMeta.viewer_result)
+                {
+                    battle.status = battleMeta.viewer_result;
+                    setMessage(statusMessage(battle.status));
+                    clearActionMenus();
+                }
+
                 if (!blackoutHandled)
                 {
                     busy = false;
@@ -4403,7 +4426,7 @@ var AnimasterCombat = (function ()
         {
             pvpPhase = 'animating';
         }
-        else if (battle.type === 'party_pve')
+        else if (isPartyConfirmBattle(battle.type))
         {
             setMessage(t('combat.resolving_turn'));
             renderPartyPvePlanningPanel();
@@ -4452,7 +4475,7 @@ var AnimasterCombat = (function ()
             return;
         }
 
-        if (battle && battle.type === 'party_pve' && battleMeta)
+        if (battle && isPartyConfirmBattle(battle.type) && battleMeta)
         {
             renderPartyPveUnits(unitStats);
             return;

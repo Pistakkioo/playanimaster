@@ -7,13 +7,15 @@
  *
  * Layers: a fixed, server-seeded set (see tile_layers / 03_world_tiles_seed.sql).
  * Exactly one layer is the "ground" layer -- it always covers every cell
- * (explicit placement or deterministic base-pack fill). Every other layer
- * is sparse/explicit-only (nothing placed = fully transparent/empty) and
- * drawn above the ground in ascending z_order. Terrain composes
- * cumulatively: a cell is blocked if the ground OR any placed overlay (or
- * a large object's bounding box) says blocked, and move_speed_mult
- * multiplies across every layer present -- layers can only add
- * restrictions, never remove the ground's.
+ * (explicit placement or deterministic base-pack fill). Other layers are
+ * sparse/explicit-only (nothing placed = fully transparent/empty).
+ * Non-canopy overlays draw above ground (ascending z_order) but behind
+ * entities. The `canopy` layer is drawn in a second pass after avatars
+ * (via drawCanopy) so foliage can sit over players. Terrain still
+ * composes across every layer including canopy: a cell is blocked if the
+ * ground OR any placed overlay/canopy (or a large object's bounding box)
+ * says blocked, and move_speed_mult multiplies across every layer present
+ * -- layers can only add restrictions, never remove the ground's.
  *
  * Objects: large multi-cell art (e.g. a house) with its own world-unit
  * footprint (width_world/height_world), rendered at that size regardless
@@ -36,7 +38,10 @@ var AnimasterWorldTiles = (function ()
     var layers = [];
     var layersById = {};
     var groundLayerId = null;
+    /** Overlays drawn under entities (everything except canopy). */
     var overlayLayers = [];
+    /** Canopy overlays drawn above player / other_players avatars. */
+    var canopyLayers = [];
     var defsById = {};
     var basePackDefs = [];
     var placementsByCellLayer = {};
@@ -137,10 +142,23 @@ var AnimasterWorldTiles = (function ()
         return basePackDefs[idx];
     }
 
+    function appendLayerDefs(stack, layerList, gx, gz)
+    {
+        layerList.forEach(function (layer)
+        {
+            var def = resolveTileDef(gx, gz, layer.id_tile_layer);
+
+            if (def)
+            {
+                stack.push(def);
+            }
+        });
+    }
+
     /**
      * Every tile definition present at (gx, gz) across all layers, ground
-     * first then overlays in ascending z_order -- used by both terrain
-     * resolution and rendering so they stay consistent.
+     * first then overlays then canopy in ascending z_order -- used by
+     * terrain resolution (walkability / speed).
      */
     function resolveStack(gx, gz)
     {
@@ -152,17 +170,33 @@ var AnimasterWorldTiles = (function ()
             stack.push(groundDef);
         }
 
-        overlayLayers.forEach(function (layer)
-        {
-            var def = resolveTileDef(gx, gz, layer.id_tile_layer);
-
-            if (def)
-            {
-                stack.push(def);
-            }
-        });
+        appendLayerDefs(stack, overlayLayers, gx, gz);
+        appendLayerDefs(stack, canopyLayers, gx, gz);
 
         return stack;
+    }
+
+    /**
+     * Draw stack under entities: ground + non-canopy overlays only.
+     */
+    function resolveUnderEntityStack(gx, gz)
+    {
+        var stack = [];
+        var groundDef = groundLayerId !== null ? resolveTileDef(gx, gz, groundLayerId) : null;
+
+        if (groundDef)
+        {
+            stack.push(groundDef);
+        }
+
+        appendLayerDefs(stack, overlayLayers, gx, gz);
+
+        return stack;
+    }
+
+    function isCanopyLayer(layer)
+    {
+        return !!(layer && String(layer.code || '').toLowerCase() === 'canopy');
     }
 
     function computeObjectRect(placement, def)
@@ -230,6 +264,7 @@ var AnimasterWorldTiles = (function ()
             layersById = {};
             groundLayerId = null;
             overlayLayers = [];
+            canopyLayers = [];
 
             layers.forEach(function (layer)
             {
@@ -239,6 +274,10 @@ var AnimasterWorldTiles = (function ()
                 if (layer.is_ground === 'S' && groundLayerId === null)
                 {
                     groundLayerId = layer.id_tile_layer;
+                }
+                else if (isCanopyLayer(layer))
+                {
+                    canopyLayers.push(layer);
                 }
                 else
                 {
@@ -387,6 +426,74 @@ var AnimasterWorldTiles = (function ()
         });
     }
 
+    function getViewportGrid(player, canvas, worldToScreen)
+    {
+        var origin = worldToScreen(0, 0);
+        var unit = worldToScreen(1, 0);
+        var scale = unit.x - origin.x;
+
+        if (!scale)
+        {
+            return null;
+        }
+
+        var halfWWorld = (canvas.width * 0.5) / scale;
+        var halfHWorld = (canvas.height * 0.5) / scale;
+
+        return {
+            scale: scale,
+            halfWWorld: halfWWorld,
+            halfHWorld: halfHWorld,
+            startGx: Math.floor((player.x - halfWWorld) / tileWorldSize) - 1,
+            endGx: Math.ceil((player.x + halfWWorld) / tileWorldSize) + 1,
+            startGz: Math.floor((player.z - halfHWorld) / tileWorldSize) - 1,
+            endGz: Math.ceil((player.z + halfHWorld) / tileWorldSize) + 1
+        };
+    }
+
+    function drawTileStackAt(ctx, worldToScreen, gx, gz, stack, fillFallback)
+    {
+        // Integer pixel bounds from both cell corners. floor/ceil with a
+        // 1px overdraw kills subpixel hairline gaps that otherwise show
+        // FALLBACK_COLOR as fake "tile borders" between cells.
+        var screen0 = worldToScreen(gx * tileWorldSize, gz * tileWorldSize);
+        var screen1 = worldToScreen((gx + 1) * tileWorldSize, (gz + 1) * tileWorldSize);
+        var dx = Math.floor(screen0.x);
+        var dy = Math.floor(screen0.y);
+        var dw = Math.max(1, Math.ceil(screen1.x) - dx + 1);
+        var dh = Math.max(1, Math.ceil(screen1.y) - dy + 1);
+
+        if (!stack.length)
+        {
+            if (fillFallback)
+            {
+                ctx.fillStyle = FALLBACK_COLOR;
+                ctx.fillRect(dx, dy, dw, dh);
+            }
+
+            return;
+        }
+
+        var drewAny = false;
+
+        stack.forEach(function (def)
+        {
+            var cached = getTileImage(def.image_file);
+
+            if (cached && cached.loaded)
+            {
+                ctx.drawImage(cached.img, dx, dy, dw, dh);
+                drewAny = true;
+            }
+        });
+
+        if (!drewAny && fillFallback)
+        {
+            ctx.fillStyle = FALLBACK_COLOR;
+            ctx.fillRect(dx, dy, dw, dh);
+        }
+    }
+
     function draw(ctx, player, canvas, worldToScreen)
     {
         if (!ctx || !player || !canvas || typeof worldToScreen !== 'function')
@@ -394,65 +501,59 @@ var AnimasterWorldTiles = (function ()
             return;
         }
 
-        var origin = worldToScreen(0, 0);
-        var unit = worldToScreen(1, 0);
-        var scale = unit.x - origin.x;
+        var viewport = getViewportGrid(player, canvas, worldToScreen);
 
-        if (!scale)
+        if (!viewport)
         {
             return;
         }
 
-        var pxPerTile = tileWorldSize * scale;
-        var halfWWorld = (canvas.width * 0.5) / scale;
-        var halfHWorld = (canvas.height * 0.5) / scale;
-
-        var startGx = Math.floor((player.x - halfWWorld) / tileWorldSize) - 1;
-        var endGx = Math.ceil((player.x + halfWWorld) / tileWorldSize) + 1;
-        var startGz = Math.floor((player.z - halfHWorld) / tileWorldSize) - 1;
-        var endGz = Math.ceil((player.z + halfHWorld) / tileWorldSize) + 1;
-
-        for (var gz = startGz; gz <= endGz; gz++)
+        for (var gz = viewport.startGz; gz <= viewport.endGz; gz++)
         {
-            for (var gx = startGx; gx <= endGx; gx++)
+            for (var gx = viewport.startGx; gx <= viewport.endGx; gx++)
             {
-                var stack = resolveStack(gx, gz);
-                var screen = worldToScreen(gx * tileWorldSize, gz * tileWorldSize);
-
-                if (!stack.length)
-                {
-                    ctx.fillStyle = FALLBACK_COLOR;
-                    ctx.fillRect(screen.x, screen.y, pxPerTile, pxPerTile);
-                    continue;
-                }
-
-                var drewAny = false;
-
-                stack.forEach(function (def)
-                {
-                    var cached = getTileImage(def.image_file);
-
-                    if (cached && cached.loaded)
-                    {
-                        ctx.drawImage(cached.img, screen.x, screen.y, pxPerTile, pxPerTile);
-                        drewAny = true;
-                    }
-                });
-
-                if (!drewAny)
-                {
-                    ctx.fillStyle = FALLBACK_COLOR;
-                    ctx.fillRect(screen.x, screen.y, pxPerTile, pxPerTile);
-                }
+                drawTileStackAt(ctx, worldToScreen, gx, gz, resolveUnderEntityStack(gx, gz), true);
             }
         }
 
-        drawObjects(ctx, worldToScreen, scale, {
-            x0: player.x - halfWWorld,
-            x1: player.x + halfWWorld,
-            z0: player.z - halfHWorld,
-            z1: player.z + halfHWorld
+        drawObjects(ctx, worldToScreen, viewport.scale, {
+            x0: player.x - viewport.halfWWorld,
+            x1: player.x + viewport.halfWWorld,
+            z0: player.z - viewport.halfHWorld,
+            z1: player.z + viewport.halfHWorld
         });
+    }
+
+    /**
+     * Second pass: canopy tiles over entities (player / other players / NPCs).
+     */
+    function drawCanopy(ctx, player, canvas, worldToScreen)
+    {
+        if (!ctx || !player || !canvas || typeof worldToScreen !== 'function' || !canopyLayers.length)
+        {
+            return;
+        }
+
+        var viewport = getViewportGrid(player, canvas, worldToScreen);
+
+        if (!viewport)
+        {
+            return;
+        }
+
+        for (var gz = viewport.startGz; gz <= viewport.endGz; gz++)
+        {
+            for (var gx = viewport.startGx; gx <= viewport.endGx; gx++)
+            {
+                var stack = [];
+                appendLayerDefs(stack, canopyLayers, gx, gz);
+
+                if (stack.length)
+                {
+                    drawTileStackAt(ctx, worldToScreen, gx, gz, stack, false);
+                }
+            }
+        }
     }
 
     return {
@@ -460,6 +561,7 @@ var AnimasterWorldTiles = (function ()
         getTerrainAt: getTerrainAt,
         isWalkable: isWalkable,
         getSpeedMultiplierAt: getSpeedMultiplierAt,
-        draw: draw
+        draw: draw,
+        drawCanopy: drawCanopy
     };
 })();

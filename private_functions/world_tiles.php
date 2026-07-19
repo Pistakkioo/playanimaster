@@ -45,7 +45,7 @@ function animaster_world_tiles_fetch_layers(PDO $conn)
 function animaster_world_tiles_fetch_definitions(PDO $conn, $id_zone)
 {
     $stmt = $conn->prepare('
-        SELECT id_tile_definition, code, image_file, category, id_zone, id_tile_layer,
+        SELECT id_tile_definition, code, image_file, category, pack, id_zone, id_tile_layer,
                is_base_pack, is_walkable, move_speed_mult, collision_mask, sort_order
         FROM tile_definitions
         WHERE id_zone IS NULL OR id_zone = :id_zone
@@ -64,13 +64,42 @@ function animaster_world_tiles_fetch_definitions(PDO $conn, $id_zone)
 function animaster_world_tiles_fetch_all_definitions(PDO $conn)
 {
     $stmt = $conn->query('
-        SELECT id_tile_definition, code, image_file, category, id_zone, id_tile_layer,
+        SELECT id_tile_definition, code, image_file, category, pack, id_zone, id_tile_layer,
                is_base_pack, is_walkable, move_speed_mult, collision_mask, sort_order
         FROM tile_definitions
-        ORDER BY sort_order ASC, id_tile_definition ASC
+        ORDER BY pack ASC, sort_order ASC, id_tile_definition ASC
     ');
 
     return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+}
+
+/**
+ * Distinct non-empty pack keys for the admin palette filter.
+ *
+ * @return array<int, string>
+ */
+function animaster_world_tiles_fetch_packs(PDO $conn)
+{
+    $stmt = $conn->query('
+        SELECT DISTINCT pack
+        FROM tile_definitions
+        WHERE pack <> \'\'
+        ORDER BY pack ASC
+    ');
+
+    if (!$stmt)
+    {
+        return [];
+    }
+
+    $packs = [];
+
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row)
+    {
+        $packs[] = (string) $row['pack'];
+    }
+
+    return $packs;
 }
 
 /**
